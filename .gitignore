@@ -3,6 +3,7 @@ Annulus_Benchmarks/output/
 Annulus_Benchmarks/.meshes/
 Annulus_Benchmarks/.ipynb_checkpoints/
 Annulus_Benchmarks/*.vtk
-Annulus_Benchmarks/Latex_files
+Annulus_Benchmarks/Latex_files/*
+!Annulus_Benchmarks/Latex_files/*.tex
 
 .DS_Store
