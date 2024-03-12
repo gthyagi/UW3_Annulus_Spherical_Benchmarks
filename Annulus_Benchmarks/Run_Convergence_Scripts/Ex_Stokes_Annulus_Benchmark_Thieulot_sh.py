@@ -509,12 +509,5 @@ import psutil
 process = psutil.Process()
 print(f'rank: {uw.mpi.rank}, RAM Used (GB): {process.memory_info().rss/1024 ** 3}')
 
-# ### Todo: 
-# 1. compute pressure on the inner and outer boundaries and save in h5 file
-# 2. compute avg. v_r, v_theta and save in h5 file
-
-# +
-# mesh.data[uw.discretisation.petsc_discretisation.petsc_dm_find_labeled_points_local(mesh.dm, 'Lower')]
-# -
 
 
