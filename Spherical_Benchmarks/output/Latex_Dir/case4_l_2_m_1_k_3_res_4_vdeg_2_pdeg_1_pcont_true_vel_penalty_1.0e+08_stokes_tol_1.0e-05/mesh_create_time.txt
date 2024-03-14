@@ -1,0 +1,6 @@
+line_routine                   hits tot_time av_time
+-----------------------------  ---- -------- -------
+swarm.py: 1526   Swarm.access     1    0.089   0.089
+
+Total Time (UW3 API) :                 0.089        
+Total Time (Runtime) :                 1.180        
