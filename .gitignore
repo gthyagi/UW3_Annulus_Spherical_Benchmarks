@@ -1,3 +1,5 @@
+.DS_Store
+
 Annulus_Benchmarks/del_files/
 Annulus_Benchmarks/output/
 Annulus_Benchmarks/.meshes/
@@ -6,7 +8,11 @@ Annulus_Benchmarks/*.vtk
 Annulus_Benchmarks/Latex_Files/*
 !Annulus_Benchmarks/Latex_Files/*.tex
 
-.DS_Store
+Annulus_Benchmarks/Annulus_NoSlip_BC_Tests/output/
+Annulus_Benchmarks/Annulus_NoSlip_BC_Tests/.meshes/
+Annulus_Benchmarks/Annulus_NoSlip_BC_Tests/.ipynb_checkpoints/
+
+Annulus_Benchmarks/Run_Convergence_Scripts/.ipynb_checkpoints/
 
 Spherical_Benchmarks/output/
 Spherical_Benchmarks/.meshes/

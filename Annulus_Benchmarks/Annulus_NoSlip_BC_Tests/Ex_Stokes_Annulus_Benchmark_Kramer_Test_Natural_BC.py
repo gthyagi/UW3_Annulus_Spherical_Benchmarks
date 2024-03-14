@@ -5,8 +5,6 @@
 #
 # *Author: [Thyagarajulu Gollapalli](https://github.com/gthyagi)*
 
-from mpi4py import MPI
-
 # +
 import underworld3 as uw
 from underworld3.systems import Stokes
@@ -53,6 +51,7 @@ res_int_fac = 1/2
 # which normals to use
 ana_normal = not True # unit radial vector
 petsc_normal = True # gamma function
+bc_type = 'nat_bc' # 'nat_bc', 'ess_bc'
 
 # compute analytical solutions
 comp_ana = True
@@ -88,7 +87,7 @@ elif case in ('case4'):
     noslip, smooth = True, True
 
 # +
-output_dir = os.path.join(os.path.join("./output/Latex_Dir/"), f"{case}/")
+output_dir = os.path.join(os.path.join("./output/Latex_files/"), f"{case}_ess_bc/")
 
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
@@ -374,21 +373,19 @@ if freeslip:
         Gamma = mesh.CoordinateSystem.unit_e_0
     elif petsc_normal:
         Gamma = mesh.Gamma
-
-    # stokes.add_natural_bc(2.5e3 * Gamma.dot(v_uw.sym) *  Gamma, "Upper")
-    # stokes.add_natural_bc(2.5e3 * Gamma.dot(v_uw.sym) *  Gamma, "Lower")
     
     v_diff =  v_uw.sym - v_ana.sym
     stokes.add_natural_bc(2.5e8*v_diff, "Upper")
     stokes.add_natural_bc(2.5e8*v_diff, "Lower")
     
 elif noslip:
-    # stokes.add_essential_bc(sympy.Matrix([0., 0.]), "Upper")
-    # stokes.add_essential_bc(sympy.Matrix([0., 0.]), "Lower")
-
-    v_diff =  v_uw.sym - v_ana.sym
-    stokes.add_natural_bc(2.5e8*v_diff, "Upper")
-    stokes.add_natural_bc(2.5e8*v_diff, "Lower")
+    if bc_type=='ess_bc':
+        stokes.add_essential_bc(sympy.Matrix([0., 0.]), "Upper")
+        stokes.add_essential_bc(sympy.Matrix([0., 0.]), "Lower")
+    if bc_type=='nat_bc':
+        v_diff =  v_uw.sym - v_ana.sym
+        stokes.add_natural_bc(2.5e8*v_diff, "Upper")
+        stokes.add_natural_bc(2.5e8*v_diff, "Lower")
 # -
 
 # bodyforce term
@@ -452,7 +449,15 @@ stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative"
 stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
 # -
 
-stokes.solve()
+stokes.natural_bcs
+
+for index,bc in enumerate(stokes.natural_bcs):
+    print("Setting bc {} ({})".format(index, bc.type))
+    print(" - component: {}".format(bc.components))
+    print(" - boundary:   {}".format(bc.boundary))
+    print(" - fn:         {} ".format(bc.fn_f))
+
+stokes.solve(verbose=True)
 
 # +
 # Null space evaluation
@@ -520,6 +525,10 @@ if uw.mpi.size == 1 and comp_ana:
     # velocity error plot
     plot_vector(mesh, v_err, _vector_name='v_err(relative)', _cmap=cmc.lapaz.resampled(11), _clim=clim, _vmag=vmag, _vfreq=vfreq,
                 _save_png=True, _dir_fname=output_dir+'vel_r_err.png')
+    # saving colobar separately 
+    save_colorbar(_colormap=cmc.lapaz.resampled(11), _cb_bounds='', _vmin=clim[0], _vmax=clim[1], _figsize_cb=(5, 5), _primary_fs=18, 
+                  _cb_orient='horizontal', _cb_axis_label='Velocity Relative Error', _cb_label_xpos=0.5, _cb_label_ypos=-2.05, _fformat='pdf', 
+                  _output_path=output_dir, _fname='vel_r_err')
 
 # +
 # plotting magnitude error in percentage
@@ -538,6 +547,10 @@ if comp_ana:
          # velocity error plot
         plot_scalar(mesh, vmag_expr, 'vmag_err(%)', _cmap=cmc.oslo_r.resampled(21), _clim=clim, _save_png=True, 
                     _dir_fname=output_dir+'vel_p_err.png')
+        # saving colobar separately 
+        save_colorbar(_colormap=cmc.oslo_r.resampled(21), _cb_bounds='', _vmin=clim[0], _vmax=clim[1], _figsize_cb=(5, 5), _primary_fs=18, 
+                      _cb_orient='horizontal', _cb_axis_label='Velocity Percentage Error', _cb_label_xpos=0.5, _cb_label_ypos=-2.0, _fformat='pdf', 
+                      _output_path=output_dir, _fname='vel_p_err_ana')
 
 # +
 # plotting pressure from uw
@@ -614,6 +627,7 @@ if uw.mpi.rank == 0:
 import psutil
 process = psutil.Process()
 print('RAM Used (GB):', process.memory_info().rss/1024 ** 3) 
+
 # ### From here onwards we compute quantities to compare analytical and numerical solution.
 # ### Feel free to comment out this section
 
@@ -720,7 +734,7 @@ label_list = ['k='+str(k)+' (analy.), '+r'$r=R_{1}$',
 linestyle_list = ['-', '-', '--', '--']
 
 plot_stats(_data_list=data_list, _label_list=label_list, _line_style=linestyle_list, _xlabel=r'$\theta$', _ylabel='Pressure', 
-           _xlim=[0, 2*np.pi], _ylim=ylim, _mod_xticks=True, _save_pdf=True, _output_path=output_dir, _fname='p_r_i_o')
+           _xlim=[0, 2*np.pi], _ylim=ylim, _mod_xticks=True, _save_pdf=True, _output_path=output_dir, _fname='p_r_i_o_'+bc_type)
 
 
 # -
@@ -748,7 +762,7 @@ elif case in ('case2'):
 elif case in ('case3'):
     ylim = [0, 3.7e-9]
 elif case in ('case4'):
-    ylim = [0, 2.2e-9]
+    ylim = [0-1e-11, 2.2e-9]
     
 data_list = [np.hstack((np.c_[lower_theta[sort_lower]], v_ana_lower_mag[sort_lower])),
              np.hstack((np.c_[upper_theta[sort_upper]], v_ana_upper_mag[sort_upper])), 
@@ -761,7 +775,7 @@ label_list = ['k='+str(k)+' (analy.), '+r'$r=R_{1}$',
 linestyle_list = ['-', '-', '--', '--']
 
 plot_stats(_data_list=data_list, _label_list=label_list, _line_style=linestyle_list, _xlabel=r'$\theta$', _ylabel='Velocity Magnitude', 
-           _xlim=[0, 2*np.pi], _ylim=ylim, _mod_xticks=True, _save_pdf=True, _output_path=output_dir, _fname='vel_r_i_o')
+           _xlim=[0, 2*np.pi], _ylim=ylim, _mod_xticks=True, _save_pdf=True, _output_path=output_dir, _fname='vel_r_i_o_'+bc_type)
 # -
 
 # uw velocity in (r, theta)
@@ -777,8 +791,7 @@ if comp_ana:
 
 # theta and r arrays
 theta_0_2pi = np.linspace(0, 2*np.pi, 1000, endpoint=True)
-# r_i_o = np.linspace(r_i, r_o-1e-4, 21, endpoint=True)
-r_i_o = np.linspace(r_i, r_o-1e-4, 11, endpoint=True)
+r_i_o = np.linspace(r_i, r_o-1e-4, 21, endpoint=True)
 
 
 def get_vel_avg_r(_theta_arr, _r_arr, _vel_comp):
@@ -814,7 +827,7 @@ label_list = ['k='+str(k)+' (analy.)',
 linestyle_list = ['-', '--']
 
 plot_stats(_data_list=data_list, _label_list=label_list, _line_style=linestyle_list, _xlabel='r', _ylabel=r'$<v_{r}>$', 
-           _xlim=[r_i, r_o], _ylim=ylim, _save_pdf=True, _output_path=output_dir, _fname='vel_r_avg')
+           _xlim=[r_i, r_o], _ylim=ylim, _save_pdf=True, _output_path=output_dir, _fname='vel_r_avg_'+bc_type)
 # -
 
 # velocity theta component average
@@ -838,7 +851,7 @@ label_list = ['k='+str(k)+' (analy.)',
 linestyle_list = ['-', '--']
 
 plot_stats(_data_list=data_list, _label_list=label_list, _line_style=linestyle_list, _xlabel='r', _ylabel=r'$<v_{\theta}>$', 
-           _xlim=[r_i, r_o], _ylim=ylim, _save_pdf=True, _output_path=output_dir, _fname='vel_th_avg')
+           _xlim=[r_i, r_o], _ylim=ylim, _save_pdf=True, _output_path=output_dir, _fname='vel_th_avg_'+bc_type)
 # -
 
 

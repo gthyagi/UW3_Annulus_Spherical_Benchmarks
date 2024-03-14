@@ -99,8 +99,8 @@ stokes2.bodyforce = sympy.Matrix([0, Piecewise((f_0, x2 > x_c), (0.0, True))])
 # +
 # free slip.
 
-# stokes1.add_dirichlet_bc((sympy.oo, 0.0), "Top")
-stokes1.add_natural_bc([0.0, 2.5e6*v1.sym[1]], "Top") 
+stokes1.add_dirichlet_bc((sympy.oo, 0.0), "Top")
+# stokes1.add_natural_bc([0.0, 2.5e6*v1.sym[1]], "Top") 
 stokes1.add_dirichlet_bc((sympy.oo, 0.0), "Bottom")
 stokes1.add_dirichlet_bc((0.0, sympy.oo), "Left")
 stokes1.add_dirichlet_bc((0.0, sympy.oo), "Right")
