@@ -7,3 +7,7 @@ Annulus_Benchmarks/Latex_Files/*
 !Annulus_Benchmarks/Latex_Files/*.tex
 
 .DS_Store
+
+Spherical_Benchmarks/output/
+Spherical_Benchmarks/.meshes/
+Spherical_Benchmarks/.ipynb_checkpoints/
