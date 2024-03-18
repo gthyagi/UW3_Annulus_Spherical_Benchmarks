@@ -78,7 +78,8 @@ res = 1/res_inv
 
 vdegree  = 2
 pdegree = 1
-pcont = 'true'
+pcont = True
+pcont_str = str(pcont).lower()
 
 vel_penalty = 1e8
 stokes_tol = 1e-10
@@ -88,13 +89,14 @@ stokes_tol_str = str("{:.1e}".format(stokes_tol))
 # -
 
 # compute analytical solutions
-comp_ana = True
-do_timing = True
-plotting = True
+analytical = True
+timing = True
+visualize= True
 
 # +
 output_dir = os.path.join(os.path.join("./output/Latex_Dir/"), 
-                          f"model_k_{k}_res_{res_inv}_vdeg_{vdegree}_pdeg_{pdegree}_pcont_{pcont}_vel_penalty_{vel_penalty_str}_stokes_tol_{stokes_tol_str}/")
+                          f'model_k_{k}_res_{res_inv}_vdeg_{vdegree}_pdeg_{pdegree}'
+                          f'_pcont_{pcont_str}_vel_penalty_{vel_penalty_str}_stokes_tol_{stokes_tol_str}/')
 
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
@@ -134,7 +136,7 @@ v_y = v_r * sympy.sin(theta) + v_theta * sympy.cos(theta)
 
 # -
 
-# ### Plotting and Analysis functions
+# ### visualizeand Analysis functions
 
 def plot_mesh(_mesh, _save_png=False, _dir_fname='', _title=''):
     # plot mesh
@@ -242,18 +244,18 @@ def save_colorbar(_colormap='', _cb_bounds='', _vmin='', _vmax='', _figsize_cb='
 
 # ### Create Mesh
 
-if do_timing:
+if timing:
     uw.timing.reset()
     uw.timing.start()
 
 # mesh
 mesh = uw.meshing.Annulus(radiusOuter=r_o, radiusInner=r_i, cellSize=res, qdegree=max(pdegree, vdegree), degree=1)
 
-if do_timing:
+if timing:
     uw.timing.stop()
     uw.timing.print_table(group_by='line_routine', output_file=f"{output_dir}/mesh_create_time.txt",  display_fraction=1.00)
 
-if uw.mpi.size == 1 and plotting:
+if uw.mpi.size == 1 and visualize:
     plot_mesh(mesh, _save_png=True, _dir_fname=output_dir+'mesh.png', _title='k='+str(k))
 
 # print mesh size in each cpu
@@ -265,23 +267,16 @@ if uw.mpi.rank == 0:
 
 # +
 # mesh variables
-v_uw = uw.discretisation.MeshVariable(r"\mathbf{u}", mesh, 2, degree=vdegree)
-if pcont == 'true':
-    p_uw = uw.discretisation.MeshVariable(r"p", mesh, 1, degree=pdegree, continuous=True)
-else:
-    p_uw = uw.discretisation.MeshVariable(r"p", mesh, 1, degree=pdegree, continuous=False)
+v_uw = uw.discretisation.MeshVariable('V_u', mesh, mesh.data.shape[1], degree=vdegree)
+p_uw = uw.discretisation.MeshVariable('P_u', mesh, 1, degree=pdegree, continuous=pcont)
 
-if comp_ana:
-    v_ana = uw.discretisation.MeshVariable(r"\mathbf{v}", mesh, 2, degree=vdegree)
-    v_err = uw.discretisation.MeshVariable(r"\mathbf{u_e}", mesh, 2, degree=vdegree)
-    if pcont == 'true':
-        p_ana = uw.discretisation.MeshVariable(r"p_a", mesh, 1, degree=pdegree, continuous=True)
-        rho_ana = uw.discretisation.MeshVariable(r"rho_a", mesh, 1, degree=pdegree, continuous=True)
-        p_err = uw.discretisation.MeshVariable(r"p_e", mesh, 1, degree=pdegree, continuous=True)
-    else:
-        p_ana = uw.discretisation.MeshVariable(r"p_a", mesh, 1, degree=pdegree, continuous=False)
-        rho_ana = uw.discretisation.MeshVariable(r"rho_a", mesh, 1, degree=pdegree, continuous=False)
-        p_err = uw.discretisation.MeshVariable(r"p_e", mesh, 1, degree=pdegree, continuous=False)
+if analytical:
+    v_ana = uw.discretisation.MeshVariable('V_a', mesh, mesh.data.shape[1], degree=vdegree)
+    p_ana = uw.discretisation.MeshVariable('P_a', mesh, 1, degree=pdegree, continuous=pcont)
+    rho_ana = uw.discretisation.MeshVariable('RHO_a', mesh, 1, degree=pdegree, continuous=True) # radial stress
+    
+    v_err = uw.discretisation.MeshVariable('V_e', mesh, mesh.data.shape[1], degree=vdegree)
+    p_err = uw.discretisation.MeshVariable('P_e', mesh, 1, degree=pdegree, continuous=pcont)
 
 # +
 # # Null space evaluation
@@ -300,7 +295,7 @@ v_theta_fn_xy = r_uw * mesh.CoordinateSystem.rRotN.T * sympy.Matrix((0,1))
 # -
 
 # Analytical velocities
-if comp_ana:
+if analytical:
     with mesh.access(v_ana, p_ana, rho_ana):
         if k==0:
             v_ana_expr = mesh.CoordinateSystem.rRotN.T * sympy.Matrix([0, v_theta.subs({r:r_uw, theta:th_uw})])
@@ -315,8 +310,8 @@ if comp_ana:
         v_ana.data[:,0] = uw.function.evalf(v_ana_expr[0], v_ana.coords)
         v_ana.data[:,1] = uw.function.evalf(v_ana_expr[1], v_ana.coords)
 
-# plotting analytical density
-if uw.mpi.size == 1 and comp_ana and plotting:
+# visualize analytical density
+if uw.mpi.size == 1 and analytical and visualize:
     # density plot
     plot_scalar(mesh, rho_ana.sym, 'rho', _cmap=cmc.roma.resampled(31), _clim=[-67.5, 67.5], _save_png=True, 
                 _dir_fname=output_dir+'rho_ana.png', _title='k='+str(k), )
@@ -324,8 +319,8 @@ if uw.mpi.size == 1 and comp_ana and plotting:
     save_colorbar(_colormap=cmc.roma.resampled(31), _cb_bounds='', _vmin=-67.5, _vmax=67.5, _figsize_cb=(5, 5), _primary_fs=18, _cb_orient='horizontal', 
                   _cb_axis_label='Density', _cb_label_xpos=0.5, _cb_label_ypos=-2.0, _fformat='pdf', _output_path=output_dir, _fname='rho_ana')
 
-# plotting analytical velocities
-if uw.mpi.size == 1 and comp_ana and plotting:
+# visualize analytical velocities
+if uw.mpi.size == 1 and analytical and visualize:
     # velocity plot
     plot_vector(mesh, v_ana, _vector_name='v_ana', _cmap=cmc.lapaz.resampled(11), _clim=[0., 2.3], _vmag=1e-1, _vfreq=40,
                 _save_png=True, _dir_fname=output_dir+'vel_ana.png')
@@ -333,8 +328,8 @@ if uw.mpi.size == 1 and comp_ana and plotting:
     save_colorbar(_colormap=cmc.lapaz.resampled(11), _cb_bounds='', _vmin=0., _vmax=2.3, _figsize_cb=(5, 5), _primary_fs=18, _cb_orient='horizontal', 
                   _cb_axis_label='Velocity', _cb_label_xpos=0.5, _cb_label_ypos=-2.05, _fformat='pdf', _output_path=output_dir, _fname='v_ana')
 
-# plotting analytical pressure
-if uw.mpi.size == 1 and comp_ana and plotting:
+# visualize analytical pressure
+if uw.mpi.size == 1 and analytical and visualize:
     # pressure plot
     plot_scalar(mesh, p_ana.sym, 'p_ana', _cmap=cmc.vik.resampled(41), _clim=[-8.5, 8.5], _save_png=True, 
                 _dir_fname=output_dir+'p_ana.png')
@@ -396,13 +391,13 @@ stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative"
 stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
 # -
 
-if do_timing:
+if timing:
     uw.timing.reset()
     uw.timing.start()
 
 stokes.solve(verbose=False)
 
-if do_timing:
+if timing:
     uw.timing.stop()
     uw.timing.print_table(group_by='line_routine', output_file=f"{output_dir}/stokes_solve_time.txt", display_fraction=1.00)
 
@@ -421,47 +416,47 @@ if do_timing:
 # -
 
 # compute error
-if comp_ana:
+if analytical:
     with mesh.access(v_uw, p_uw, v_err, p_err):
         v_err.data[:,0] = v_uw.data[:,0] - v_ana.data[:,0]
         v_err.data[:,1] = v_uw.data[:,1] - v_ana.data[:,1]
         p_err.data[:,0] = p_uw.data[:,0] - p_ana.data[:,0]
 
-# plotting velocities from uw
-if uw.mpi.size == 1 and plotting:
+# visualize velocities from uw
+if uw.mpi.size == 1 and visualize:
     plot_vector(mesh, v_uw, _vector_name='v_uw', _cmap=cmc.lapaz.resampled(11), _clim=[0., 2.3], _vfreq=40, _vmag=1e-1,
                 _save_png=True, _dir_fname=output_dir+'vel_uw.png')
 
-# plotting errror in velocities
-if uw.mpi.size == 1 and comp_ana and plotting:
+# visualize errror in velocities
+if uw.mpi.size == 1 and analytical and visualize:
     plot_vector(mesh, v_err, _vector_name='v_err', _cmap=cmc.lapaz.resampled(11), _clim=[0., 2.3e-4], _vfreq=20, _vmag=10, # 20e3
                 _save_png=True, _dir_fname=output_dir+'vel_err.png')
 
-if comp_ana:   
+if analytical:   
     vmag_expr = (sympy.sqrt(v_err.sym.dot(v_err.sym))/sympy.sqrt(v_ana.sym.dot(v_ana.sym)))*100
-    if uw.mpi.size == 1 and plotting:
+    if uw.mpi.size == 1 and visualize:
         plot_scalar(mesh, vmag_expr, 'vmag_err(%)', _cmap=cmc.oslo_r.resampled(21), _clim=[0, 1], 
                     _save_png=True, _dir_fname=output_dir+'vmag_p_err.png')
 
-# plotting pressure from uw
-if uw.mpi.size == 1 and plotting:
+# visualize pressure from uw
+if uw.mpi.size == 1 and visualize:
     plot_scalar(mesh, p_uw.sym, 'p_uw', _cmap=cmc.vik.resampled(41), _clim=[-8.5, 8.5], 
                 _save_png=True, _dir_fname=output_dir+'p_uw.png')
 
-# plotting error in uw
-if uw.mpi.size == 1 and comp_ana and plotting:
+# visualize error in uw
+if uw.mpi.size == 1 and analytical and visualize:
     plot_scalar(mesh, p_err.sym, 'p_err', _cmap=cmc.vik.resampled(41), _clim=[-0.006, 0.006], 
                 _save_png=True, _dir_fname=output_dir+'p_err.png')
 
-# plotting percentage error in uw
+# visualize percentage error in uw
 if k==0:
     pass
-elif uw.mpi.size == 1 and comp_ana and plotting:
+elif uw.mpi.size == 1 and analytical and visualize:
     plot_scalar(mesh, (p_err.sym[0]/p_ana.sym[0])*100, 'p_err(%)', _cmap=cmc.vik.resampled(41), _clim=[-100, 100], 
                 _save_png=True, _dir_fname=output_dir+'p_p_err.png')
 
 # computing L2 norm
-if comp_ana:
+if analytical:
     with mesh.access(v_err, p_err, p_ana, v_ana):    
         v_err_I = uw.maths.Integral(mesh, v_err.sym.dot(v_err.sym))
         v_ana_I = uw.maths.Integral(mesh, v_ana.sym.dot(v_ana.sym))
@@ -513,7 +508,7 @@ print('RAM Used (GB):', process.memory_info().rss/1024 ** 3)
 # ### From here onwards we compute quantities to compare analytical and numerical solution.
 # ### Feel free to comment out this section
 
-# #### Plotting velocity and pressure on lower and outer boundaries
+# #### visualizevelocity and pressure on lower and outer boundaries
 
 # +
 # get indices
@@ -528,7 +523,7 @@ upper_theta[upper_theta<0] += 2 * np.pi
 # -
 
 # lower and upper bd velocities
-if comp_ana:
+if analytical:
     with mesh.access(v_uw, p_uw):
         # pressure
         p_ana_lower = np.zeros((len(lower_indx), 1))
@@ -558,7 +553,7 @@ if comp_ana:
         v_uw_lower = uw.function.evalf(v_uw.sym, mesh.data[lower_indx])
         v_uw_upper = uw.function.evalf(v_uw.sym, mesh.data[upper_indx])
 
-# sort array for plotting
+# sort array for visualize
 sort_lower = lower_theta.argsort()
 sort_upper = upper_theta.argsort()
 
@@ -590,7 +585,7 @@ def plot_stats(_data_list='', _label_list='', _line_style='', _xlabel='', _ylabe
 
 
 # +
-# plotting pressure on lower and upper boundaries
+# visualizepressure on lower and upper boundaries
 data_list = [np.hstack((np.c_[lower_theta[sort_lower]], p_ana_lower[sort_lower])),
              np.hstack((np.c_[upper_theta[sort_upper]], p_ana_upper[sort_upper])), 
              np.hstack((np.c_[lower_theta[sort_lower]], p_uw_lower[sort_lower])), 
@@ -622,7 +617,7 @@ v_uw_lower_mag = get_magnitude(v_uw_lower)
 v_uw_upper_mag = get_magnitude(v_uw_upper)
 
 # +
-# plotting vel. mag on lower and upper boundaries
+# visualizevel. mag on lower and upper boundaries
 data_list = [np.hstack((np.c_[lower_theta[sort_lower]], v_ana_lower_mag[sort_lower])),
              np.hstack((np.c_[upper_theta[sort_upper]], v_ana_upper_mag[sort_upper])), 
              np.hstack((np.c_[lower_theta[sort_lower]], v_uw_lower_mag[sort_lower])), 
@@ -641,7 +636,7 @@ plot_stats(_data_list=data_list, _label_list=label_list, _line_style=linestyle_l
 v_uw_r_th = mesh.CoordinateSystem.rRotN*v_uw.sym.T
 
 # radial and theta components of velocity integrated over mesh. Theoretically output should be zero
-if comp_ana:   
+if analytical:   
     v_r_rms_I = uw.maths.Integral(mesh, v_uw_r_th[0])
     print((1/(2*np.pi))*v_r_rms_I.evaluate())
 
@@ -670,7 +665,7 @@ def get_vel_avg_r(_theta_arr, _r_arr, _vel_comp):
 vr_avg = get_vel_avg_r(theta_0_2pi, r_i_o, v_uw_r_th[0])
 
 # +
-# plotting velocity radial component average
+# visualizevelocity radial component average
 data_list = [np.hstack((np.c_[r_i_o], np.c_[np.zeros_like(r_i_o)])),
              np.hstack((np.c_[r_i_o], np.c_[vr_avg]))]
 label_list = ['k='+str(k)+' (analy.)',
@@ -685,7 +680,7 @@ plot_stats(_data_list=data_list, _label_list=label_list, _line_style=linestyle_l
 vth_avg = get_vel_avg_r(theta_0_2pi, r_i_o, v_uw_r_th[1])
 
 # +
-# plotting velocity theta component average
+# visualizevelocity theta component average
 data_list = [np.hstack((np.c_[r_i_o], np.c_[np.zeros_like(r_i_o)])),
              np.hstack((np.c_[r_i_o], np.c_[vth_avg]))]
 label_list = ['k='+str(k)+' (analy.)',
@@ -718,7 +713,7 @@ f_lbd = lambdify([r], f)
 vr_rms = get_vel_rms_r(theta_0_2pi, r_i_o, v_uw_r_th[0]**2)
 
 # +
-# plotting velocity radial component rms
+# visualizevelocity radial component rms
 data_list = [np.hstack((np.c_[r_i_o], np.c_[k*np.abs(g_lbd(r_i_o))/np.sqrt(2)])),
              np.hstack((np.c_[r_i_o], np.c_[vr_rms]))]
 label_list = ['k='+str(k)+' (analy.)',
@@ -733,7 +728,7 @@ plot_stats(_data_list=data_list, _label_list=label_list, _line_style=linestyle_l
 vth_rms = get_vel_rms_r(theta_0_2pi, r_i_o, v_uw_r_th[1]**2)
 
 # +
-# plotting velocity radial component rms
+# visualizevelocity radial component rms
 data_list = [np.hstack((np.c_[r_i_o], np.c_[np.abs(f_lbd(r_i_o))/np.sqrt(2)])),
              np.hstack((np.c_[r_i_o], np.c_[vth_rms]))]
 label_list = ['k='+str(k)+' (analy.)',

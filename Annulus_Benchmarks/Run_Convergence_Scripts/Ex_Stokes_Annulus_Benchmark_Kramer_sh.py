@@ -99,7 +99,8 @@ elif case in ('case4'):
 
 # +
 output_dir = os.path.join(os.path.join("./output/Annulus_Benchmark_Kramer/"), 
-                          f"{case}_n_{n}_k_{k}_res_{res_inv}_vdeg_{vdegree}_pdeg_{pdegree}_pcont_{pcont}_vel_penalty_{vel_penalty_str}_stokes_tol_{stokes_tol_str}/")
+                          f'{case}_n_{n}_k_{k}_res_{res_inv}_vdeg_{vdegree}_pdeg_{pdegree}'\
+                          f'_pcont_{pcont}_vel_penalty_{vel_penalty_str}_stokes_tol_{stokes_tol_str}/')
 
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
