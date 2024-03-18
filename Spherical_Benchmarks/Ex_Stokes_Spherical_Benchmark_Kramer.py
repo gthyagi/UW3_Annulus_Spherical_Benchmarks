@@ -37,17 +37,9 @@ r_o = 2.22
 r_int = 2.0
 r_i = 1.22
 
-res_inv = 8 # 4, 8, 16, 32, 64, 128
-res = 1/res_inv
-res_int_fac = 1/2
-
-# r_o = 2.22
-# r_i = 1.22
-# r_int = (r_o+r_i)/2
-
-# res_inv = 32 # 8, 16, 32, 64, 128
-# res = 1/res_inv
-# res_int_fac = 1
+res = 8 # 4, 8, 16, 32, 64, 128
+cellsize = 1/res
+cellsize_int_fac = 1/2
 # -
 
 # ##### Case1: Freeslip boundaries and delta function density perturbation
@@ -105,7 +97,7 @@ elif case in ('case4'):
 # +
 # output_dir = os.path.join(os.path.join("./output/Latex_Dir/"), f"{case}/")
 output_dir = os.path.join(os.path.join("./output/Latex_Dir/"), 
-                          f'{case}_l_{l}_m_{m}_k_{k}_res_{res_inv}_vdeg_{vdegree}_pdeg_{pdegree}'\
+                          f'{case}_l_{l}_m_{m}_k_{k}_res_{res}_vdeg_{vdegree}_pdeg_{pdegree}'\
                           f'_pcont_{pcont_str}_vel_penalty_{vel_penalty_str}_stokes_tol_{stokes_tol_str}/')
 
 if uw.mpi.rank == 0:
@@ -288,14 +280,22 @@ if timing:
     uw.timing.reset()
     uw.timing.start()
 
-mesh = uw.meshing.SegmentedSphericalShell(radiusInner=r_i, radiusOuter=r_o, cellSize=res, numSegments=5, qdegree=max(pdegree, vdegree))
+mesh = uw.meshing.SegmentedSphericalShell(radiusInner=r_i, radiusOuter=r_o, cellSize=cellsize, numSegments=5, qdegree=max(pdegree, vdegree), 
+                                          filename=f'{output_dir}/mesh.msh')
 
 if timing:
     uw.timing.stop()
     uw.timing.print_table(group_by='line_routine', output_file=f"{output_dir}/mesh_create_time.txt",  display_fraction=1.00)
 
-if uw.mpi.size == 1:
+if uw.mpi.size == 1 and visualize:
     plot_mesh(mesh, _save_png=True, _dir_fname=output_dir+'mesh.png', _title=case, _show_clip=True)
+
+# print mesh size in each cpu
+if uw.mpi.rank == 0:
+    print('-------------------------------------------------------------------------------')
+mesh.dm.view()
+if uw.mpi.rank == 0:
+    print('-------------------------------------------------------------------------------')
 
 # +
 # mesh variables
@@ -653,7 +653,7 @@ if uw.mpi.rank == 0:
 # -
 
 # saving h5 and xdmf file
-mesh.petsc_save_checkpoint(index=0, meshVars=[v_uw, p_uw, v_ana, p_ana, v_err, p_err], outputPath=output_dir+'output')
+mesh.petsc_save_checkpoint(index=0, meshVars=[v_uw, p_uw, v_ana, p_ana, v_err, p_err], outputPath=os.path.relpath(output_dir)+'output')
 
 # +
 if uw.mpi.rank == 0:
