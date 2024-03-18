@@ -37,17 +37,9 @@ r_o = 2.22
 r_int = 2.0
 r_i = 1.22
 
-res_inv = 32 # 8, 16, 32, 64, 128
-res = 1/res_inv
-res_int_fac = 1/2
-
-# r_o = 2.22
-# r_i = 1.22
-# r_int = (r_o+r_i)/2
-
-# res_inv = 32 # 8, 16, 32, 64, 128
-# res = 1/res_inv
-# res_int_fac = 1
+res = 32 # 8, 16, 32, 64, 128
+cellsize = 1/res
+csize_int_fac = 1/2 # internal layer cellsize factor
 
 vdegree  = 2
 pdegree = 1
@@ -88,7 +80,7 @@ visualize= True
 
 # +
 # specify the case 
-case = 'case4'
+case = 'case3'
 
 n = 2 # wave number
 k = 0 # power (check the reference paper)
@@ -109,8 +101,8 @@ elif case in ('case4'):
 # +
 output_dir = os.path.join(os.path.join("./output/Latex_Dir/"), f"{case}/")
 # output_dir = os.path.join(os.path.join("./output/Annulus_Benchmark_Kramer/"), 
-#                           f'{case}_n_{n}_k_{k}_res_{res_inv}_vdeg_{vdegree}_pdeg_{pdegree}'\
-#                           f'_pcont_{pcont}_vel_penalty_{vel_penalty_str}_stokes_tol_{stokes_tol_str}/')
+#                           f'{case}_n_{n}_k_{k}_res_{res}_vdeg_{vdegree}_pdeg_{pdegree}'\
+#                           f'_pcont_{pcont_str}_vel_penalty_{vel_penalty_str}_stokes_tol_{stokes_tol_str}/')
 
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
@@ -260,20 +252,29 @@ if delta_fn:
     mesh = uw.meshing.AnnulusInternalBoundary(radiusOuter=r_o, 
                                               radiusInternal=r_int, 
                                               radiusInner=r_i, 
-                                              cellSize_Inner=res,
-                                              cellSize_Internal=res*res_int_fac,
-                                              cellSize_Outer=res,)
+                                              cellSize_Inner=cellsize,
+                                              cellSize_Internal=cellsize*csize_int_fac,
+                                              cellSize_Outer=cellsize,
+                                              filename=f'{output_dir}/mesh.msh')
 elif smooth:
-    mesh = uw.meshing.Annulus(radiusOuter=r_o, radiusInner=r_i, cellSize=res, 
-                              qdegree=2, degree=1)
+    mesh = uw.meshing.Annulus(radiusOuter=r_o, radiusInner=r_i, cellSize=cellsize, 
+                              qdegree=max(pdegree, vdegree), degree=1, 
+                              filename=f'{output_dir}/mesh.msh')
 
 if timing:
     uw.timing.stop()
     uw.timing.print_table(group_by='line_routine', output_file=f"{output_dir}/mesh_create_time.txt",  display_fraction=1.00)
 
-if uw.mpi.size == 1:
+if uw.mpi.size == 1 and visualize:
     plot_mesh(mesh, _save_png=True, _dir_fname=output_dir+'mesh.png', _title=case)
 
+
+# print mesh size in each cpu
+if uw.mpi.rank == 0:
+    print('-------------------------------------------------------------------------------')
+mesh.dm.view()
+if uw.mpi.rank == 0:
+    print('-------------------------------------------------------------------------------')
 
 # +
 # mesh variables
@@ -614,12 +615,14 @@ if analytical:
         v_err_I = uw.maths.Integral(mesh, v_err.sym.dot(v_err.sym))
         v_ana_I = uw.maths.Integral(mesh, v_ana.sym.dot(v_ana.sym))
         v_err_l2 = np.sqrt(v_err_I.evaluate())/np.sqrt(v_ana_I.evaluate())
-        print('Relative error in velocity in the L2 norm: ', v_err_l2)
-    
+        
         p_err_I = uw.maths.Integral(mesh, p_err.sym.dot(p_err.sym))
         p_ana_I = uw.maths.Integral(mesh, p_ana.sym.dot(p_ana.sym))
         p_err_l2 = np.sqrt(p_err_I.evaluate())/np.sqrt(p_ana_I.evaluate())
-        print('Relative error in pressure in the L2 norm: ', p_err_l2)
+        
+        if uw.mpi.rank == 0:
+            print('Relative error in velocity in the L2 norm: ', v_err_l2)
+            print('Relative error in pressure in the L2 norm: ', p_err_l2)
 
 # +
 # writing l2 norms to h5 file
@@ -636,7 +639,7 @@ if uw.mpi.rank == 0:
         f.create_dataset("p_l2_norm", data=p_err_l2)
 # +
 # # saving h5 and xdmf file
-# mesh.petsc_save_checkpoint(index=0, meshVars=[v_uw, p_uw, v_ana, p_ana, rho_ana, v_err, p_err], outputPath=output_dir+'output')
+# mesh.petsc_save_checkpoint(index=0, meshVars=[v_uw, p_uw, v_ana, p_ana, rho_ana, v_err, p_err], outputPath=os.path.relpath(output_dir)+'output')
 # -
 
 

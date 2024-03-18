@@ -38,6 +38,8 @@
 #
 # In the present case, we set $ R_1 = 1, R_2 = 2$ and $C = -1 $.
 
+from mpi4py import MPI
+
 # +
 import underworld3 as uw
 from underworld3.systems import Stokes
@@ -73,8 +75,8 @@ r_o = 2
 
 k = 1 # controls the number of convection cells
 
-res_inv = 32
-res = 1/res_inv
+res = 32
+cellsize = 1/res
 
 vdegree  = 2
 pdegree = 1
@@ -95,7 +97,7 @@ visualize= True
 
 # +
 output_dir = os.path.join(os.path.join("./output/Latex_Dir/"), 
-                          f'model_k_{k}_res_{res_inv}_vdeg_{vdegree}_pdeg_{pdegree}'
+                          f'model_k_{k}_res_{res}_vdeg_{vdegree}_pdeg_{pdegree}'
                           f'_pcont_{pcont_str}_vel_penalty_{vel_penalty_str}_stokes_tol_{stokes_tol_str}/')
 
 if uw.mpi.rank == 0:
@@ -249,7 +251,8 @@ if timing:
     uw.timing.start()
 
 # mesh
-mesh = uw.meshing.Annulus(radiusOuter=r_o, radiusInner=r_i, cellSize=res, qdegree=max(pdegree, vdegree), degree=1)
+mesh = uw.meshing.Annulus(radiusOuter=r_o, radiusInner=r_i, cellSize=cellsize, qdegree=max(pdegree, vdegree), degree=1,
+                          filename=f'{output_dir}/mesh.msh')
 
 if timing:
     uw.timing.stop()
@@ -475,10 +478,6 @@ if analytical:
                 print('Relative error in pressure in the L2 norm: ', p_err_l2)
 
 # +
-# Relative error in velocity in the L2 norm:  7.874960338926923e-05
-# Relative error in pressure in the L2 norm:  0.0006003496290628329
-
-# +
 # writing l2 norms to h5 file
 if uw.mpi.size == 1 and os.path.isfile(output_dir+'error_norm.h5'):
     os.remove(output_dir+'error_norm.h5')
@@ -497,7 +496,7 @@ if uw.mpi.rank == 0:
 
 # +
 # # saving h5 and xdmf file
-# mesh.petsc_save_checkpoint(index=0, meshVars=[v_uw, p_uw, v_ana, p_ana, rho_ana, v_err, p_err], outputPath=output_dir+'output')
+# mesh.petsc_save_checkpoint(index=0, meshVars=[v_uw, p_uw, v_ana, p_ana, rho_ana, v_err, p_err], outputPath=os.path.relpath(output_dir)+'output')
 # -
 
 # memory stats: needed only on mac
