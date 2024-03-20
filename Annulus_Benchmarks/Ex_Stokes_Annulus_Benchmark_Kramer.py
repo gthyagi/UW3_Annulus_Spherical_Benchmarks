@@ -639,7 +639,7 @@ if uw.mpi.rank == 0:
         f.create_dataset("p_l2_norm", data=p_err_l2)
 # +
 # # saving h5 and xdmf file
-# mesh.petsc_save_checkpoint(index=0, meshVars=[v_uw, p_uw, v_ana, p_ana, rho_ana, v_err, p_err], outputPath=os.path.relpath(output_dir)+'output')
+# mesh.petsc_save_checkpoint(index=0, meshVars=[v_uw, p_uw, v_ana, p_ana, rho_ana, v_err, p_err], outputPath=os.path.relpath(output_dir)+'/output')
 # -
 
 
