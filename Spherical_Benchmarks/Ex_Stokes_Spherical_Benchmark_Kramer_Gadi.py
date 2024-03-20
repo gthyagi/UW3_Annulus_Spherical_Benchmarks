@@ -37,7 +37,7 @@ r_o = 2.22
 r_int = 2.0
 r_i = 1.22
 
-res = 8 # 4, 8, 16, 32, 64, 128
+res = 16 # 4, 8, 16, 32, 64, 128
 cellsize = 1/res
 cellsize_int_fac = 1/2
 # -
@@ -62,7 +62,7 @@ cellsize_int_fac = 1/2
 
 # +
 # specify the case 
-case = 'case4'
+case = 'case3'
 
 # spherical harmonic fn degree (l) and order (m)
 l = 2
@@ -306,6 +306,7 @@ if analytical:
     v_ana = uw.discretisation.MeshVariable('V_a', mesh, mesh.data.shape[1], degree=vdegree)
     p_ana = uw.discretisation.MeshVariable('P_a', mesh, 1, degree=pdegree, continuous=pcont)
     rad_ss_ana = uw.discretisation.MeshVariable('RSS_a', mesh, 1, degree=pdegree, continuous=True) # radial stress
+    rho_ana = uw.discretisation.MeshVariable('RHO_a', mesh, 1, degree=pdegree, continuous=True)
     
     v_err = uw.discretisation.MeshVariable('V_e', mesh, mesh.data.shape[1], degree=vdegree)
     p_err = uw.discretisation.MeshVariable('P_e', mesh, 1, degree=pdegree, continuous=pcont)
@@ -419,10 +420,10 @@ stokes.saddle_preconditioner = 1.0
 
 # +
 # defining rho fn
+y_lm_real = sympy.sqrt((2*l + 1)/(4*sympy.pi) * sympy.factorial(l - m)/sympy.factorial(l + m)) * sympy.cos(m*phi_uw) * sympy.assoc_legendre(l, m, sympy.cos(th_uw))
 if delta_fn:
-    rho = sympy.cos(n*th_uw) * sympy.exp(-1e5 * ((r_uw - r_int) ** 2))
+    rho = sympy.exp(-1e5 * ((r_uw - r_int) ** 2)) * y_lm_real
 elif smooth:
-    y_lm_real = sympy.sqrt((2*l + 1)/(4*sympy.pi) * sympy.factorial(l - m)/sympy.factorial(l + m)) * sympy.cos(m*phi_uw) * sympy.assoc_legendre(l, m, sympy.cos(th_uw))
     rho = ((r_uw/r_o)**k) * y_lm_real
     
 
@@ -434,10 +435,14 @@ stokes.add_natural_bc(vel_penalty*v_diff, "Lower")
 
 # bodyforce term
 if delta_fn:
-    stokes.bodyforce = sympy.Matrix([0., 0.])
+    stokes.bodyforce = sympy.Matrix([0., 0., 0.])
 elif smooth:
     gravity_fn = -1.0 * unit_rvec # gravity
     stokes.bodyforce = rho*gravity_fn 
+
+if analytical:
+    with mesh.access(rho_ana):
+        rho_ana.data[:] = np.c_[uw.function.evaluate(rho, rho_ana.coords)]
 
 # +
 # visualizing rho
@@ -655,7 +660,7 @@ if uw.mpi.rank == 0:
 # -
 
 # saving h5 and xdmf file
-mesh.petsc_save_checkpoint(index=0, meshVars=[v_uw, p_uw, v_ana, p_ana, v_err, p_err], outputPath=os.path.relpath(output_dir)+'output')
+mesh.petsc_save_checkpoint(index=0, meshVars=[v_uw, p_uw, v_ana, p_ana, v_err, p_err, rho_ana], outputPath=os.path.relpath(output_dir)+'/output')
 
 # +
 if uw.mpi.rank == 0:
