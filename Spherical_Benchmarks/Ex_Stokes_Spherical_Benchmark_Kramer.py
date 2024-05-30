@@ -15,6 +15,9 @@ import sympy
 import os
 import assess
 import h5py
+import sys
+from enum import Enum
+from underworld3.coordinates import CoordinateSystemType
 # -
 
 os.environ["SYMPY_USE_CACHE"] = "no"
@@ -37,9 +40,24 @@ r_o = 2.22
 r_int = 2.0
 r_i = 1.22
 
-res = 8 # 4, 8, 16, 32, 64, 128
-cellsize = 1/res
-cellsize_int_fac = 1/2
+sph_type = 'SphericalShell' # sph_type:'SphericalShell', 'CubedSphere', 'SegmentedSphere'
+msh_h5_load = False # Load existing mesh h5 file 
+
+refine_callback = False # whether or not put the outer/inner simplices at analytical spherical surfaces
+ref_cb_str = str(refine_callback).lower()
+
+res = 4 # 4, 8, 16, 32, 64, 96 (actual res of the model)
+refine = None
+
+if refine==None:
+    res_1 = res
+else:
+    if sph_type=='CubedSphere':
+        res_1 = res
+    else:
+        res_1 = int(res/2**refine)
+
+cellsize = 1/res_1
 # -
 
 # ##### Case1: Freeslip boundaries and delta function density perturbation
@@ -62,7 +80,7 @@ cellsize_int_fac = 1/2
 
 # +
 # specify the case 
-case = 'case4'
+case = 'case2'
 
 # spherical harmonic fn degree (l) and order (m)
 l = 2
@@ -76,10 +94,17 @@ pdegree = 1
 pcont = True
 pcont_str = str(pcont).lower()
 
-vel_penalty = 1e8
-stokes_tol = 1e-5
+vel_penalty = 2.5e8
+stokes_tol = 1e-10
 vel_penalty_str = str("{:.1e}".format(vel_penalty))
 stokes_tol_str = str("{:.1e}".format(stokes_tol))
+# -
+
+# compute analytical solution
+analytical = True
+visualize = True
+timing = True
+save_png = True
 
 # +
 # boundary condition and density perturbation
@@ -95,19 +120,14 @@ elif case in ('case4'):
     noslip, smooth = True, True
 
 # +
-# output_dir = os.path.join(os.path.join("./output/Latex_Dir/"), f"{case}/")
+# output dir
 output_dir = os.path.join(os.path.join("./output/Latex_Dir/"), 
-                          f'{case}_l_{l}_m_{m}_k_{k}_res_{res}_vdeg_{vdegree}_pdeg_{pdegree}'\
+                          f'{case}_l_{l}_m_{m}_k_{k}_res_{res_1}_refine_{refine}_ref_cb_{ref_cb_str}_vdeg_{vdegree}_pdeg_{pdegree}'\
                           f'_pcont_{pcont_str}_vel_penalty_{vel_penalty_str}_stokes_tol_{stokes_tol_str}/')
 
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
 # -
-
-# compute analytical solution
-analytical = True
-visualize = True
-timing = True
 
 # ### Analytical Solution
 
@@ -146,13 +166,13 @@ def plot_mesh(_mesh, _save_png=False, _dir_fname='', _title='', _show_clip=False
     if _show_clip:
         clip1_normal = (np.cos(np.deg2rad(135)), np.cos(np.deg2rad(135)), 0.0)
         clip1 = pvmesh.clip(origin=(0.0, 0.0, 0.0), normal=clip1_normal, invert=False, crinkle=False)
-        pl.add_mesh(clip1, cmap="coolwarm", edge_color="Black", show_edges=True, use_transparency=False, show_scalar_bar=False, opacity=1.0,)
+        pl.add_mesh(clip1, cmap="coolwarm", edge_color="Black", show_edges=True, use_transparency=False, show_scalar_bar=False, opacity=1.0)
 
         clip2_normal = (np.cos(np.deg2rad(135)), -np.cos(np.deg2rad(135)), 0.0)
         clip2 = pvmesh.clip(origin=(0.0, 0.0, 0.0), normal=clip2_normal, invert=False, crinkle=False)
-        pl.add_mesh(clip2, cmap="coolwarm", edge_color="Black", show_edges=True, use_transparency=False, show_scalar_bar=False, opacity=1.0,)
+        pl.add_mesh(clip2, cmap="coolwarm", edge_color="Black", show_edges=True, use_transparency=False, show_scalar_bar=False, opacity=1.0)
     else:
-        pl.add_mesh(pvmesh, edge_color="Grey", show_edges=True, use_transparency=False, opacity=1.0, )
+        pl.add_mesh(pvmesh, edge_color="Grey", show_edges=True, use_transparency=False, opacity=1.0)
 
     pl.show(cpos="yz")
 
@@ -280,15 +300,75 @@ if timing:
     uw.timing.reset()
     uw.timing.start()
 
-mesh = uw.meshing.SegmentedSphericalShell(radiusInner=r_i, radiusOuter=r_o, cellSize=cellsize, numSegments=5, qdegree=max(pdegree, vdegree), 
-                                          filename=f'{output_dir}/mesh.msh')
+# +
+if msh_h5_load:
+    class boundaries(Enum):
+        Lower = 11
+        Upper = 12
+        Centre = 1
+        Internal = 13
+        All_Boundaries = 1001
+    
+    class boundary_normals(Enum):
+        Lower = 11
+        Upper = 12
+        Internal = 13
+        Centre = 1
+    
+    radiusOuter, radiusInner = r_o, r_i
+    def spherical_mesh_refinement_callback(dm):
+        r_o, r_i = radiusOuter, radiusInner
+    
+        c2 = dm.getCoordinatesLocal()
+        coords = c2.array.reshape(-1, 3)
+        R = np.sqrt(coords[:, 0] ** 2 + coords[:, 1] ** 2 + coords[:, 2] ** 2)
+    
+        upperIndices = (uw.cython.petsc_discretisation.petsc_dm_find_labeled_points_local(dm, "Upper"))
+        coords[upperIndices] *= r_o / R[upperIndices].reshape(-1, 1)
+    
+        lowerIndices = (uw.cython.petsc_discretisation.petsc_dm_find_labeled_points_local(dm, "Lower"))
+        coords[lowerIndices] *= r_i / (1.0e-16 + R[lowerIndices].reshape(-1, 1))
+    
+        c2.array[...] = coords.reshape(-1)
+        dm.setCoordinatesLocal(c2)
+        return
+
+    msh_h5_file = f"./output/create_mesh/uw_spherical_shell_ro{r_o}_ri{r_i}_res{res_1}_refine{refine}.msh.h5"
+    
+    if refine_callback:
+        refine_callback_fn = spherical_mesh_refinement_callback
+    else:
+        refine_callback_fn = None
+
+    mesh = uw.discretisation.Mesh(msh_h5_file, degree=1, qdegree=max(pdegree, vdegree), coordinate_system_type=CoordinateSystemType.SPHERICAL,
+                                  useMultipleTags=True, useRegions=True, markVertices=True, boundaries=boundaries, boundary_normals=None,
+                                  refinement=None, refinement_callback=None, verbose=0)
+    # class boundary_normals(Enum):
+    #     Lower = mesh.CoordinateSystem.unit_e_0
+    #     Upper = mesh.CoordinateSystem.unit_e_0
+    #     Internal = mesh.CoordinateSystem.unit_e_0
+    #     Centre = None
+    
+    mesh.boundary_normals = boundary_normals
+    
+else:
+    if sph_type=='SphericalShell':
+        mesh = uw.meshing.SphericalShell(radiusInner=r_i, radiusOuter=r_o, cellSize=cellsize, qdegree=max(pdegree, vdegree), 
+                                         filename=f'{output_dir}mesh.msh', refinement=refine)
+    elif sph_type=='CubedSphere':
+        mesh = uw.meshing.CubedSphere(radiusInner=r_i, radiusOuter=r_o, numElements=res, qdegree=max(pdegree, vdegree), 
+                                      filename=f'{output_dir}mesh.msh', refinement=refine)
+    elif sph_type=='SegmentedSphere':
+        mesh = uw.meshing.SegmentedSphericalShell(radiusInner=r_i, radiusOuter=r_o, cellSize=cellsize, numSegments=5, 
+                                                  qdegree=max(pdegree, vdegree), filename=f'{output_dir}mesh.msh', refinement=refine)
+# -
 
 if timing:
     uw.timing.stop()
-    uw.timing.print_table(group_by='line_routine', output_file=f"{output_dir}/mesh_create_time.txt",  display_fraction=1.00)
+    uw.timing.print_table(group_by='line_routine', output_file=f"{output_dir}mesh_create_time.txt",  display_fraction=1.00)
 
 if uw.mpi.size == 1 and visualize:
-    plot_mesh(mesh, _save_png=True, _dir_fname=output_dir+'mesh.png', _title=case, _show_clip=True)
+    plot_mesh(mesh, _save_png=save_png, _dir_fname=output_dir+'mesh.png', _title=case, _show_clip=True)
 
 # print mesh size in each cpu
 if uw.mpi.rank == 0:
@@ -326,8 +406,8 @@ phi_uw =sympy.Piecewise((2*sympy.pi + mesh.CoordinateSystem.xR[2], mesh.Coordina
                         (mesh.CoordinateSystem.xR[2], True)
                        )
 
-# # Null space in velocity (constant v_theta) expressed in x,y coordinates
-# v_theta_fn_xy = r_uw * mesh.CoordinateSystem.rRotN.T * sympy.Matrix((0,1))
+# Null space in velocity expressed in x,y,z coordinates
+v_theta_phi_fn_xyz = sympy.Matrix(((0,1,1), (-1,0,1), (-1,-1,0))) * mesh.CoordinateSystem.N.T
 # -
 
 if analytical:
@@ -356,7 +436,7 @@ if analytical:
 if case in ('case1'):
     clim, vmag, vfreq = [0., 0.05], 5e0, 75
 elif case in ('case2'):
-    clim, vmag, vfreq = [0., 0.025], 1e1, 75
+    clim, vmag, vfreq = [0., 0.0065], 1e1, 75
 elif case in ('case3'):
     clim, vmag, vfreq = [0., 0.01], 2.5e1, 75
 elif case in ('case4'):
@@ -365,7 +445,7 @@ elif case in ('case4'):
 if uw.mpi.size == 1 and analytical and visualize:
     # velocity plot
     plot_vector(mesh, v_ana, _vector_name='v_ana', _cmap=cmc.lapaz.resampled(11), _clim=clim, _vmag=vmag, _vfreq=vfreq,
-                _save_png=True, _dir_fname=output_dir+'vel_ana.png', _show_clip=True, _show_arrows=False)
+                _save_png=save_png, _dir_fname=output_dir+'vel_ana.png', _show_clip=True, _show_arrows=False)
     # saving colobar separately 
     save_colorbar(_colormap=cmc.lapaz.resampled(11), _cb_bounds='', _vmin=clim[0], _vmax=clim[1], _figsize_cb=(5, 5), _primary_fs=18, 
                   _cb_orient='horizontal', _cb_axis_label='Velocity', _cb_label_xpos=0.5, _cb_label_ypos=-2.05, _fformat='pdf', 
@@ -384,7 +464,7 @@ elif case in ('case4'):
 
 if uw.mpi.size == 1 and analytical and visualize:
     # pressure plot
-    plot_scalar(mesh, p_ana.sym, 'p_ana', _cmap=cmc.vik.resampled(41), _clim=clim, _save_png=True, _show_clip=True,
+    plot_scalar(mesh, p_ana.sym, 'p_ana', _cmap=cmc.vik.resampled(41), _clim=clim, _save_png=save_png, _show_clip=True,
                 _dir_fname=output_dir+'p_ana.png')
     # saving colobar separately 
     save_colorbar(_colormap=cmc.vik.resampled(41), _cb_bounds='', _vmin=clim[0], _vmax=clim[1], _figsize_cb=(5, 5), _primary_fs=18, 
@@ -404,7 +484,7 @@ elif case in ('case4'):
         
 if uw.mpi.size == 1 and analytical and visualize:
     # pressure plot
-    plot_scalar(mesh, rad_ss_ana.sym, 'Radial Stress', _cmap=cmc.roma.resampled(31), _clim=clim, _save_png=True, 
+    plot_scalar(mesh, rad_ss_ana.sym, 'Radial Stress', _cmap=cmc.roma.resampled(31), _clim=clim, _save_png=save_png, 
                 _dir_fname=output_dir+'rad_stress_ana.png', _show_clip=True)
     # saving colobar separately 
     save_colorbar(_colormap=cmc.roma.resampled(31), _cb_bounds='', _vmin=clim[0], _vmax=clim[1], _figsize_cb=(5, 5), _primary_fs=18, 
@@ -419,26 +499,22 @@ stokes.constitutive_model.Parameters.viscosity = 1.0
 stokes.saddle_preconditioner = 1.0
 
 # +
-# defining rho fn
+# defining rho fn and bodyforce term
 y_lm_real = sympy.sqrt((2*l + 1)/(4*sympy.pi) * sympy.factorial(l - m)/sympy.factorial(l + m)) * sympy.cos(m*phi_uw) * sympy.assoc_legendre(l, m, sympy.cos(th_uw))
 if delta_fn:
-    rho = sympy.exp(-1e5 * ((r_uw - r_int) ** 2))*y_lm_real
+    rho = sympy.exp(-1e3 * ((r_uw - r_int) ** 2))*y_lm_real
+    stokes.add_natural_bc(-rho * unit_rvec, "Internal")
+    stokes.bodyforce = sympy.Matrix([0., 0., 0.])
 elif smooth:
     rho = ((r_uw/r_o)**k) * y_lm_real
-    
+    gravity_fn = -1.0 * unit_rvec # gravity
+    stokes.bodyforce = rho*gravity_fn 
 
 # boundary conditions
 v_diff =  v_uw.sym - v_ana.sym
 stokes.add_natural_bc(vel_penalty*v_diff, "Upper")
 stokes.add_natural_bc(vel_penalty*v_diff, "Lower")
 # -
-
-# bodyforce term
-if delta_fn:
-    stokes.bodyforce = sympy.Matrix([0., 0., 0.])
-elif smooth:
-    gravity_fn = -1.0 * unit_rvec # gravity
-    stokes.bodyforce = rho*gravity_fn 
 
 if analytical:
     with mesh.access(rho_ana):
@@ -459,7 +535,7 @@ elif noslip:
         
 if uw.mpi.size == 1 and visualize:
     # rho plot
-    plot_scalar(mesh, rho, 'rho', _cmap=cmc.roma.resampled(31), _clim=clim, _save_png=True, 
+    plot_scalar(mesh, rho, 'rho', _cmap=cmc.roma.resampled(31), _clim=clim, _save_png=save_png, 
                 _dir_fname=output_dir+'rho_ana.png', _title=case, _show_clip=True)
     # saving colobar separately 
     save_colorbar(_colormap=cmc.roma.resampled(31), _cb_bounds='', _vmin=clim[0], _vmax=clim[1], _figsize_cb=(5, 5), _primary_fs=18, 
@@ -468,7 +544,6 @@ if uw.mpi.size == 1 and visualize:
 
 # +
 # Stokes settings
-
 stokes.tolerance = stokes_tol
 stokes.petsc_options["ksp_monitor"] = None
 
@@ -502,24 +577,24 @@ if timing:
     uw.timing.reset()
     uw.timing.start()
 
-stokes.solve(verbose=False)
+stokes.solve(verbose=True)
 
 if timing:
     uw.timing.stop()
-    uw.timing.print_table(group_by='line_routine', output_file=f"{output_dir}/stokes_solve_time.txt", display_fraction=1.00)
+    uw.timing.print_table(group_by='line_routine', output_file=f"{output_dir}stokes_solve_time.txt", display_fraction=1.00)
 
 # +
-# # Null space evaluation
+# Null space evaluation
+I0 = uw.maths.Integral(mesh, v_theta_phi_fn_xyz.dot(v_uw.sym))
+norm = I0.evaluate()
 
-# I0 = uw.maths.Integral(mesh, v_theta_fn_xy.dot(v_uw.sym))
-# norm = I0.evaluate()
-# I0.fn = v_theta_fn_xy.dot(v_theta_fn_xy)
-# vnorm = I0.evaluate()
-# # print(norm/vnorm, vnorm)
+I0.fn = v_theta_phi_fn_xyz.dot(v_theta_phi_fn_xyz)
+vnorm = I0.evaluate()
+# print(norm/vnorm, vnorm)
 
-# with mesh.access(v_uw):
-#     dv = uw.function.evaluate(norm * v_theta_fn_xy, v_uw.coords) / vnorm
-#     v_uw.data[...] -= dv 
+with mesh.access(v_uw):
+    dv = uw.function.evaluate(norm * v_theta_phi_fn_xyz, v_uw.coords) / vnorm
+    v_uw.data[...] -= dv 
 # -
 
 # compute error
@@ -546,7 +621,7 @@ if analytical:
 if case in ('case1'):
     clim, vmag, vfreq = [0., 0.05], 5e0, 75
 elif case in ('case2'):
-    clim, vmag, vfreq = [0., 0.025], 1e1, 75
+    clim, vmag, vfreq = [0., 0.0065], 1e1, 75
 elif case in ('case3'):
     clim, vmag, vfreq = [0., 0.01], 2.5e1, 75
 elif case in ('case4'):
@@ -555,7 +630,7 @@ elif case in ('case4'):
 if uw.mpi.size == 1 and visualize:
     # velocity plot
     plot_vector(mesh, v_uw, _vector_name='v_ana', _cmap=cmc.lapaz.resampled(11), _clim=clim, _vmag=vmag, _vfreq=vfreq,
-                _save_png=True, _dir_fname=output_dir+'vel_uw.png', _show_clip=True, _show_arrows=False)
+                _save_png=save_png, _dir_fname=output_dir+'vel_uw.png', _show_clip=True, _show_arrows=False)
 
 # +
 # plotting relative errror in velocities
@@ -571,7 +646,7 @@ elif case in ('case4'):
 if uw.mpi.size == 1 and analytical and visualize:
     # velocity error plot
     plot_vector(mesh, v_err, _vector_name='v_err(relative)', _cmap=cmc.lapaz.resampled(11), _clim=clim, _vmag=vmag, _vfreq=vfreq,
-                _save_png=True, _dir_fname=output_dir+'vel_r_err.png', _show_clip=True, _show_arrows=False)
+                _save_png=save_png, _dir_fname=output_dir+'vel_r_err.png', _show_clip=True, _show_arrows=False)
 
 # +
 # plotting magnitude error in percentage
@@ -587,7 +662,7 @@ elif case in ('case4'):
 if uw.mpi.size == 1 and analytical and visualize: 
     # velocity error plot
     vmag_expr = (sympy.sqrt(v_err.sym.dot(v_err.sym))/sympy.sqrt(v_ana.sym.dot(v_ana.sym)))*100
-    plot_scalar(mesh, vmag_expr, 'vmag_err(%)', _cmap=cmc.oslo_r.resampled(21), _clim=clim, _save_png=True, 
+    plot_scalar(mesh, vmag_expr, 'vmag_err(%)', _cmap=cmc.oslo_r.resampled(21), _clim=clim, _save_png=save_png, 
                 _dir_fname=output_dir+'vel_p_err.png', _show_clip=True)
 
 # +
@@ -603,7 +678,7 @@ elif case in ('case4'):
         
 if uw.mpi.size == 1 and visualize:
     # pressure plot
-    plot_scalar(mesh, p_uw.sym, 'p_uw', _cmap=cmc.vik.resampled(41), _clim=clim, _save_png=True, 
+    plot_scalar(mesh, p_uw.sym, 'p_uw', _cmap=cmc.vik.resampled(41), _clim=clim, _save_png=save_png, 
                 _dir_fname=output_dir+'p_uw.png', _show_clip=True)
 
 # +
@@ -619,14 +694,14 @@ elif case in ('case4'):
         
 if uw.mpi.size == 1 and analytical and visualize:
     # pressure error plot
-    plot_scalar(mesh, p_err.sym, 'p_err(relative)', _cmap=cmc.vik.resampled(41), _clim=clim, _save_png=True, 
+    plot_scalar(mesh, p_err.sym, 'p_err(relative)', _cmap=cmc.vik.resampled(41), _clim=clim, _save_png=save_png, 
                 _dir_fname=output_dir+'p_r_err.png', _show_clip=True)
 # -
 
 # plotting percentage error in uw
 if uw.mpi.size == 1 and analytical and visualize:
     # pressure error plot
-    plot_scalar(mesh, (p_err.sym[0]/p_ana.sym[0])*100, 'p_err(%)', _cmap=cmc.vik.resampled(41), _clim=[-10, 10], _save_png=True, 
+    plot_scalar(mesh, (p_err.sym[0]/p_ana.sym[0])*100, 'p_err(%)', _cmap=cmc.vik.resampled(41), _clim=[-10, 10], _save_png=save_png, 
                 _dir_fname=output_dir+'p_p_err.png', _show_clip=True)
 
 # computing L2 norm
@@ -635,12 +710,14 @@ if analytical:
         v_err_I = uw.maths.Integral(mesh, v_err.sym.dot(v_err.sym))
         v_ana_I = uw.maths.Integral(mesh, v_ana.sym.dot(v_ana.sym))
         v_err_l2 = np.sqrt(v_err_I.evaluate())/np.sqrt(v_ana_I.evaluate())
-        print('Relative error in velocity in the L2 norm: ', v_err_l2)
     
         p_err_I = uw.maths.Integral(mesh, p_err.sym.dot(p_err.sym))
         p_ana_I = uw.maths.Integral(mesh, p_ana.sym.dot(p_ana.sym))
         p_err_l2 = np.sqrt(p_err_I.evaluate())/np.sqrt(p_ana_I.evaluate())
-        print('Relative error in pressure in the L2 norm: ', p_err_l2)
+
+        if uw.mpi.rank == 0:
+            print('Relative error in velocity in the L2 norm: ', v_err_l2)
+            print('Relative error in pressure in the L2 norm: ', p_err_l2)
 
 # +
 # writing l2 norms to h5 file
@@ -652,22 +729,13 @@ if uw.mpi.rank == 0:
     print('Creating new h5 file')
     with h5py.File(output_dir+'error_norm.h5', 'w') as f:
         f.create_dataset("k", data=k)
-        f.create_dataset("cell_size", data=res)
+        f.create_dataset("res", data=res)
+        f.create_dataset("cellsize", data=cellsize)
         f.create_dataset("v_l2_norm", data=v_err_l2)
         f.create_dataset("p_l2_norm", data=p_err_l2)
 # -
 
 # saving h5 and xdmf file
 mesh.petsc_save_checkpoint(index=0, meshVars=[v_uw, p_uw, v_ana, p_ana, v_err, p_err, rho_ana], outputPath=os.path.relpath(output_dir)+'/output')
-
-# +
-if uw.mpi.rank == 0:
-    print('-------------------------------------------------------------------------------')
-
-# memory stats: needed only on mac
-import psutil
-process = psutil.Process()
-print(f'rank: {uw.mpi.rank}, RAM Used (GB): {process.memory_info().rss/1024 ** 3}')
-# -
 
 
