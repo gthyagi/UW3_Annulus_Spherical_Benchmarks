@@ -3,65 +3,8 @@
 # #### [Benchmark paper](https://gmd.copernicus.org/articles/14/1899/2021/) 
 #
 # *Author: [Thyagarajulu Gollapalli](https://github.com/gthyagi)*
-
-from mpi4py import MPI
-
-# +
-import underworld3 as uw
-from underworld3.systems import Stokes
-
-import numpy as np
-import sympy
-import os
-import assess
-import h5py
-# -
-
-os.environ["SYMPY_USE_CACHE"] = "no"
-os.environ["UW_TIMING_ENABLE"] = "1"
-
-if uw.mpi.size == 1:
-    # to fix trame issue
-    import nest_asyncio
-    nest_asyncio.apply()
-    
-    import pyvista as pv
-    import underworld3.visualisation as vis
-    import matplotlib.pyplot as plt
-    import cmcrameri.cm as cmc
-    from scipy import integrate
-
-# +
-# mesh options
-r_o = 2.22
-r_int = 2.0
-r_i = 1.22
-
-res = 32 # 8, 16, 32, 64, 128
-cellsize = 1/res
-csize_int_fac = 1/2 # internal layer cellsize factor
-
-vdegree  = 2
-pdegree = 1
-pcont = True
-pcont_str = str(pcont).lower()
-
-vel_penalty = 1e8
-stokes_tol = 1e-10
-
-vel_penalty_str = str("{:.1e}".format(vel_penalty))
-stokes_tol_str = str("{:.1e}".format(stokes_tol))
-# -
-
-# which normals to use
-ana_normal = not True # unit radial vector
-petsc_normal = True # gamma function
-
-# compute analytical solutions
-analytical = True
-timing = True
-visualize= True
-
+#
+#
 # ##### Case1: Freeslip boundaries and delta function density perturbation
 # <!--    1. Works fine (i.e., bc produce results) -->
 # ##### Case2: Freeslip boundaries and smooth density distribution
@@ -78,12 +21,68 @@ visualize= True
 #     1. Works fine (i.e., bc produce results)
 # -->
 
+from mpi4py import MPI
+import underworld3 as uw
+from underworld3.systems import Stokes
+
+import numpy as np
+import sympy
+import os
+import assess
+import h5py
+from enum import Enum
+
+if uw.mpi.size == 1:
+    # to fix trame issue
+    import nest_asyncio
+    nest_asyncio.apply()
+    
+    import pyvista as pv
+    import underworld3.visualisation as vis
+    import matplotlib.pyplot as plt
+    import cmcrameri.cm as cmc
+    from scipy import integrate
+
+os.environ["SYMPY_USE_CACHE"] = "no"
+os.environ["UW_TIMING_ENABLE"] = "1"
+
+# +
+# mesh options
+r_o = 2.22
+r_int = 2.0
+r_i = 1.22
+
+res = uw.options.getInt("res", default=16) # 8, 16, 32, 64, 128
+cellsize = 1/res
+csize_int_fac = 1/2 # internal layer cellsize factor
+
+vdegree  = uw.options.getInt("vdegree", default=2)
+pdegree = uw.options.getInt("pdegree", default=1)
+pcont = uw.options.getBool("pcont", default=True)
+pcont_str = str(pcont).lower()
+
+vel_penalty = uw.options.getReal("vel_penalty", default=2.5e8)
+stokes_tol = uw.options.getReal("stokes_tol", default=1e-10)
+
+vel_penalty_str = str("{:.1e}".format(vel_penalty))
+stokes_tol_str = str("{:.1e}".format(stokes_tol))
+# -
+
+# which normals to use
+ana_normal = not True # unit radial vector
+petsc_normal = True # gamma function
+
+# compute analytical solutions
+analytical = True
+timing = True
+visualize= True
+
 # +
 # specify the case 
-case = 'case3'
+case = uw.options.getString('case', default='case2')
 
-n = 2 # wave number
-k = 0 # power (check the reference paper)
+n = uw.options.getInt("n", default=2) # wave number
+k = uw.options.getInt("k", default=3) # power (check the reference paper)
 
 # +
 # boundary condition and density perturbation
@@ -99,10 +98,9 @@ elif case in ('case4'):
     noslip, smooth = True, True
 
 # +
-output_dir = os.path.join(os.path.join("./output/Latex_Dir/"), f"{case}/")
-# output_dir = os.path.join(os.path.join("./output/Annulus_Benchmark_Kramer/"), 
-#                           f'{case}_n_{n}_k_{k}_res_{res}_vdeg_{vdegree}_pdeg_{pdegree}'\
-#                           f'_pcont_{pcont_str}_vel_penalty_{vel_penalty_str}_stokes_tol_{stokes_tol_str}/')
+output_dir = os.path.join(os.path.join("./output/Annulus_Benchmark_Kramer/"), 
+                          f'{case}_n_{n}_k_{k}_res_{res}_vdeg_{vdegree}_pdeg_{pdegree}'\
+                          f'_pcont_{pcont_str}_vel_penalty_{vel_penalty_str}_stokes_tol_{stokes_tol_str}/')
 
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
@@ -134,113 +132,6 @@ if analytical:
             soln_above = assess.CylindricalStokesSolutionSmoothZeroSlip(n, k, Rp=r_o, Rm=r_i, nu=1.0, g=1.0)
             soln_below = assess.CylindricalStokesSolutionSmoothZeroSlip(n, k, Rp=r_o, Rm=r_i, nu=1.0, g=1.0)
 
-
-# ### Plotting and Analysis functions
-
-def plot_mesh(_mesh, _save_png=False, _dir_fname='', _title=''):
-    # plot mesh
-    pvmesh = vis.mesh_to_pv_mesh(_mesh)
-
-    pl = pv.Plotter(window_size=(750, 750))
-    pl.add_mesh(pvmesh, edge_color="Grey", show_edges=True, use_transparency=False, opacity=1.0, )
-
-    pl.show(cpos="xy")
-
-    if len(_title)!=0:
-        pl.add_text(_title, font_size=18, position=(950, 1075))
-    
-    if _save_png:
-        pl.camera.zoom(1.4)
-        pl.screenshot(_dir_fname, scale=3.5,)
-
-
-def plot_scalar(_mesh, _scalar, _scalar_name='', _cmap='', _clim='', _save_png=False, _dir_fname='', _title='', _fmt='%10.7f' ):
-    # plot scalar quantity from mesh
-    pvmesh = vis.mesh_to_pv_mesh(_mesh)
-    pvmesh.point_data[_scalar_name] = vis.scalar_fn_to_pv_points(pvmesh, _scalar)
-
-    print(pvmesh.point_data[_scalar_name].min(), pvmesh.point_data[_scalar_name].max())
-    
-    pl = pv.Plotter(window_size=(750, 750))
-    pl.add_mesh(pvmesh, cmap=_cmap, edge_color="Grey", scalars=_scalar_name, show_edges=False, 
-                use_transparency=False, opacity=1.0, clim=_clim, show_scalar_bar=False)
-    
-    # pl.add_scalar_bar(_scalar_name, vertical=False, title_font_size=25, label_font_size=20, fmt=_fmt, 
-    #                   position_x=0.225, position_y=0.01, color='k')
-    
-    pl.show(cpos="xy")
-
-    if len(_title)!=0:
-        pl.add_text(_title, font_size=18, position=(950, 1075))
-
-    if _save_png:
-        pl.camera.zoom(1.4)
-        pl.screenshot(_dir_fname, scale=3.5,)
-
-
-def plot_vector(_mesh, _vector, _vector_name='', _cmap='', _clim='', _vmag='', _vfreq='', _save_png=False, _dir_fname='', _title='', _fmt='%10.7f'):
-    # plot vector quantity from mesh
-    pvmesh = vis.mesh_to_pv_mesh(_mesh)
-    pvmesh.point_data[_vector_name] = vis.vector_fn_to_pv_points(pvmesh, _vector.sym)
-    _vector_mag_name = _vector_name+'_mag'
-    pvmesh.point_data[_vector_mag_name] = vis.scalar_fn_to_pv_points(pvmesh, 
-                                                                     sympy.sqrt(_vector.sym.dot(_vector.sym)))
-    
-    print(pvmesh.point_data[_vector_mag_name].min(), pvmesh.point_data[_vector_mag_name].max())
-    
-    velocity_points = vis.meshVariable_to_pv_cloud(_vector)
-    velocity_points.point_data[_vector_name] = vis.vector_fn_to_pv_points(velocity_points, _vector.sym)
-    
-    pl = pv.Plotter(window_size=(750, 750))
-    pl.add_mesh(pvmesh, cmap=_cmap, edge_color="Grey", scalars=_vector_mag_name, show_edges=False, use_transparency=False,
-                opacity=0.7, clim=_clim, show_scalar_bar=False)
-               
-    # pl.add_scalar_bar(_vector_name, vertical=False, title_font_size=25, label_font_size=20, fmt=_fmt, 
-    #                   position_x=0.225, position_y=0.01,)
-    
-    pl.add_arrows(velocity_points.points[::_vfreq], velocity_points.point_data[_vector_name][::_vfreq], mag=_vmag, color='k')
-
-    pl.show(cpos="xy")
-
-    if len(_title)!=0:
-        pl.add_text(_title, font_size=18, position=(950, 1075))
-
-    if _save_png:
-        pl.camera.zoom(1.4)
-        pl.screenshot(_dir_fname, scale=3.5,)
-
-
-def save_colorbar(_colormap='', _cb_bounds='', _vmin='', _vmax='', _figsize_cb='', _primary_fs=18, _cb_orient='', _cb_axis_label='',
-                  _cb_label_xpos='', _cb_label_ypos='', _fformat='', _output_path='', _fname=''):
-    # save the colorbar separately
-    plt.figure(figsize=_figsize_cb)
-    plt.rc('font', size=_primary_fs) # font_size
-    if len(_cb_bounds)!=0:
-        a = np.array([bounds])
-        img = plt.imshow(a, cmap=_colormap, norm=norm)
-    else:
-        a = np.array([[_vmin,_vmax]])
-        img = plt.imshow(a, cmap=_colormap)
-        
-    plt.gca().set_visible(False)
-    if _cb_orient=='vertical':
-        cax = plt.axes([0.1, 0.2, 0.06, 1.15])
-        cb = plt.colorbar(orientation='vertical', cax=cax)
-        cb.ax.set_title(_cb_axis_label, fontsize=_primary_fs, x=_cb_label_xpos, y=_cb_label_ypos, rotation=90) # font_size
-        if _fformat=='png':
-            plt.savefig(_output_path+_fname+'_cbvert.'+_fformat, dpi=150, bbox_inches='tight')
-        elif _fformat=='pdf':
-            plt.savefig(_output_path+_fname+"_cbvert."+_fformat, format=_fformat, bbox_inches='tight')
-    if _cb_orient=='horizontal':
-        cax = plt.axes([0.1, 0.2, 1.15, 0.06])
-        cb = plt.colorbar(orientation='horizontal', cax=cax)
-        cb.ax.set_title(_cb_axis_label, fontsize=_primary_fs, x=_cb_label_xpos, y=_cb_label_ypos) # font_size
-        if _fformat=='png':
-            plt.savefig(_output_path+_fname+'_cbhorz.'+_fformat, dpi=150, bbox_inches='tight')
-        elif _fformat=='pdf':
-            plt.savefig(_output_path+_fname+"_cbhorz."+_fformat, format=_fformat, bbox_inches='tight')
-
-
 # ### Create Mesh
 
 if timing:
@@ -259,14 +150,15 @@ if delta_fn:
 elif smooth:
     mesh = uw.meshing.Annulus(radiusOuter=r_o, radiusInner=r_i, cellSize=cellsize, 
                               qdegree=max(pdegree, vdegree), degree=1, 
-                              filename=f'{output_dir}/mesh.msh')
+                              filename=f'{output_dir}/mesh.msh', refinement=None)
 
 if timing:
     uw.timing.stop()
     uw.timing.print_table(group_by='line_routine', output_file=f"{output_dir}/mesh_create_time.txt",  display_fraction=1.00)
 
 if uw.mpi.size == 1 and visualize:
-    plot_mesh(mesh, _save_png=True, _dir_fname=output_dir+'mesh.png', _title=case)
+    # plot_mesh(mesh, _save_png=True, _dir_fname=output_dir+'mesh.png', _title=case)
+    vis.plot_mesh(mesh, save_png=True, dir_fname=output_dir+'mesh.png', title='', clip_angle=0., cpos='xy')
 
 
 # print mesh size in each cpu
@@ -284,7 +176,7 @@ p_uw = uw.discretisation.MeshVariable('P_u', mesh, 1, degree=pdegree, continuous
 if analytical:
     v_ana = uw.discretisation.MeshVariable('V_a', mesh, mesh.data.shape[1], degree=vdegree)
     p_ana = uw.discretisation.MeshVariable('P_a', mesh, 1, degree=pdegree, continuous=pcont)
-    rad_ss_ana = uw.discretisation.MeshVariable('RSS_a', mesh, 1, degree=pdegree, continuous=True) # radial stress
+    rho_ana = uw.discretisation.MeshVariable('RHO_a', mesh, 1, degree=pdegree, continuous=True)
     
     v_err = uw.discretisation.MeshVariable('V_e', mesh, mesh.data.shape[1], degree=vdegree)
     p_err = uw.discretisation.MeshVariable('P_e', mesh, 1, degree=pdegree, continuous=pcont)
@@ -305,7 +197,7 @@ v_theta_fn_xy = r_uw * mesh.CoordinateSystem.rRotN.T * sympy.Matrix((0,1))
 # -
 
 if analytical:
-    with mesh.access(v_ana, p_ana, rad_ss_ana):
+    with mesh.access(v_ana, p_ana):
         
         def get_ana_soln(_var, _r_int, _soln_above, _soln_below):
             # get analytical solution into mesh variables
@@ -321,29 +213,25 @@ if analytical:
 
         # pressure 
         get_ana_soln(p_ana, r_int, soln_above.pressure_cartesian, soln_below.pressure_cartesian)
-        
-        # density
-        get_ana_soln(rad_ss_ana, r_int, soln_above.radial_stress_cartesian, soln_below.radial_stress_cartesian)
 
 # +
 # plotting analytical velocities
 if case in ('case1'):
     clim, vmag, vfreq = [0., 0.05], 5e0, 75
 elif case in ('case2'):
-    clim, vmag, vfreq = [0., 0.0385], 6e0, 75
+    clim, vmag, vfreq = [0., 0.04], 6e0, 75
 elif case in ('case3'):
     clim, vmag, vfreq = [0., 0.01], 2.5e1, 75
 elif case in ('case4'):
     clim, vmag, vfreq = [0., 0.00925], 3e1, 75
         
 if uw.mpi.size == 1 and analytical and visualize:
-    # velocity plot
-    plot_vector(mesh, v_ana, _vector_name='v_ana', _cmap=cmc.lapaz.resampled(11), _clim=clim, _vmag=vmag, _vfreq=vfreq,
-                _save_png=True, _dir_fname=output_dir+'vel_ana.png')
-    # saving colobar separately 
-    save_colorbar(_colormap=cmc.lapaz.resampled(11), _cb_bounds='', _vmin=clim[0], _vmax=clim[1], _figsize_cb=(5, 5), _primary_fs=18, 
-                  _cb_orient='horizontal', 
-                  _cb_axis_label='Velocity', _cb_label_xpos=0.5, _cb_label_ypos=-2.05, _fformat='pdf', _output_path=output_dir, _fname='v_ana')
+    vis.plot_vector(mesh, v_ana, vector_name='v_ana', cmap=cmc.lapaz.resampled(11), clim=clim, vmag=vmag, vfreq=vfreq,
+                    save_png=True, dir_fname=output_dir+'vel_ana.png', clip_angle=0., show_arrows=False, cpos='xy')
+    
+    vis.save_colorbar(colormap=cmc.lapaz.resampled(11), cb_bounds=None, vmin=clim[0], vmax=clim[1], figsize_cb=(5, 5), primary_fs=18, 
+                      cb_orient='horizontal', cb_axis_label='Velocity', cb_label_xpos=0.5, cb_label_ypos=-2.05, fformat='pdf', 
+                      output_path=output_dir, fname='v_ana')
 
 # +
 # plotting analytical pressure
@@ -357,32 +245,12 @@ elif case in ('case4'):
     clim = [-0.5, 0.5]
 
 if uw.mpi.size == 1 and analytical and visualize:
-    # pressure plot
-    plot_scalar(mesh, p_ana.sym, 'p_ana', _cmap=cmc.vik.resampled(41), _clim=clim, _save_png=True, 
-                _dir_fname=output_dir+'p_ana.png')
-    # saving colobar separately 
-    save_colorbar(_colormap=cmc.vik.resampled(41), _cb_bounds='', _vmin=clim[0], _vmax=clim[1], _figsize_cb=(5, 5), _primary_fs=18, _cb_orient='horizontal', 
-                  _cb_axis_label='Pressure', _cb_label_xpos=0.5, _cb_label_ypos=-2.0, _fformat='pdf', _output_path=output_dir, _fname='p_ana')
-
-# +
-# plotting analytical density
-if case in ('case1'):
-    clim = [-1, 1]
-elif case in ('case2'):
-    clim = [-0.6, 0.6]
-elif case in ('case3'):
-    clim = [-0.65, 0.65]
-elif case in ('case4'):
-    clim = [-0.5, 0.5]
-        
-if uw.mpi.size == 1 and analytical and visualize:
-    # pressure plot
-    plot_scalar(mesh, rad_ss_ana.sym, 'Radial Stress', _cmap=cmc.roma.resampled(31), _clim=clim, _save_png=True, 
-                _dir_fname=output_dir+'rad_stress_ana.png')
-    # saving colobar separately 
-    save_colorbar(_colormap=cmc.roma.resampled(31), _cb_bounds='', _vmin=clim[0], _vmax=clim[1], _figsize_cb=(5, 5), _primary_fs=18, 
-                  _cb_orient='horizontal', 
-                  _cb_axis_label='Radial Stress', _cb_label_xpos=0.5, _cb_label_ypos=-2.0, _fformat='pdf', _output_path=output_dir, _fname='rad_stress_ana')
+    vis.plot_scalar(mesh, p_ana.sym, 'p_ana', cmap=cmc.vik.resampled(41), clim=clim, save_png=True, clip_angle=0.,
+                    dir_fname=output_dir+'p_ana.png', cpos='xy')
+    
+    vis.save_colorbar(colormap=cmc.vik.resampled(41), cb_bounds=None, vmin=clim[0], vmax=clim[1], figsize_cb=(5, 5), primary_fs=18, 
+                      cb_orient='horizontal', cb_axis_label='Pressure', cb_label_xpos=0.5, cb_label_ypos=-2.0, fformat='pdf', 
+                      output_path=output_dir, fname='p_ana')
 # -
 
 # Create Stokes object
@@ -401,27 +269,22 @@ elif smooth:
     gravity_fn = -1.0 * unit_rvec # gravity
     stokes.bodyforce = rho*gravity_fn 
 
+# rho
+if analytical:
+    with mesh.access(rho_ana):
+        rho_ana.data[:] = np.c_[uw.function.evaluate(rho, rho_ana.coords)]
+
 # +
-# visualizing rho
-if freeslip:
-    if delta_fn:
-        clim = [-1, 1]
-    elif smooth:
-        clim = [-1, 1]
-elif noslip:
-    if delta_fn:
-        clim = [-1, 1]
-    elif smooth:
-        clim = [-1, 1]
+# plotting analytical rho
+clim = [-1, 1]
         
 if uw.mpi.size == 1 and visualize:
-    # rho plot
-    plot_scalar(mesh, rho, 'rho', _cmap=cmc.roma.resampled(31), _clim=clim, _save_png=True, 
-                _dir_fname=output_dir+'rho_ana.png', _title=case)
-    # saving colobar separately 
-    save_colorbar(_colormap=cmc.roma.resampled(31), _cb_bounds='', _vmin=clim[0], _vmax=clim[1], _figsize_cb=(5, 5), _primary_fs=18, 
-                  _cb_orient='horizontal', 
-                  _cb_axis_label='Density', _cb_label_xpos=0.5, _cb_label_ypos=-2.0, _fformat='pdf', _output_path=output_dir, _fname='rho_ana')
+    vis.plot_scalar(mesh, -rho_ana.sym, 'Rho', cmap=cmc.roma.resampled(31), clim=clim, save_png=True, 
+                    dir_fname=output_dir+'rho_ana.png', clip_angle=0., cpos='xy')
+    
+    vis.save_colorbar(colormap=cmc.roma.resampled(31), cb_bounds=None, vmin=clim[0], vmax=clim[1], figsize_cb=(5, 5), primary_fs=18, 
+                      cb_orient='horizontal', cb_axis_label='Rho', cb_label_xpos=0.5, cb_label_ypos=-2.0, fformat='pdf', 
+                      output_path=output_dir, fname='rho_ana')
 
 # +
 # boundary conditions
@@ -435,20 +298,19 @@ if freeslip:
     # stokes.add_natural_bc(2.5e3 * Gamma.dot(v_uw.sym) *  Gamma, "Lower")
     
     v_diff =  v_uw.sym - v_ana.sym
-    stokes.add_natural_bc(vel_penalty*v_diff, "Upper")
-    stokes.add_natural_bc(vel_penalty*v_diff, "Lower")
+    stokes.add_natural_bc(vel_penalty*v_diff, mesh.boundaries.Upper.name)
+    stokes.add_natural_bc(vel_penalty*v_diff, mesh.boundaries.Lower.name)
     
 elif noslip:
     # stokes.add_essential_bc(sympy.Matrix([0., 0.]), "Upper")
     # stokes.add_essential_bc(sympy.Matrix([0., 0.]), "Lower")
 
     v_diff =  v_uw.sym - v_ana.sym
-    stokes.add_natural_bc(vel_penalty*v_diff, "Upper")
-    stokes.add_natural_bc(vel_penalty*v_diff, "Lower")
+    stokes.add_natural_bc(vel_penalty*v_diff, mesh.boundaries.Upper.name)
+    stokes.add_natural_bc(vel_penalty*v_diff, mesh.boundaries.Lower.name)
 
 # +
 # Stokes settings
-
 stokes.tolerance = stokes_tol
 stokes.petsc_options["ksp_monitor"] = None
 
@@ -482,7 +344,7 @@ if timing:
     uw.timing.reset()
     uw.timing.start()
 
-stokes.solve()
+stokes.solve(verbose=True, debug=False)
 
 if timing:
     uw.timing.stop()
@@ -527,16 +389,19 @@ if analytical:
 if case in ('case1'):
     clim, vmag, vfreq = [0., 0.05], 5e0, 75
 elif case in ('case2'):
-    clim, vmag, vfreq = [0., 0.0385], 6e0, 75
+    clim, vmag, vfreq = [0., 0.04], 6e0, 75
 elif case in ('case3'):
     clim, vmag, vfreq = [0., 0.01], 2.5e1, 75
 elif case in ('case4'):
     clim, vmag, vfreq = [0., 0.00925], 3e1, 75
     
 if uw.mpi.size == 1 and visualize:
-    # velocity plot
-    plot_vector(mesh, v_uw, _vector_name='v_ana', _cmap=cmc.lapaz.resampled(11), _clim=clim, _vmag=vmag, _vfreq=vfreq,
-                _save_png=True, _dir_fname=output_dir+'vel_uw.png')
+    vis.plot_vector(mesh, v_uw, vector_name='v_uw', cmap=cmc.lapaz.resampled(11), clim=clim, vmag=vmag, vfreq=vfreq,
+                    save_png=True, dir_fname=output_dir+'vel_uw.png', clip_angle=0., cpos='xy', show_arrows=False)
+
+    vis.save_colorbar(colormap=cmc.lapaz.resampled(11), cb_bounds=None, vmin=clim[0], vmax=clim[1], figsize_cb=(5, 5), primary_fs=18, 
+                      cb_orient='horizontal', cb_axis_label='Velocity', cb_label_xpos=0.5, cb_label_ypos=-2.05, fformat='pdf', 
+                      output_path=output_dir, fname='v_uw')
 
 # +
 # plotting relative errror in velocities
@@ -550,9 +415,12 @@ elif case in ('case4'):
     clim, vmag, vfreq = [0., 1e-5], 5e4, 75
         
 if uw.mpi.size == 1 and analytical and visualize:
-    # velocity error plot
-    plot_vector(mesh, v_err, _vector_name='v_err(relative)', _cmap=cmc.lapaz.resampled(11), _clim=clim, _vmag=vmag, _vfreq=vfreq,
-                _save_png=True, _dir_fname=output_dir+'vel_r_err.png')
+    vis.plot_vector(mesh, v_err, vector_name='v_err(relative)', cmap=cmc.lapaz.resampled(11), clim=clim, vmag=vmag, vfreq=vfreq,
+                    save_png=True, dir_fname=output_dir+'vel_r_err.png', clip_angle=0., cpos='xy', show_arrows=False)
+
+    vis.save_colorbar(colormap=cmc.lapaz.resampled(11), cb_bounds=None, vmin=clim[0], vmax=clim[1], figsize_cb=(5, 5), primary_fs=18, 
+                      cb_orient='horizontal', cb_axis_label='Velocity Error (relative)', cb_label_xpos=0.5, cb_label_ypos=-2.05, fformat='pdf', 
+                      output_path=output_dir, fname='v_err_rel')
 
 # +
 # plotting magnitude error in percentage
@@ -567,8 +435,12 @@ elif case in ('case4'):
 
 if uw.mpi.size == 1 and analytical and visualize:   
     vmag_expr = (sympy.sqrt(v_err.sym.dot(v_err.sym))/sympy.sqrt(v_ana.sym.dot(v_ana.sym)))*100
-    plot_scalar(mesh, vmag_expr, 'vmag_err(%)', _cmap=cmc.oslo_r.resampled(21), _clim=clim, _save_png=True, 
-                _dir_fname=output_dir+'vel_p_err.png')
+    vis.plot_scalar(mesh, vmag_expr, 'vmag_err(%)', cmap=cmc.oslo_r.resampled(21), clim=clim, save_png=True, 
+                    dir_fname=output_dir+'vel_p_err.png', clip_angle=0., cpos='xy')
+    
+    vis.save_colorbar(colormap=cmc.oslo_r.resampled(21), cb_bounds=None, vmin=clim[0], vmax=clim[1], figsize_cb=(5, 5), primary_fs=18, 
+                      cb_orient='horizontal', cb_axis_label='Velocity Error (%)', cb_label_xpos=0.5, cb_label_ypos=-2.05, fformat='pdf', 
+                      output_path=output_dir, fname='v_err_perc')
 
 # +
 # plotting pressure from uw
@@ -582,9 +454,12 @@ elif case in ('case4'):
     clim = [-0.5, 0.5]
         
 if uw.mpi.size == 1 and visualize:
-    # pressure plot
-    plot_scalar(mesh, p_uw.sym, 'p_uw', _cmap=cmc.vik.resampled(41), _clim=clim, _save_png=True, 
-                _dir_fname=output_dir+'p_uw.png')
+    vis.plot_scalar(mesh, p_uw.sym, 'p_uw', cmap=cmc.vik.resampled(41), clim=clim, save_png=True, 
+                    dir_fname=output_dir+'p_uw.png', clip_angle=0., cpos='xy')
+    
+    vis.save_colorbar(colormap=cmc.vik.resampled(41), cb_bounds=None, vmin=clim[0], vmax=clim[1], figsize_cb=(5, 5), primary_fs=18, 
+                      cb_orient='horizontal', cb_axis_label='Pressure', cb_label_xpos=0.5, cb_label_ypos=-2.0, fformat='pdf', 
+                      output_path=output_dir, fname='p_uw')
 
 # +
 # plotting relative error in uw
@@ -598,16 +473,25 @@ elif case in ('case4'):
     clim = [-0.0045, 0.0045]
         
 if uw.mpi.size == 1 and analytical and visualize:
-    # pressure error plot
-    plot_scalar(mesh, p_err.sym, 'p_err(relative)', _cmap=cmc.vik.resampled(41), _clim=clim, _save_png=True, 
-                _dir_fname=output_dir+'p_r_err.png')
-# -
+    vis.plot_scalar(mesh, p_err.sym, 'p_err(relative)', cmap=cmc.vik.resampled(41), clim=clim, save_png=True, 
+                    dir_fname=output_dir+'p_r_err.png', clip_angle=0., cpos='xy')
 
+    vis.save_colorbar(colormap=cmc.vik.resampled(41), cb_bounds=None, vmin=clim[0], vmax=clim[1], figsize_cb=(5, 5), primary_fs=18, 
+                      cb_orient='horizontal', cb_axis_label='Pressure Error (relative)', cb_label_xpos=0.5, cb_label_ypos=-2.0, fformat='pdf', 
+                      output_path=output_dir, fname='p_err_rel')
+
+# +
 # plotting percentage error in uw
+clim = [-1e2, 1e2]
+
 if uw.mpi.size == 1 and analytical and visualize:
-    # pressure error plot
-    plot_scalar(mesh, (p_err.sym[0]/p_ana.sym[0])*100, 'p_err(%)', _cmap=cmc.vik.resampled(41), _clim=[-10, 10], _save_png=True, 
-                _dir_fname=output_dir+'p_p_err.png')
+    vis.plot_scalar(mesh, (p_err.sym[0]/p_ana.sym[0])*100, 'p_err(%)', cmap=cmc.vik.resampled(41), clim=clim, save_png=True, 
+                    dir_fname=output_dir+'p_p_err.png', clip_angle=0., cpos='xy')
+    
+    vis.save_colorbar(colormap=cmc.vik.resampled(41), cb_bounds=None, vmin=clim[0], vmax=clim[1], figsize_cb=(5, 5), primary_fs=18, 
+                      cb_orient='horizontal', cb_axis_label='Pressure Error (%)', cb_label_xpos=0.5, cb_label_ypos=-2.0, fformat='pdf', 
+                      output_path=output_dir, fname='p_err_perc')
+# -
 
 # computing L2 norm
 if analytical:
@@ -634,19 +518,15 @@ if uw.mpi.rank == 0:
     print('Creating new h5 file')
     with h5py.File(output_dir+'error_norm.h5', 'w') as f:
         f.create_dataset("k", data=k)
-        f.create_dataset("cell_size", data=res)
+        f.create_dataset("cellsize", data=cellsize)
+        f.create_dataset("res", data=res)
         f.create_dataset("v_l2_norm", data=v_err_l2)
         f.create_dataset("p_l2_norm", data=p_err_l2)
-# +
-# # saving h5 and xdmf file
-# mesh.petsc_save_checkpoint(index=0, meshVars=[v_uw, p_uw, v_ana, p_ana, rho_ana, v_err, p_err], outputPath=os.path.relpath(output_dir)+'/output')
 # -
+# saving h5 and xdmf file
+mesh.petsc_save_checkpoint(index=0, meshVars=[v_uw, p_uw, v_ana, p_ana, v_err, p_err], outputPath=os.path.relpath(output_dir)+'/output')
 
 
-# memory stats: needed only on mac
-import psutil
-process = psutil.Process()
-print('RAM Used (GB):', process.memory_info().rss/1024 ** 3) 
 # ### From here onwards we compute quantities to compare analytical and numerical solution.
 # ### Feel free to comment out this section
 
@@ -811,7 +691,7 @@ if analytical:
 # theta and r arrays
 theta_0_2pi = np.linspace(0, 2*np.pi, 1000, endpoint=True)
 # r_i_o = np.linspace(r_i, r_o-1e-4, 21, endpoint=True)
-r_i_o = np.linspace(r_i, r_o-1e-4, 11, endpoint=True)
+r_i_o = np.linspace(r_i, r_o-1e-3, 11, endpoint=True)
 
 
 def get_vel_avg_r(_theta_arr, _r_arr, _vel_comp):
@@ -831,14 +711,7 @@ vr_avg = get_vel_avg_r(theta_0_2pi, r_i_o, v_uw_r_th[0])
 
 # +
 # plotting velocity radial component average
-if case in ('case1'):
-    ylim = [-1e-6, 1e-6]
-elif case in ('case2'):
-    ylim = [-2.5e-9, 2.5e-9]
-elif case in ('case3'):
-    ylim = [-8e-7, 8e-7]
-elif case in ('case4'):
-    ylim = [-1e-8, 1e-8]
+ylim = [vr_avg.min(), vr_avg.max()] 
     
 data_list = [np.hstack((np.c_[r_i_o], np.c_[np.zeros_like(r_i_o)])),
              np.hstack((np.c_[r_i_o], np.c_[vr_avg]))]
@@ -855,15 +728,8 @@ vth_avg = get_vel_avg_r(theta_0_2pi, r_i_o, v_uw_r_th[1])
 
 # +
 # plotting velocity theta component average
-if case in ('case1'):
-    ylim = [-5e-7, 5e-7]
-elif case in ('case2'):
-    ylim = [-2e-8, 2e-8]
-elif case in ('case3'):
-    ylim = [-5e-7, 5e-7]
-elif case in ('case4'):
-    ylim = [-2e-8, 2e-8]
-    
+ylim = [vth_avg.min(), vth_avg.max()] 
+
 data_list = [np.hstack((np.c_[r_i_o], np.c_[np.zeros_like(r_i_o)])),
              np.hstack((np.c_[r_i_o], np.c_[vth_avg]))]
 label_list = ['k='+str(k)+' (analy.)',
