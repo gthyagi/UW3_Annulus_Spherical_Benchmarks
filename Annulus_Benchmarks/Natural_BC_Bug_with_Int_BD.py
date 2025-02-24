@@ -189,20 +189,51 @@ mesh.write_timestep(f'output_{uw.mpi.size}_n_{norm_type}_{mesh_type}', meshUpdat
                     meshVars=[v_soln, p_soln, rank_var], 
                     outputPath=output_dir, index=0,)
 
-if uw.mpi.size == 1:
-    for f in glob.glob("*.txt"):
-        os.remove(f)
+
+def create_merged_debug_txt(filename):
+    # Specify the directory containing the text files
+    directory = './'
+    
+    # Get a list of all .txt files in the directory
+    txt_files = glob.glob(os.path.join(directory, '*_debug.txt'))
+    
+    # Sort the files by creation time (latest first)
+    txt_files_sorted = sorted(txt_files, key=os.path.getctime, reverse=True)
+
+    if len(txt_files_sorted)>0:
+        # Name of the merged output file
+        merged_filename = filename
+        
+        with open(merged_filename, 'w') as outfile:
+            for file in txt_files_sorted:
+                with open(file, 'r') as infile:
+                    outfile.write(infile.read())
+                    outfile.write('\n')  # Optionally add a newline between files
+                os.remove(file) # remove the file after merging
+                
+        print(f"Merged {len(txt_files_sorted)} files into {merged_filename}")
+    else:
+        print('No txt file exists')
+
+
+
+if uw.mpi.rank == 0:
+    filename = f'merged_debug_{mesh_type}_n_{norm_type}_cpus_{uw.mpi.size}.txt'
+    try:
+        os.remove(filename)
+    except FileNotFoundError:
+        pass
+    create_merged_debug_txt(filename)
 
 # ### Plot parallel model data
 
 # +
-reload = not False
+reload = True
+cpus = 2
 
-for cpu_no in range(2, 3):
-    
-    cpus = cpu_no
+for cpu_no in range(cpus, cpus+1):
 
-    if reload:
+    if uw.mpi.size == 1 and reload:
         mesh_2 = uw.discretisation.Mesh(f"{output_dir}output_{cpus}_n_{norm_type}_{mesh_type}.mesh.00000.h5")
         
         v_soln_2 = uw.discretisation.MeshVariable(f"u_{cpus}", mesh_2, 2, degree=2)
@@ -216,75 +247,47 @@ for cpu_no in range(2, 3):
         rank_var_2.read_timestep(data_filename=f'output_{cpus}_n_{norm_type}_{mesh_type}', data_name="r", 
                                  index=0, outputPath=output_dir)
 
-        if uw.mpi.size == 1 and reload:
+        clim=[-1, 1]
+        if mesh_type=='simp':
+            vmag=1e1
+        if mesh_type=='quad':
+            vmag=0.5e1
+        cmap= cmc.vik.resampled(10)
+        
+        # plotting vectors
+        vis.plot_vector(mesh_2, v_soln_2, 'v', cmap=cmap, clim=clim, window_size=(750, 550),
+                        vfreq=1, vmag=vmag, show_arrows=True, save_png=True, show_edges=True,
+                        dir_fname=f'{output_dir}v_p_{cpus}_n_{norm_type}_{mesh_type}', scalar=p_soln_2, 
+                        scalar_name=f'p_{cpus}')
+        
+        # saving colorbar 
+        vis.save_colorbar(colormap=cmap, cb_bounds=None, vmin=clim[0], vmax=clim[1], 
+                          figsize_cb=(5, 5), primary_fs=18, cb_orient='horizontal', 
+                          cb_axis_label='Pressure', cb_label_xpos=0.5, cb_label_ypos=-2.05, 
+                          fformat='pdf', output_path=output_dir, fname=f'p_{cpus}_n_{norm_type}_{mesh_type}')
 
-            clim=[-1, 1]
-            if mesh_type=='simp':
-                vmag=1e1
-            if mesh_type=='quad':
-                vmag=0.5e1
-            cmap= cmc.vik.resampled(10)
-            
-            # plotting vectors
-            vis.plot_vector(mesh_2, v_soln_2, 'v', cmap=cmap, clim=clim, window_size=(750, 550),
-                            vfreq=1, vmag=vmag, show_arrows=True, save_png=True, show_edges=True,
-                            dir_fname=f'{output_dir}v_p_{cpus}_n_{norm_type}_{mesh_type}', scalar=p_soln_2, 
-                            scalar_name=f'p_{cpus}')
-            
-            # saving colorbar 
-            vis.save_colorbar(colormap=cmap, cb_bounds=None, vmin=clim[0], vmax=clim[1], 
-                              figsize_cb=(5, 5), primary_fs=18, cb_orient='horizontal', 
-                              cb_axis_label='Pressure', cb_label_xpos=0.5, cb_label_ypos=-2.05, 
-                              fformat='pdf', output_path=output_dir, fname=f'p_{cpus}_n_{norm_type}_{mesh_type}')
+    # if uw.mpi.size == 1 and reload:
 
-        # if uw.mpi.size == 1 and reload:
-
-        #     clim=[0, cpus-1]
-        #     cmap= plt.cm.tab10.resampled(cpus)
-            
-        #     # plotting vectors
-        #     vis.plot_vector(mesh_2, v_soln_2, 'v', cmap=cmap, clim=clim, window_size=(750, 550),
-        #                     vfreq=1, vmag=vmag, show_arrows=True, save_png=True, show_edges=True,
-        #                     dir_fname=f'{output_dir}v_r_{cpus}_n_{norm_type}_{mesh_type}', scalar=rank_var_2, 
-        #                     scalar_name=f'r_{cpus}')
-            
-        #     # saving colorbar 
-        #     vis.save_colorbar(colormap=cmap, cb_bounds=None, vmin=clim[0], vmax=clim[1], 
-        #                       figsize_cb=(5, 5), primary_fs=18, cb_orient='horizontal', 
-        #                       cb_axis_label='Rank', cb_label_xpos=0.5, cb_label_ypos=-2.05, 
-        #                       fformat='pdf', output_path=output_dir, fname=f'r_{cpus}_n_{norm_type}_{mesh_type}')
+    #     clim=[0, cpus-1]
+    #     cmap= plt.cm.tab10.resampled(cpus)
+        
+    #     # plotting vectors
+    #     vis.plot_vector(mesh_2, v_soln_2, 'v', cmap=cmap, clim=clim, window_size=(750, 550),
+    #                     vfreq=1, vmag=vmag, show_arrows=True, save_png=True, show_edges=True,
+    #                     dir_fname=f'{output_dir}v_r_{cpus}_n_{norm_type}_{mesh_type}', scalar=rank_var_2, 
+    #                     scalar_name=f'r_{cpus}')
+        
+    #     # saving colorbar 
+    #     vis.save_colorbar(colormap=cmap, cb_bounds=None, vmin=clim[0], vmax=clim[1], 
+    #                       figsize_cb=(5, 5), primary_fs=18, cb_orient='horizontal', 
+    #                       cb_axis_label='Rank', cb_label_xpos=0.5, cb_label_ypos=-2.05, 
+    #                       fformat='pdf', output_path=output_dir, fname=f'r_{cpus}_n_{norm_type}_{mesh_type}')
 # -
-if not os.path.isfile('merged_latest.dat'):
-    if reload and uw.mpi.size==1:
-        # Specify the directory containing the text files
-        directory = './'
-        
-        # Get a list of all .txt files in the directory
-        txt_files = glob.glob(os.path.join(directory, '*.txt'))
-        
-        # Sort the files by creation time (latest first)
-        # On some platforms, os.path.getctime() may give the modification time instead.
-        txt_files_sorted = sorted(txt_files, key=os.path.getctime, reverse=True)
-        
-        # Name of the merged output file
-        merged_filename = 'merged_latest.dat'
-        
-        with open(merged_filename, 'w') as outfile:
-            for file in txt_files_sorted:
-                with open(file, 'r') as infile:
-                    outfile.write(infile.read())
-                    outfile.write('\n')  # Optionally add a newline between files
-        
-        print(f"Merged {len(txt_files_sorted)} files into {merged_filename}")
-else:
-    pass
+# file to load
+filename = f'merged_debug_{mesh_type}_n_{norm_type}_cpus_{cpu_no}.txt'
 
-
-if reload and uw.mpi.size == 1:
+if reload and uw.mpi.size == 1 and os.path.isfile(filename):
     import re
-    
-    # Replace this with the path to your file
-    filename = 'merged_latest.dat' 
     
     all_X = []  # list to store (x, y, z) from lines
     all_N = []  # list to store (nx, ny, nz) from lines
@@ -346,7 +349,7 @@ if reload and uw.mpi.size == 1:
             int_bd = v_soln_2.coords[np.where(v_soln_2.coords[:,1]==0.67)]
             rank_data = rank_var_2.data
 
-if reload and uw.mpi.size == 1:
+if reload and uw.mpi.size == 1 and os.path.isfile(filename):
     # Convert your int_bd coordinates to PyVista PolyData
     point_cloud = np.column_stack((int_bd, np.zeros(len(int_bd))))
 
@@ -378,11 +381,7 @@ if reload and uw.mpi.size == 1:
     pl.show(cpos='xy')
     pl.camera.zoom(1.4)
 
-    filename = f'{output_dir}mesh_int_bd_pts_n_{norm_type}_{cpus}_2'
+    filename = f'{output_dir}mesh_int_bd_pts_n_{norm_type}_{cpus}_{mesh_type}'
     pl.screenshot(f'{filename}.png', scale=3)
-
-if reload and uw.mpi.size == 1:
-    for f in glob.glob("*.txt"):
-        os.remove(f)
 
 
