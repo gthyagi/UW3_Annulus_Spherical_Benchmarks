@@ -9,12 +9,15 @@ from underworld3.systems import Stokes
 import sympy
 from enum import Enum
 import os
+import glob
 
 if uw.mpi.size == 1:
     import matplotlib.pyplot as plt
     import cmcrameri.cm as cmc
     import underworld3.visualisation as vis
     import gmsh
+    import pyvista as pv
+    import numpy as np
 
 output_dir = './output/natural_bc_test/'
 if uw.mpi.rank == 0:
@@ -91,14 +94,13 @@ mesh = uw.discretisation.Mesh(mesh_fname, boundaries=boundaries,
 x,y = mesh.X
 
 mesh.view()
-
 # +
 # mesh.print_label_info_parallel()
 # -
 
 v_soln = uw.discretisation.MeshVariable(r"u", mesh, 2, degree=2)
 p_soln = uw.discretisation.MeshVariable(r"p", mesh, 1, degree=1, continuous=True)
-rank_var = uw.discretisation.MeshVariable(r"r", mesh, 1, degree=1, continuous=True)
+rank_var = uw.discretisation.MeshVariable(r"r", mesh, 1, degree=0, continuous=False)
 
 with mesh.access(rank_var):
     rank_var.data[...] = uw.mpi.rank
@@ -129,7 +131,6 @@ stokes.add_essential_bc(sympy.Matrix([0.0,sympy.oo]), "Left")
 stokes.add_essential_bc(sympy.Matrix([0.0,sympy.oo]), "Right")
 
 stokes.bodyforce = sympy.Matrix([0, 0])
-
 # +
 # print(f'rank: {uw.mpi.rank}, min coord: {mesh.data[:,0].min(), mesh.data[:,1].min()}', flush=True)
 # print(f'rank: {uw.mpi.rank}, max coord: {mesh.data[:,0].max(), mesh.data[:,1].max()}', flush=True)
@@ -138,7 +139,11 @@ stokes.bodyforce = sympy.Matrix([0, 0])
 
 # stokes.petsc_options["pc_type"] = "lu"
 stokes.tolerance = 1e-6
-stokes.solve(verbose=False, debug=True, debug_name=f'Natural_BC_Bug_{uw.mpi.size}')
+stokes.solve(verbose=False, debug=True,)# debug_name="test")
+
+mesh.dm.view()
+
+stokes.dm.view()
 
 p_stats = p_soln.stats()
 if uw.mpi.rank==0:
@@ -148,6 +153,10 @@ if uw.mpi.rank==0:
     # Print the result
     # print(p_stats)
     print(rounded_data)
+
+# +
+# stokes.dm.orient()
+# -
 
 if uw.mpi.size == 1:
     
@@ -180,12 +189,16 @@ mesh.write_timestep(f'output_{uw.mpi.size}_n_{norm_type}_{mesh_type}', meshUpdat
                     meshVars=[v_soln, p_soln, rank_var], 
                     outputPath=output_dir, index=0,)
 
+if uw.mpi.size == 1:
+    for f in glob.glob("*.txt"):
+        os.remove(f)
+
 # ### Plot parallel model data
 
 # +
-reload = False
+reload = not False
 
-for cpu_no in range(2, 5):
+for cpu_no in range(2, 3):
     
     cpus = cpu_no
 
@@ -194,7 +207,7 @@ for cpu_no in range(2, 5):
         
         v_soln_2 = uw.discretisation.MeshVariable(f"u_{cpus}", mesh_2, 2, degree=2)
         p_soln_2 = uw.discretisation.MeshVariable(f"p_{cpus}", mesh_2, 1, degree=1, continuous=True)
-        rank_var_2 = uw.discretisation.MeshVariable(f"r_{cpus}", mesh_2, 1, degree=1, continuous=True)
+        rank_var_2 = uw.discretisation.MeshVariable(f"r_{cpus}", mesh_2, 1, degree=0, continuous=False)
     
         v_soln_2.read_timestep(data_filename=f'output_{cpus}_n_{norm_type}_{mesh_type}', data_name="u", 
                                index=0, outputPath=output_dir)
@@ -224,22 +237,152 @@ for cpu_no in range(2, 5):
                               cb_axis_label='Pressure', cb_label_xpos=0.5, cb_label_ypos=-2.05, 
                               fformat='pdf', output_path=output_dir, fname=f'p_{cpus}_n_{norm_type}_{mesh_type}')
 
-        if uw.mpi.size == 1 and reload:
+        # if uw.mpi.size == 1 and reload:
 
-            clim=[0, cpus-1]
-            cmap= plt.cm.tab10.resampled(cpus)
+        #     clim=[0, cpus-1]
+        #     cmap= plt.cm.tab10.resampled(cpus)
             
-            # plotting vectors
-            vis.plot_vector(mesh_2, v_soln_2, 'v', cmap=cmap, clim=clim, window_size=(750, 550),
-                            vfreq=1, vmag=vmag, show_arrows=True, save_png=True, show_edges=True,
-                            dir_fname=f'{output_dir}v_r_{cpus}_n_{norm_type}_{mesh_type}', scalar=rank_var_2, 
-                            scalar_name=f'r_{cpus}')
+        #     # plotting vectors
+        #     vis.plot_vector(mesh_2, v_soln_2, 'v', cmap=cmap, clim=clim, window_size=(750, 550),
+        #                     vfreq=1, vmag=vmag, show_arrows=True, save_png=True, show_edges=True,
+        #                     dir_fname=f'{output_dir}v_r_{cpus}_n_{norm_type}_{mesh_type}', scalar=rank_var_2, 
+        #                     scalar_name=f'r_{cpus}')
             
-            # saving colorbar 
-            vis.save_colorbar(colormap=cmap, cb_bounds=None, vmin=clim[0], vmax=clim[1], 
-                              figsize_cb=(5, 5), primary_fs=18, cb_orient='horizontal', 
-                              cb_axis_label='Rank', cb_label_xpos=0.5, cb_label_ypos=-2.05, 
-                              fformat='pdf', output_path=output_dir, fname=f'r_{cpus}_n_{norm_type}_{mesh_type}')
+        #     # saving colorbar 
+        #     vis.save_colorbar(colormap=cmap, cb_bounds=None, vmin=clim[0], vmax=clim[1], 
+        #                       figsize_cb=(5, 5), primary_fs=18, cb_orient='horizontal', 
+        #                       cb_axis_label='Rank', cb_label_xpos=0.5, cb_label_ypos=-2.05, 
+        #                       fformat='pdf', output_path=output_dir, fname=f'r_{cpus}_n_{norm_type}_{mesh_type}')
 # -
+if not os.path.isfile('merged_latest.dat'):
+    if reload and uw.mpi.size==1:
+        # Specify the directory containing the text files
+        directory = './'
+        
+        # Get a list of all .txt files in the directory
+        txt_files = glob.glob(os.path.join(directory, '*.txt'))
+        
+        # Sort the files by creation time (latest first)
+        # On some platforms, os.path.getctime() may give the modification time instead.
+        txt_files_sorted = sorted(txt_files, key=os.path.getctime, reverse=True)
+        
+        # Name of the merged output file
+        merged_filename = 'merged_latest.dat'
+        
+        with open(merged_filename, 'w') as outfile:
+            for file in txt_files_sorted:
+                with open(file, 'r') as infile:
+                    outfile.write(infile.read())
+                    outfile.write('\n')  # Optionally add a newline between files
+        
+        print(f"Merged {len(txt_files_sorted)} files into {merged_filename}")
+else:
+    pass
+
+
+if reload and uw.mpi.size == 1:
+    import re
+    
+    # Replace this with the path to your file
+    filename = 'merged_latest.dat' 
+    
+    all_X = []  # list to store (x, y, z) from lines
+    all_N = []  # list to store (nx, ny, nz) from lines
+    
+    with open(filename, 'r') as f:
+        for line in f:
+            # Only process lines that start with this specific prefix
+            if line.startswith("bdres - equation 18 X / N"):
+                # Find the substring in parentheses: "(x, y, z / nx, ny, nz)"
+                match = re.search(r"\((.*?)\)", line)
+                if not match:
+                    continue
+                
+                content = match.group(1)
+                # content is something like "2.96e-01, 6.70e-01, 0.00e+00 / 0e+00, 1e+00, 0.00e+00"
+                
+                # Split left side (x, y, z) from right side (nx, ny, nz)
+                parts = content.split("/")
+                if len(parts) < 2:
+                    continue
+                
+                # Left side: e.g. "2.96e-01, 6.70e-01, 0.00e+00"
+                left_str = parts[0].strip()
+                # Right side: e.g. "0e+00, 1e+00, 0.00e+00"
+                right_str = parts[1].strip()
+                
+                # Split by commas to get separate values
+                left_vals = [val.strip() for val in left_str.split(",")]
+                right_vals = [val.strip() for val in right_str.split(",")]
+                
+                # Convert to floats
+                if len(left_vals) == 3 and len(right_vals) == 3:
+                    x_tuple = tuple(float(x) for x in left_vals)   # (x, y, z)
+                    n_tuple = tuple(float(x) for x in right_vals)  # (nx, ny, nz)
+                    
+                    all_X.append(x_tuple)
+                    all_N.append(n_tuple)
+    
+    # # After the loop, 'all_X' and 'all_N' contain the parsed data
+    # print("Extracted X vectors:")
+    # for xvec in all_X:
+    #     print(xvec)
+    
+    # print("\nExtracted N vectors:")
+    # for nvec in all_N:
+    #     print(nvec)
+
+    print(np.array(all_X).shape)
+    print(np.array(all_N).shape)
+
+if reload and uw.mpi.size == 1:
+    if not reload:
+        cpus = 1
+        with mesh.access(v_soln, rank_var):
+            int_bd = v_soln.coords[np.where(v_soln.coords[:,1]==0.67)]
+            rank_data = rank_var.data
+    else:
+        with mesh_2.access(v_soln_2, rank_var_2):
+            int_bd = v_soln_2.coords[np.where(v_soln_2.coords[:,1]==0.67)]
+            rank_data = rank_var_2.data
+
+if reload and uw.mpi.size == 1:
+    # Convert your int_bd coordinates to PyVista PolyData
+    point_cloud = np.column_stack((int_bd, np.zeros(len(int_bd))))
+
+    point_cloud_debug = np.array(all_X)
+    poly_debug = pv.PolyData(point_cloud_debug)
+    poly_debug["normals"] = np.array(all_N)
+
+    
+    glyphs = poly_debug.glyph(orient="normals", scale=False, factor=0.1)
+    
+    pvmesh = vis.mesh_to_pv_mesh(mesh)
+    
+    pvmesh.cell_data["rank_var"] = rank_data
+    
+    pl = pv.Plotter(window_size=(750, 750))
+
+    clim=[0, cpus-1]
+    cmap= plt.cm.tab10.resampled(cpus)
+    pl.add_mesh(pvmesh, edge_color="k", show_edges=True, scalars="rank_var", 
+                cmap=cmap, show_scalar_bar=True, clim=clim)
+    
+    pl.add_mesh(point_cloud, color="red", point_size=10, render_points_as_spheres=True)
+
+    pl.add_mesh(point_cloud_debug, color="blue", point_size=10, render_points_as_spheres=True)
+
+
+    pl.add_mesh(glyphs, color="black")
+
+    pl.show(cpos='xy')
+    pl.camera.zoom(1.4)
+
+    filename = f'{output_dir}mesh_int_bd_pts_n_{norm_type}_{cpus}_2'
+    pl.screenshot(f'{filename}.png', scale=3)
+
+if reload and uw.mpi.size == 1:
+    for f in glob.glob("*.txt"):
+        os.remove(f)
 
 
