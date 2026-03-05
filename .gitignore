@@ -1,0 +1,4 @@
+.DS_Store
+
+# Ignore generated benchmark outputs anywhere in the repo tree
+**/output/
