@@ -13,6 +13,15 @@ This repository contains Underworld3 benchmark scripts for annulus (2D) and sphe
 
 For parity checks, compare latest-branch benchmark outputs against legacy-branch baseline outputs.
 
+## Local Underworld3 Paths (Debugging Reference)
+
+- Latest UW3 checkout:
+  - `/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest_bdint/underworld3`
+- Legacy UW3 checkout:
+  - `/Users/tgol0006/uw_folder/uw3_git_gthyagi/underworld3`
+
+These are local machine paths and are intended as quick references during debugging.
+
 ## Primary Directories
 
 - `benchmarks/annulus/`: annulus benchmark scripts (current main script: legacy Thieulot benchmark).

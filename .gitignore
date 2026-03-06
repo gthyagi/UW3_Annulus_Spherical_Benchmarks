@@ -2,3 +2,8 @@
 
 # Ignore generated benchmark outputs anywhere in the repo tree
 **/output/
+
+__pycache__/
+*.pyc
+.meshes/
+.ipynb_checkpoints/
