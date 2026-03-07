@@ -111,8 +111,6 @@ vel_penalty = uw.options.getReal(
     default=2.5e8,
 )
 
-analytical = True
-
 # %% [markdown]
 # ### Output Directory
 
@@ -121,7 +119,7 @@ output_dir = os.path.join(
     "../../output/annulus/thieulot/legacy/",
     (
         f"model_inv_lc_{int(1/cellsize)}_k_{k}_vdeg_{vdegree}_pdeg_{pdegree}"
-        f"_pcont_{pcont_str}_vel_penalty_{vel_penalty:.2g}_stokes_tol_{stokes_tol:.2g}/"
+        f"_pcont_{pcont_str}_vel_penalty_{vel_penalty:.2g}_stokes_tol_{stokes_tol:.2g}_ncpus_{uw.mpi.size}/"
     ),
 )
 if uw.mpi.rank == 0:
@@ -203,28 +201,12 @@ unit_rvec = mesh.CoordinateSystem.unit_e_0
 # ### Create Mesh Variables
 
 # %%
-v_soln = uw.discretisation.MeshVariable(
-    r"{V_u}",
-    mesh,
-    mesh.data.shape[1],
-    degree=vdegree,
-)
-p_soln = uw.discretisation.MeshVariable(
-    r"{P_u}",
-    mesh,
-    1,
-    degree=pdegree,
-    continuous=pcont,
-)
+v_soln = uw.discretisation.MeshVariable(r"{V_u}", mesh, mesh.data.shape[1], degree=vdegree)
+p_soln = uw.discretisation.MeshVariable(r"{P_u}", mesh, 1, degree=pdegree, continuous=pcont)
 
 # %%
 # Analytical solution and error expressions
-v_ana_expr, p_ana_expr, rho_ana_expr = analytic_solution(
-    mesh,
-    r_i,
-    r_o,
-    k,
-)
+v_ana_expr, p_ana_expr, rho_ana_expr = analytic_solution(mesh, r_i, r_o, k)
 v_err_expr = sp.Matrix(v_soln.sym).T - v_ana_expr
 p_err_expr = p_soln.sym[0] - p_ana_expr
 
@@ -235,11 +217,7 @@ p_err_expr = p_soln.sym[0] - p_ana_expr
 # #### Stokes Setup
 
 # %%
-stokes = Stokes(
-    mesh,
-    velocityField=v_soln,
-    pressureField=p_soln,
-)
+stokes = Stokes(mesh, velocityField=v_soln, pressureField=p_soln)
 stokes.constitutive_model = uw.constitutive_models.ViscousFlowModel
 stokes.constitutive_model.Parameters.viscosity = 1.0
 stokes.saddle_preconditioner = 1.0
@@ -251,14 +229,8 @@ stokes.bodyforce = rho_ana_expr * gravity_fn
 # #### Boundary Conditions
 
 # %%
-stokes.add_essential_bc(
-    v_ana_expr,
-    mesh.boundaries.Upper.name,
-)
-stokes.add_essential_bc(
-    v_ana_expr,
-    mesh.boundaries.Lower.name,
-)
+stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Upper.name)
+stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Lower.name)
 
 if k == 0:
     stokes.add_condition(
@@ -335,18 +307,16 @@ def relative_l2_error(mesh, err_expr, ana_expr):
 
 
 # %%
-if analytical:
+v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
+p_err_l2 = np.inf if k == 0 else relative_l2_error(mesh, p_err_expr, p_ana_expr)
 
-    v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
-    p_err_l2 = np.inf if k == 0 else relative_l2_error(mesh, p_err_expr, p_ana_expr)
+if uw.mpi.rank == 0:
+    print("Relative velocity L2 error:", v_err_l2)
 
-    if uw.mpi.rank == 0:
-        print("Relative velocity L2 error:", v_err_l2)
-
-        if k == 0:
-            print("Pressure L2 error undefined for k=0.")
-        else:
-            print("Relative pressure L2 error:", p_err_l2)
+    if k == 0:
+        print("Pressure L2 error undefined for k=0.")
+    else:
+        print("Relative pressure L2 error:", p_err_l2)
 
 # %% [markdown]
 # ### Save Outputs

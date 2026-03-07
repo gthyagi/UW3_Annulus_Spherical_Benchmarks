@@ -4,7 +4,13 @@
 # Uses only `pyvista` + `h5py` + `numpy` + `matplotlib`.
 
 # %%
+# to fix trame issue
+import nest_asyncio
+nest_asyncio.apply()
+
+# %%
 import os
+import re
 import cmcrameri.cm as cmc
 import h5py
 import matplotlib.pyplot as plt
@@ -15,26 +21,43 @@ import pyvista as pv
 # ### Parameters And Paths
 
 # %%
-# Match solve script naming convention.
-cellsize = 1 / 64
-r_i = 1.0
-r_o = 2.0
-k = 2
-vdegree = 2
-pdegree = 1
-pcont = True
-pcont_str = str(pcont).lower()
-stokes_tol = 1e-10
-vel_penalty = 2.5e8
+dirname = f'model_inv_lc_64_k_2_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_1'
 
 # %%
-output_dir = os.path.join(
-    "../../output/annulus/thieulot/legacy/",
-    (
-        f"model_inv_lc_{int(1/cellsize)}_k_{k}_vdeg_{vdegree}_pdeg_{pdegree}"
-        f"_pcont_{pcont_str}_vel_penalty_{vel_penalty:.2g}_stokes_tol_{stokes_tol:.2g}/"
-    ),
+output_dir = os.path.join("../../output/annulus/thieulot/legacy/", f'{dirname}/')
+
+# %%
+pattern = (
+    r"inv_lc_(?P<inv_lc>\d+)_"
+    r"k_(?P<k>\d+)_"
+    r"vdeg_(?P<vdeg>\d+)_"
+    r"pdeg_(?P<pdeg>\d+)_"
+    r"pcont_(?P<pcont>true|false)_"
+    r"vel_penalty_(?P<vel_penalty>[0-9.eE+\-]+)_"
+    r"stokes_tol_(?P<stokes_tol>[0-9.eE+\-]+)_"
+    r"ncpus_(?P<ncpus>\d+)"
 )
+
+m = re.search(pattern, dirname)
+params = m.groupdict()
+
+# %%
+# convert types
+inv_lc = int(params["inv_lc"])
+cellsize = 1 / inv_lc
+
+k = int(params["k"])
+vdegree = int(params["vdeg"])
+pdegree = int(params["pdeg"])
+pcont = params["pcont"] == "true"
+
+vel_penalty = float(params["vel_penalty"])
+stokes_tol = float(params["stokes_tol"])
+ncpus = int(params["ncpus"])
+
+# constants
+r_i = 1.0
+r_o = 2.0
 
 # %%
 xdmf_path = os.path.join(output_dir, "output_step_00000.xdmf")
@@ -313,7 +336,6 @@ def plot_vector(
         pl.camera.zoom(1.4)
         pl.render()
         pl.screenshot(dir_fname)
-        # pl.close()
     
     pl.show(cpos=cpos)
 
@@ -359,7 +381,6 @@ def plot_scalar(
         pl.camera.zoom(1.4)
         pl.render()
         pl.screenshot(dir_fname)
-        # pl.close()
     
     pl.show(cpos=cpos)
 

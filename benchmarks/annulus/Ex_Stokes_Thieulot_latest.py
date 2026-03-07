@@ -108,7 +108,8 @@ output_dir = os.path.join(
     "../../output/annulus/thieulot/latest/",
     (
         f"model_inv_lc_{int(1/params.uw_cellsize)}_k_{params.uw_k}_vdeg_{params.uw_vdegree}_pdeg_{params.uw_pdegree}"
-        f"_pcont_{str(params.uw_pcont).lower()}_vel_penalty_{params.uw_vel_penalty:.2g}_stokes_tol_{params.uw_stokes_tol:.2g}/"
+        f"_pcont_{str(params.uw_pcont).lower()}_vel_penalty_{params.uw_vel_penalty:.2g}_stokes_tol_{params.uw_stokes_tol:.2g}"
+        f"_ncpus_{uw.mpi.size}/"
     ),
 )
 if uw.mpi.rank == 0:
@@ -225,11 +226,7 @@ p_err_expr = p_soln.sym[0] - p_ana_expr
 # #### Stokes Setup
 
 # %%
-stokes = Stokes(
-    mesh,
-    velocityField=v_soln,
-    pressureField=p_soln,
-)
+stokes = Stokes(mesh, velocityField=v_soln, pressureField=p_soln)
 stokes.constitutive_model = uw.constitutive_models.ViscousFlowModel
 stokes.constitutive_model.Parameters.viscosity = 1.0
 stokes.saddle_preconditioner = 1.0
@@ -241,14 +238,8 @@ stokes.bodyforce = rho_ana_expr * gravity_fn
 # #### Boundary Conditions
 
 # %%
-stokes.add_natural_bc(
-    params.uw_vel_penalty * v_err_expr,
-    mesh.boundaries.Upper.name,
-)
-stokes.add_natural_bc(
-    params.uw_vel_penalty * v_err_expr,
-    mesh.boundaries.Lower.name,
-)
+stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Upper.name)
+stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Lower.name)
 
 if params.uw_k == 0:
     stokes.add_condition(
