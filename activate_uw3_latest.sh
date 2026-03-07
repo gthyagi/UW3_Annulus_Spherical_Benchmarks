@@ -41,10 +41,14 @@ if [[ -z "${ENV_NAME}" ]]; then
 fi
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    # On macOS with MPICH+OFI, explicitly prefer tcp provider for stable local MPI performance.
+    export FI_PROVIDER="${FI_PROVIDER:-tcp}"
     cd "${HOME_DIR}"
     echo "Starting pixi shell '${ENV_NAME}' from ${UW_ROOT}"
     exec "${PIXI_BIN}" shell -m "${UW_ROOT}" -e "${ENV_NAME}"
 else
+    # On macOS with MPICH+OFI, explicitly prefer tcp provider for stable local MPI performance.
+    export FI_PROVIDER="${FI_PROVIDER:-tcp}"
     eval "$(
         cd "${UW_ROOT}"
         "${PIXI_BIN}" shell-hook -e "${ENV_NAME}"
