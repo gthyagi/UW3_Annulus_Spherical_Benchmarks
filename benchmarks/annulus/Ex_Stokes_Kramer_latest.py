@@ -282,29 +282,14 @@ p_err = uw.discretisation.MeshVariable(
 # %%
 def analytical_values(var, r_int, fn_above, fn_below):
     coords = np.asarray(var.coords)
-    # For annulus benchmarks, radius from Cartesian coordinates is faster than symbolic evaluate.
-    radii = np.hypot(coords[:, 0], coords[:, 1])
-    mask_above = radii > r_int
+    mask_above = np.hypot(coords[:, 0], coords[:, 1]) > r_int
 
+    ncomp = var.data.shape[1]
     values = np.empty_like(var.data)
-    if values.shape[1] == 1:
-        if np.any(mask_above):
-            values[mask_above, 0] = np.asarray(
-                [fn_above(coord) for coord in coords[mask_above]]
-            ).reshape(-1)
-        if np.any(~mask_above):
-            values[~mask_above, 0] = np.asarray(
-                [fn_below(coord) for coord in coords[~mask_above]]
-            ).reshape(-1)
-    else:
-        if np.any(mask_above):
-            values[mask_above, :] = np.asarray(
-                [fn_above(coord) for coord in coords[mask_above]]
-            ).reshape(-1, values.shape[1])
-        if np.any(~mask_above):
-            values[~mask_above, :] = np.asarray(
-                [fn_below(coord) for coord in coords[~mask_above]]
-            ).reshape(-1, values.shape[1])
+
+    for mask, fn in ((mask_above, fn_above), (~mask_above, fn_below)):
+        if np.any(mask):
+            values[mask, :] = np.asarray([fn(c) for c in coords[mask]]).reshape(-1, ncomp)
 
     return values
 
