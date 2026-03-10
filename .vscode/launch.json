@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "UW: Run current file (auto latest/legacy)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "${workspaceFolder}/.vscode/run_uw_by_suffix.sh ${file}",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "UW: Run current file (auto latest/legacy)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.vscode/run_uw_by_suffix.sh",
+      "args": [
+        "${file}"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "UW: Run current file (auto latest/legacy, with args)",
+      "type": "shell",
+      "command": "/bin/bash",
+      "args": [
+        "-lc",
+        "\"${workspaceFolder}/.vscode/run_uw_by_suffix.sh\" \"${file}\" ${input:uwScriptArgs}"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "uwScriptArgs",
+      "type": "promptString",
+      "description": "Optional CLI args for the script",
+      "default": ""
+    }
+  ]
+}
