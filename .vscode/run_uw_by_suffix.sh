@@ -17,7 +17,7 @@ fi
 BASE_NAME="$(basename "$FILE")"
 
 run_latest() {
-    local uw_root="/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest_bdint/underworld3"
+    local uw_root="/Users/tgol0006/uw_folder/uw3_git_gthyagi_openmpi/underworld3"
     local env_name="runtime"
     local pixi_bin
 
