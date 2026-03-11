@@ -24,7 +24,7 @@ import pyvista as pv
 dirname = f'case1_inv_lc_32_n_2_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_1'
 
 # %%
-output_dir = os.path.join("../../output/annulus/kramer/legacy/", f'{dirname}/')
+output_dir = os.path.join("../../output/annulus/kramer/latest/", f'{dirname}/')
 
 # %%
 pattern = (
@@ -68,11 +68,28 @@ r_i = 1.22
 plot_size = (750, 750)
 
 # %%
-xdmf_path = os.path.join(output_dir, "output_step_00000.xdmf")
-h5_path = os.path.join(output_dir, "output_step_00000.h5")
+def resolve_checkpoint_paths(output_dir):
+    """Pick an available checkpoint naming scheme in the output directory."""
+    preferred = (
+        ("output.mesh.00000.xdmf", "output.mesh.00000.h5"),
+        ("output_step_00000.xdmf", "output_step_00000.h5"),
+    )
+    for xdmf_name, h5_name in preferred:
+        xdmf_file = os.path.join(output_dir, xdmf_name)
+        h5_file = os.path.join(output_dir, h5_name)
+        if os.path.isfile(h5_file):
+            return xdmf_file, h5_file
 
-if not os.path.isfile(h5_path):
-    raise FileNotFoundError(f"Missing H5 file: {h5_path}")
+    h5_candidates = sorted(
+        [f for f in os.listdir(output_dir) if f.endswith(".h5")]
+    )
+    raise FileNotFoundError(
+        f"No checkpoint mesh H5 found in {output_dir}. H5 files: {h5_candidates}"
+    )
+
+
+# %%
+xdmf_path, h5_path = resolve_checkpoint_paths(output_dir)
 if not os.path.isfile(xdmf_path):
     print(f"Warning: XDMF not found: {xdmf_path}. Using H5-only reconstruction.")
 
@@ -157,6 +174,40 @@ def read_field(
 
     return arr
 
+
+# %%
+def read_field_from_files(
+    mesh_h5_file,
+    mesh_h5f,
+    field_name,
+    n_points,
+):
+    """Read field from the mesh H5, then fallback to per-field split files."""
+    try:
+        return read_field(
+            mesh_h5f,
+            field_name,
+            n_points,
+        )
+    except Exception:
+        pass
+
+    split_file = mesh_h5_file.replace(
+        ".00000.h5",
+        f".{field_name}.00000.h5",
+    )
+    if os.path.isfile(split_file):
+        with h5py.File(split_file, "r") as field_h5f:
+            return read_field(
+                field_h5f,
+                field_name,
+                n_points,
+            )
+
+    raise KeyError(
+        f"Field '{field_name}' not found in {mesh_h5_file} or split file {split_file}"
+    )
+
 # %%
 def load_grid_and_fields(
     xdmf_file,
@@ -209,39 +260,46 @@ def load_grid_and_fields(
 
         n_points = grid.n_points
 
-        v_u = read_field(
+        v_u = read_field_from_files(
+            h5_file,
             h5f,
             "V_u",
             n_points,
         )
-        p_u = read_field(
+        p_u = read_field_from_files(
+            h5_file,
             h5f,
             "P_u",
             n_points,
         )
-        v_a = read_field(
+        v_a = read_field_from_files(
+            h5_file,
             h5f,
             "V_a",
             n_points,
         )
-        p_a = read_field(
+        p_a = read_field_from_files(
+            h5_file,
             h5f,
             "P_a",
             n_points,
         )
-        v_e = read_field(
+        v_e = read_field_from_files(
+            h5_file,
             h5f,
             "V_e",
             n_points,
         )
-        p_e = read_field(
+        p_e = read_field_from_files(
+            h5_file,
             h5f,
             "P_e",
             n_points,
         )
 
         try:
-            rho_a = read_field(
+            rho_a = read_field_from_files(
+                h5_file,
                 h5f,
                 "RHO_a",
                 n_points,
