@@ -15,6 +15,7 @@
 
 # %%
 import os
+import sys
 import h5py
 import numpy as np
 import sympy as sp
@@ -32,7 +33,7 @@ is_serial = (uw.mpi.size == 1)
 # %%
 params = uw.Params(
     uw_case=uw.Param(
-        "case2",
+        "case1",
         description="Benchmark case: case1, case2, case3, case4",
     ),
     uw_n=uw.Param(
@@ -97,6 +98,10 @@ params = uw.Params(
     ),
 )
 
+if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
+    print(params.cli_help())
+    raise SystemExit(0)
+
 # %% [markdown]
 # ### Convection Parameters
 
@@ -151,8 +156,11 @@ else:
 # ### Output Directory
 
 # %%
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+output_root = os.path.join(repo_root, "output", "annulus", "kramer", "latest")
+
 output_dir = os.path.join(
-    "../../output/annulus/kramer/latest/",
+    output_root,
     (
         f"{case}_inv_lc_{int(1/cellsize)}_n_{n}_k_{k}_vdeg_{params.uw_vdegree}_pdeg_{params.uw_pdegree}"
         f"_pcont_{str(params.uw_pcont).lower()}_vel_penalty_{params.uw_vel_penalty:.2g}_stokes_tol_{params.uw_stokes_tol:.2g}"
@@ -466,10 +474,11 @@ if uw.mpi.rank == 0:
         f_h5.create_dataset("p_l2_norm", data=p_err_l2)
 
 # %%
-mesh.petsc_save_checkpoint(
+mesh.write_timestep(
+    'output',
     index=0,
     meshVars=[v_uw, p_uw, v_ana, p_ana, rho_ana, v_err, p_err],
-    outputPath=os.path.relpath(output_dir)+'/output',
+    outputPath=str(output_dir),
 )
 
 # %%
