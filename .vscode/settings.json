@@ -1,3 +1,16 @@
+// Legacy env settings for Python in VS Code
+// {
+//   "editor.tabCompletion": "on",
+//   "python.defaultInterpreterPath": "/Users/tgol0006/manual_install_pkg/petsc_venv_uw3_21125/venv_uw3/bin/python",
+//   "python-envs.defaultEnvManager": "ms-python.python:system",
+//   "python.terminal.activateEnvironment": true,
+//   "python.terminal.activateEnvInCurrentTerminal": true,
+//   "terminal.integrated.env.osx": {
+//     "PATH": "/Users/tgol0006/manual_install_pkg/petsc_venv_uw3_21125/venv_uw3/bin:${env:PATH}"
+//   }
+// }
+
+// Latest env settings for Python in VS Code
 {
   "editor.tabCompletion": "on",
   "python.defaultInterpreterPath": "/Users/tgol0006/uw_folder/uw3_git_gthyagi_openmpi/worktrees/underworld3-feature-boundary-integrals/.pixi/envs/amr-dev/bin/python",
