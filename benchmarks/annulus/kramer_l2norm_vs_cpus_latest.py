@@ -21,10 +21,10 @@ import matplotlib.pyplot as plt
 
 # %%
 run_dir_names = [
-    "case1_inv_lc_32_n_2_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_1",
-    "case1_inv_lc_32_n_2_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_2",
-    "case1_inv_lc_32_n_2_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_4",
-    "case1_inv_lc_32_n_2_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_8",
+    "case1_inv_lc_32_n_2_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_1_bc_natural",
+    "case1_inv_lc_32_n_2_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_2_bc_natural",
+    "case1_inv_lc_32_n_2_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_4_bc_natural",
+    "case1_inv_lc_32_n_2_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_8_bc_natural",
 ]
 
 print(f"Using {len(run_dir_names)} run directories")
@@ -36,8 +36,8 @@ for name in run_dir_names:
 
 # %%
 IN_NOTEBOOK = "ipykernel" in sys.modules
-OUTPUT_ROOT = os.path.abspath(f"{os.getcwd()}/../../output/annulus/kramer/latest")
-FIG_DIR = f"{OUTPUT_ROOT}/l2norm_plots"
+OUTPUT_ROOT = f"/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/annulus/kramer/latest"
+FIG_DIR = f"{OUTPUT_ROOT}/l2norm_plots_bc_natural"
 print(f"Output root: {OUTPUT_ROOT}")
 print(f"Figure dir : {FIG_DIR}")
 
@@ -59,23 +59,30 @@ os.makedirs(FIG_DIR, exist_ok=True)
 # ## 4) Read `error_norm.h5` from each directory
 
 # %%
-ncpus_re = re.compile(r"_ncpus_(\d+)$")
+ncpus_re = re.compile(r"_ncpus_(\d+)")
 records = []
 
 for run_dir in run_dirs:
     run_name = os.path.basename(run_dir)
     match = ncpus_re.search(run_name)
     if not match:
+        print(f"Skipping (could not parse ncpus): {run_name}")
         continue
 
     ncpus = int(match.group(1))
     h5_file = os.path.join(run_dir, "error_norm.h5")
     if not os.path.isfile(h5_file):
+        print(f"Skipping (missing error_norm.h5): {run_dir}")
         continue
 
     with h5py.File(h5_file, "r") as h5f:
-        v_l2 = float(h5f["v_l2_norm"][()])
-        p_l2 = float(h5f["p_l2_norm"][()])
+        v_key = "v_l2_norm" if "v_l2_norm" in h5f else "v_l2"
+        p_key = "p_l2_norm" if "p_l2_norm" in h5f else "p_l2"
+        if v_key not in h5f or p_key not in h5f:
+            print(f"Skipping (missing expected datasets): {h5_file}")
+            continue
+        v_l2 = float(h5f[v_key][()])
+        p_l2 = float(h5f[p_key][()])
 
     records.append({"ncpus": ncpus, "v_l2": v_l2, "p_l2": p_l2, "h5": h5_file})
 

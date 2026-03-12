@@ -164,7 +164,7 @@ output_dir = os.path.join(
     (
         f"{case}_inv_lc_{int(1/cellsize)}_n_{n}_k_{k}_vdeg_{params.uw_vdegree}_pdeg_{params.uw_pdegree}"
         f"_pcont_{str(params.uw_pcont).lower()}_vel_penalty_{params.uw_vel_penalty:.2g}_stokes_tol_{params.uw_stokes_tol:.2g}"
-        f"_ncpus_{uw.mpi.size}/"
+        f"_ncpus_{uw.mpi.size}_bc_{params.uw_bc_type}/"
     ),
 )
 
