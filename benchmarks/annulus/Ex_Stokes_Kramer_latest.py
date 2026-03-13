@@ -33,7 +33,7 @@ is_serial = (uw.mpi.size == 1)
 # %%
 params = uw.Params(
     uw_case=uw.Param(
-        "case1",
+        "case2",
         description="Benchmark case: case1, case2, case3, case4",
     ),
     uw_n=uw.Param(

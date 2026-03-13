@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
-
 # %% [markdown]
-# # Kramer Latest: CPUs vs L2 Norm
+# ## Kramer Latest: CPUs vs L2 Norm
 # Simple workflow:
 # 1) create output folder
 # 2) get list of run directories
@@ -17,7 +15,7 @@ import h5py
 import matplotlib.pyplot as plt
 
 # %% [markdown]
-# ## 1) User run directory list
+# ### User run directory list
 
 # %%
 run_dir_names = [
@@ -32,7 +30,7 @@ for name in run_dir_names:
     print(name)
 
 # %% [markdown]
-# ## 2) Resolve paths
+# ### Resolve paths
 
 # %%
 IN_NOTEBOOK = "ipykernel" in sys.modules
@@ -42,7 +40,7 @@ print(f"Output root: {OUTPUT_ROOT}")
 print(f"Figure dir : {FIG_DIR}")
 
 # %% [markdown]
-# ## 3) Validate run dirs and create output folder
+# ### Validate run dirs and create output folder
 
 # %%
 run_dirs = []
@@ -56,7 +54,7 @@ for run_name in run_dir_names:
 os.makedirs(FIG_DIR, exist_ok=True)
 
 # %% [markdown]
-# ## 4) Read `error_norm.h5` from each directory
+# ### Read `error_norm.h5` from each directory
 
 # %%
 ncpus_re = re.compile(r"_ncpus_(\d+)")
@@ -94,7 +92,7 @@ for r in records:
     )
 
 # %% [markdown]
-# ## 5) Plot CPUs vs L2 norm and save figure
+# ### Plot CPUs vs L2 norm and save figure
 
 # %%
 if not records:
