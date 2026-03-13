@@ -540,9 +540,7 @@ elif smooth:
 
 # %%
 # Restore analytical density values into mesh variable
-rho_ana_values = np.asarray(uw.function.evaluate(rho, rho_ana.coords)).reshape(-1)
-with uw.synchronised_array_update():
-    rho_ana.data[:, 0] = rho_ana_values
+rho_ana.data[:] = np.asarray(uw.function.evaluate(rho, rho_ana.coords)).reshape(-1, 1)
 
 # %% [markdown]
 # #### Boundary Conditions
@@ -608,19 +606,52 @@ if uw.mpi.rank == 0:
     print(stokes.snes.ksp.getConvergedReason())
 
 # %% [markdown]
-# ### Remove Null Mode
+# ### Benchmark Calibrations
 
 # %%
-if freeslip:
-    I0 = uw.maths.Integral(mesh, v_theta_fn_xy.dot(v_uw.sym))
-    norm = I0.evaluate()
-    I0.fn = v_theta_fn_xy.dot(v_theta_fn_xy)
-    vnorm = I0.evaluate()
+def subtract_pressure_mean(mesh, pressure_var):
+    """
+    Subtract the domain-average pressure from the numerical pressure field.
 
-    with mesh.access(v_uw):
-        dv = uw.function.evaluate(norm * v_theta_fn_xy, v_uw.coords) / vnorm
-        dv = dv.reshape(v_uw.data.shape)
-        v_uw.data[...] -= dv
+    Parameters
+    ----------
+    mesh : uw.discretisation.Mesh
+        Mesh used to evaluate the pressure and volume integrals.
+    pressure_var : uw.discretisation.MeshVariable
+        Scalar pressure field to shift to zero mean.
+    """
+    p_int = uw.maths.Integral(mesh, pressure_var.sym[0]).evaluate()
+    volume = uw.maths.Integral(mesh, 1.0).evaluate()
+    p_mean = p_int / volume
+
+    pressure_var.data[:, 0] -= p_mean
+
+
+def subtract_rigid_rotation(mesh, velocity_var, rotation_mode):
+    """
+    Remove the rigid-body rotation component from the numerical velocity field.
+
+    Parameters
+    ----------
+    mesh : uw.discretisation.Mesh
+        Mesh used to evaluate the projection integrals.
+    velocity_var : uw.discretisation.MeshVariable
+        Vector velocity field to correct.
+    rotation_mode : sympy.Matrix
+        Rigid-body rotation null mode to project out, here `r * e_theta` in 2-D.
+    """
+    mode_int = uw.maths.Integral(mesh, rotation_mode.dot(velocity_var.sym)).evaluate()
+    mode_norm = uw.maths.Integral(mesh, rotation_mode.dot(rotation_mode)).evaluate()
+    coeff = mode_int / mode_norm
+
+    dv = uw.function.evaluate(coeff * rotation_mode, velocity_var.coords)
+    velocity_var.data[...] -= dv.reshape(velocity_var.data.shape)
+
+
+subtract_pressure_mean(mesh, p_uw)
+
+if freeslip:
+    subtract_rigid_rotation(mesh, v_uw, v_theta_fn_xy)
 
 
 # %% [markdown]

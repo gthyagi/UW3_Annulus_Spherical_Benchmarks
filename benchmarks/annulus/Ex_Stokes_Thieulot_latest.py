@@ -186,6 +186,7 @@ if is_serial:
 x, y = mesh.CoordinateSystem.X
 r, th = mesh.CoordinateSystem.xR
 unit_rvec = mesh.CoordinateSystem.unit_e_0
+v_theta_fn_xy = r * mesh.CoordinateSystem.rRotN.T * sp.Matrix((0, 1))
 
 # %% [markdown]
 # ### Create Mesh Variables
@@ -293,6 +294,49 @@ uw.timing.print_table(filename=f"{output_dir}/stokes_timing.txt",)
 if uw.mpi.rank == 0:
     print(stokes.snes.getConvergedReason())
     print(stokes.snes.ksp.getConvergedReason())
+
+# %% [markdown]
+# ### Benchmark Calibrations
+
+# %%
+def subtract_pressure_mean(mesh, pressure_var):
+    """
+    Subtract the domain-average pressure from the numerical pressure field.
+
+    Parameters
+    ----------
+    mesh : uw.discretisation.Mesh
+        Mesh used to evaluate the pressure and volume integrals.
+    pressure_var : uw.discretisation.MeshVariable
+        Scalar pressure field to shift to zero mean.
+    """
+    p_int = uw.maths.Integral(mesh, pressure_var.sym[0]).evaluate()
+    volume = uw.maths.Integral(mesh, 1.0).evaluate()
+    pressure_var.data[:, 0] -= p_int / volume
+
+
+def subtract_rigid_rotation(mesh, velocity_var, rotation_mode):
+    """
+    Remove the rigid-body rotation component from the numerical velocity field.
+
+    Parameters
+    ----------
+    mesh : uw.discretisation.Mesh
+        Mesh used to evaluate the projection integrals.
+    velocity_var : uw.discretisation.MeshVariable
+        Vector velocity field to correct.
+    rotation_mode : sympy.Matrix
+        Rigid-body rotation null mode to project out, here `r * e_theta` in 2-D.
+    """
+    mode_int = uw.maths.Integral(mesh, rotation_mode.dot(velocity_var.sym)).evaluate()
+    mode_norm = uw.maths.Integral(mesh, rotation_mode.dot(rotation_mode)).evaluate()
+    dv = uw.function.evaluate((mode_int / mode_norm) * rotation_mode, velocity_var.coords)
+    velocity_var.data[...] -= np.asarray(dv).reshape(velocity_var.data.shape)
+
+
+if int(params.uw_k) != 0:
+    subtract_pressure_mean(mesh, p_soln)
+    subtract_rigid_rotation(mesh, v_soln, v_theta_fn_xy)
 
 
 # %% [markdown]
