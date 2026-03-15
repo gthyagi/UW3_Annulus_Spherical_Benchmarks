@@ -18,9 +18,33 @@ fi
 if [[ "${is_sourced}" -eq 1 ]]; then
   set +u
   source "${ENV_SCRIPT}"
+  rehash 2>/dev/null || hash -r 2>/dev/null || true
   cd "${TARGET_HOME}"
   return 0
 fi
 
-# Exec mode: open a new shell with env activated.
-exec "${SHELL_BIN}" -ic "set +u; source '${ENV_SCRIPT}'; cd '${TARGET_HOME}'; exec '${SHELL_BIN}' -i"
+# Exec mode: open a fresh interactive zsh and apply the legacy UW3 env after
+# the user's normal shell config so the intended mpirun/python pair wins.
+TMP_ZDOTDIR="$(mktemp -d "${TMPDIR:-/tmp}/uw3-legacy-zdotdir.XXXXXX")"
+
+cat > "${TMP_ZDOTDIR}/.zshenv" <<EOF
+if [[ -f "/Users/tgol0006/.zshenv" ]]; then
+  source "/Users/tgol0006/.zshenv"
+fi
+EOF
+
+cat > "${TMP_ZDOTDIR}/.zshrc" <<EOF
+if [[ -f "/Users/tgol0006/.zshrc" ]]; then
+  source "/Users/tgol0006/.zshrc"
+fi
+set +u
+source "${ENV_SCRIPT}"
+rehash 2>/dev/null || hash -r 2>/dev/null || true
+cd "${TARGET_HOME}"
+TRAPEXIT() {
+  rm -rf "${TMP_ZDOTDIR}"
+}
+EOF
+
+export ZDOTDIR="${TMP_ZDOTDIR}"
+exec "${SHELL_BIN}" -i

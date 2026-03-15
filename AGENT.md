@@ -1,5 +1,14 @@
 # AGENT.md
 
+## Required Startup Reads
+
+Before doing any repository-specific work, read these files in this order and follow them together with this `AGENT.md`:
+
+1. `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/rules/karpathy-guidelines.md`
+2. `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/rules/personal_agents.md`
+
+Do not start analysis, editing, command execution, or repo-specific recommendations until both files have been read.
+
 ## Purpose
 
 This repository contains Underworld3 benchmark scripts for annulus (2D) and spherical shell (3D) Stokes-flow validation. It is currently in a fresh-start/rebuild state.
@@ -25,9 +34,51 @@ These are local machine paths and are intended as quick references during debugg
 ## Primary Directories
 
 - `benchmarks/annulus/`: annulus benchmark scripts (current main script: legacy Thieulot benchmark).
-- `benchmarks/spherical/`: spherical benchmark area (currently mostly checkpoint/mesh artifacts pending script re-addition).
+- `benchmarks/spherical/`: spherical legacy/latest benchmark scripts and plotting helpers.
 - `docs/`: documentation notes and migration guidance.
 - `output/`: shared generated output location (if used).
+
+## Benchmark Paper References
+
+Use these PDFs as the primary benchmark references when checking formulas, expected fields, convergence behaviour, and boundary-condition intent.
+
+- Curved-shell benchmark suite:
+  - `docs/benchmark_papers/Kramer_etal_GMD2021.pdf`
+  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/Kramer_etal_GMD2021.pdf`
+  - Scope:
+    - analytical Stokes solutions in 2-D cylindrical shells and 3-D spherical shells
+    - smooth polynomial forcing and delta-function forcing
+    - free-slip and zero-slip cases
+  - Practical notes:
+    - this is the main reference for Kramer annulus/spherical benchmarks in this repo
+    - pressure is only defined up to a constant and should be zero-mean calibrated for comparison
+    - free-slip velocity solutions can contain rigid-body rotation null modes and should be projected out before comparing with the analytical solution
+    - delta-function forcing can produce suboptimal convergence, especially for continuous-pressure discretisations
+
+- Spherical Thieulot benchmark:
+  - `docs/benchmark_papers/CedricThieulot_SE2017.pdf`
+  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/CedricThieulot_SE2017.pdf`
+  - Scope:
+    - analytical incompressible Stokes flow in a spherical shell
+    - tangential velocity on inner/outer boundaries
+    - radial power-law viscosity `mu(r) = mu0 * r^(m+1)`
+  - Practical notes:
+    - `m = -1` is the constant-viscosity case
+    - `m = 3` is the standard variable-viscosity case used in this repo
+    - the analytical pressure is zero on both spherical boundaries, so pressure boundary treatment matters
+    - use this paper when checking spherical `m=-1` and `m=3` velocity, pressure, density/body-force, and `vrms` expressions
+
+- Annulus Thieulot benchmark:
+  - `docs/benchmark_papers/Thieulot&Puckett_2018.pdf`
+  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/Thieulot&Puckett_2018.pdf`
+  - Scope:
+    - analytical incompressible Stokes flow in a 2-D annulus
+    - constant viscosity, inward radial gravity, tangential boundary flow
+    - parameter `k` controls the number of convection-cell lobes
+  - Practical notes:
+    - this is the main reference for annulus Thieulot benchmarks in this repo
+    - use it to check pressure, velocity, density, and scalar averages such as `vrms`
+    - expected finite-element behaviour is standard: velocity converges one order higher than pressure for stable mixed pairs
 
 ## Working Conventions
 
@@ -40,10 +91,35 @@ These are local machine paths and are intended as quick references during debugg
 ## Benchmark Priorities
 
 - Annulus:
-  - `benchmarks/annulus/Ex_Stokes_Annulus_Benchmark_Thieulot_legacy.py`
-  - Next add: latest-compatible Thieulot and Kramer scripts
+  - `benchmarks/annulus/Ex_Stokes_Thieulot_legacy.py`
+  - `benchmarks/annulus/Ex_Stokes_Thieulot_latest.py`
+  - `benchmarks/annulus/Ex_Stokes_Kramer_latest.py`
 - Spherical:
-  - Next add: latest-compatible Thieulot and Kramer scripts in `benchmarks/spherical/`
+  - `benchmarks/spherical/Ex_Stokes_Thieulot_legacy.py`
+  - `benchmarks/spherical/Ex_Stokes_Thieulot_latest.py`
+
+## Benchmark Troubleshooting Notes
+
+- Spherical Thieulot `m = 3`:
+  - this case is more sensitive than `m = -1` to pressure treatment and boundary-condition enforcement
+  - if analytical and computed pressures differ strongly, check pressure boundary conditions first, not just pressure mean calibration
+  - zero-mean pressure calibration removes only the constant pressure null space; it does not fix an incorrect pressure shape
+
+- Free-slip / null-space handling:
+  - for benchmarks following Kramer et al. (2021), remove rigid-body rotation modes from velocity before comparing with the analytical solution
+  - also subtract the domain-average pressure before evaluating pressure errors
+  - solver-internal null-space removal and final benchmark calibration are related but not identical steps
+
+- Legacy UW3 MPI setup:
+  - use the matching legacy OpenMPI and legacy UW3 Python pair from `activate_uw3_legacy.sh`
+  - if every MPI process reports rank `0` and size `1`, the wrong `mpirun` / `python` pair is being used and mesh generation can corrupt shared `.msh` files
+  - if needed, verify with:
+
+```bash
+/Users/tgol0006/manual_install_pkg/openmpi-4.1.6/bin/mpirun -np 4 \
+  /Users/tgol0006/manual_install_pkg/petsc_venv_uw3_21125/venv_uw3/bin/python3 \
+  -c 'from petsc4py import PETSc; print(PETSc.COMM_WORLD.rank, PETSc.COMM_WORLD.size, flush=True)'
+```
 
 ## Output and Data Policy
 

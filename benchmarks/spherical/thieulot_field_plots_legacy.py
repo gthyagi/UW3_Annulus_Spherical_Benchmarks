@@ -1,0 +1,422 @@
+# %% [markdown]
+# ## Spherical Thieulot Legacy Post-Processing
+#
+# Edit `dirname` below, then run this script to recreate the legacy field plots.
+
+# %%
+import os
+import re
+
+import cmcrameri.cm as cmc
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+import pyvista as pv
+
+# %% [markdown]
+# ### Parameters And Paths
+
+# %%
+dirname = "case_inv_lc_16_m_-1_vdeg_2_pdeg_1_pcont_true_vel_penalty_1e+08_stokes_tol_1e-10_ncpus_8"
+
+# %%
+output_dir = os.path.join("../../output/spherical/thieulot/legacy/", f"{dirname}/")
+
+# %%
+pattern = (
+    r"case_inv_lc_(?P<inv_lc>\d+)_"
+    r"m_(?P<m>-?\d+)_"
+    r"vdeg_(?P<vdeg>\d+)_"
+    r"pdeg_(?P<pdeg>\d+)_"
+    r"pcont_(?P<pcont>true|false)_"
+    r"vel_penalty_(?P<vel_penalty>[0-9.eE+\-]+)_"
+    r"stokes_tol_(?P<stokes_tol>[0-9.eE+\-]+)_"
+    r"ncpus_(?P<ncpus>\d+)"
+)
+
+match = re.search(pattern, dirname)
+if match is None:
+    raise ValueError(f"Could not parse dirname: {dirname}")
+
+params = match.groupdict()
+
+# %%
+inv_lc = int(params["inv_lc"])
+cellsize = 1.0 / inv_lc
+
+m = int(params["m"])
+vdegree = int(params["vdeg"])
+pdegree = int(params["pdeg"])
+pcont = params["pcont"] == "true"
+pcont_str = str(pcont).lower()
+
+vel_penalty = float(params["vel_penalty"])
+stokes_tol = float(params["stokes_tol"])
+ncpus = int(params["ncpus"])
+
+r_i = 0.5
+r_o = 1.0
+clip_angle = 135.0
+cpos = "yz"
+
+# %%
+h5_path = os.path.join(output_dir, "output_step_00000.h5")
+
+if not os.path.isfile(h5_path):
+    raise FileNotFoundError(f"Missing H5 file: {h5_path}")
+
+# %% [markdown]
+# ### Analytical Solution
+
+# %%
+def thieulot_coefficients(
+    m,
+    r_i,
+    r_o,
+    gamma=1.0,
+):
+    """Return alpha and beta for the Thieulot spherical benchmark."""
+
+    if m == -1:
+        alpha = -gamma * (
+            (r_o**3 - r_i**3)
+            / ((r_o**3) * np.log(r_i) - (r_i**3) * np.log(r_o))
+        )
+        beta = -3.0 * gamma * (
+            (np.log(r_o) - np.log(r_i))
+            / ((r_i**3) * np.log(r_o) - (r_o**3) * np.log(r_i))
+        )
+    else:
+        alpha = gamma * (m + 1) * (
+            (r_i**-3 - r_o**-3) / ((r_i ** (-(m + 4))) - (r_o ** (-(m + 4))))
+        )
+        beta = -3.0 * gamma * (
+            ((r_i ** (m + 1)) - (r_o ** (m + 1)))
+            / ((r_i ** (m + 4)) - (r_o ** (m + 4)))
+        )
+
+    return alpha, beta
+
+
+def thieulot_radial_functions(
+    radius,
+    m,
+    r_i,
+    r_o,
+    gamma=1.0,
+    mu_0=1.0,
+):
+    """Return f(r), g(r), h(r), and mu(r)."""
+
+    alpha, beta = thieulot_coefficients(m, r_i, r_o, gamma=gamma)
+    mu = mu_0 * radius ** (m + 1)
+    f = alpha * radius ** (-(m + 3)) + beta * radius
+
+    if m == -1:
+        g = (-2.0 / radius**2) * (
+            alpha * np.log(radius) + (beta / 3.0) * radius**3 + gamma
+        )
+        h = (2.0 / radius) * mu_0 * g
+    else:
+        g = (-2.0 / radius**2) * (
+            (-alpha / (m + 1)) * radius ** (-(m + 1))
+            + (beta / 3.0) * radius**3
+            + gamma
+        )
+        h = ((m + 3) / radius) * mu * g
+
+    return f, g, h, mu
+
+
+def analytical_solution(
+    points_xyz,
+    m,
+    r_i,
+    r_o,
+):
+    """Return analytical velocity, pressure, and density at mesh points."""
+
+    x = points_xyz[:, 0]
+    y = points_xyz[:, 1]
+    z = points_xyz[:, 2]
+
+    radius = np.sqrt(x**2 + y**2 + z**2)
+    theta = np.arccos(np.clip(z / radius, -1.0, 1.0))
+    phi = np.mod(np.arctan2(y, x), 2.0 * np.pi)
+
+    alpha, beta = thieulot_coefficients(m, r_i, r_o)
+    f, g, h, _ = thieulot_radial_functions(radius, m, r_i, r_o)
+
+    if m == -1:
+        rho = (
+            (alpha / radius**4) * (8.0 * np.log(radius) - 6.0)
+            + 8.0 * beta / (3.0 * radius)
+            + 8.0 / radius**4
+        ) * np.cos(theta)
+    else:
+        rho = (
+            2.0 * alpha * radius ** (-(m + 4)) * ((m + 3) / (m + 1)) * (m - 1)
+            - (2.0 * beta / 3.0) * (m - 1) * (m + 3)
+            - m * (m + 5) * (2.0 / radius**3)
+        ) * np.cos(theta)
+
+    p_ana = h * np.cos(theta)
+
+    v_r = g * np.cos(theta)
+    v_theta = f * np.sin(theta)
+    v_phi = f * np.sin(theta)
+
+    v_x = (
+        v_r * np.sin(theta) * np.cos(phi)
+        + v_theta * np.cos(theta) * np.cos(phi)
+        - v_phi * np.sin(phi)
+    )
+    v_y = (
+        v_r * np.sin(theta) * np.sin(phi)
+        + v_theta * np.cos(theta) * np.sin(phi)
+        + v_phi * np.cos(phi)
+    )
+    v_z = v_r * np.cos(theta) - v_theta * np.sin(theta)
+
+    v_ana = np.c_[v_x, v_y, v_z]
+
+    return v_ana, p_ana, rho
+
+# %% [markdown]
+# ### Read Checkpoint
+
+# %%
+with h5py.File(h5_path, "r") as h5f:
+    points = np.asarray(h5f["geometry/vertices"], dtype=np.float64)
+    cells = np.asarray(h5f["viz/topology/cells"], dtype=np.int64)
+
+    if "vertex_fields/V_u_V_u" in h5f:
+        v_u = np.asarray(h5f["vertex_fields/V_u_V_u"], dtype=np.float64)
+    else:
+        v_u = np.asarray(h5f["fields/V_u"], dtype=np.float64)
+
+    if "vertex_fields/P_u_P_u" in h5f:
+        p_u = np.asarray(h5f["vertex_fields/P_u_P_u"], dtype=np.float64).reshape(-1)
+    else:
+        p_u = np.asarray(h5f["fields/P_u"], dtype=np.float64).reshape(-1)
+
+if v_u.shape[0] != points.shape[0] and v_u.ndim == 2 and v_u.shape[1] == points.shape[0]:
+    v_u = v_u.T
+
+if v_u.shape[0] != points.shape[0]:
+    raise ValueError(f"Unexpected velocity shape: {v_u.shape}")
+
+if p_u.shape[0] != points.shape[0]:
+    raise ValueError(f"Unexpected pressure shape: {p_u.shape}")
+
+# %%
+cells_flat = np.hstack(
+    [np.full((cells.shape[0], 1), cells.shape[1], dtype=np.int64), cells]
+).ravel()
+celltypes = np.full(cells.shape[0], pv.CellType.TETRA, dtype=np.uint8)
+
+grid = pv.UnstructuredGrid(cells_flat, celltypes, points)
+grid.point_data["V_u"] = v_u
+grid.point_data["P_u"] = p_u
+
+# %% [markdown]
+# ### Analytical And Error Fields
+
+# %%
+v_ana, p_ana, rho_ana = analytical_solution(grid.points, m, r_i, r_o)
+v_err = v_u - v_ana
+p_err = p_u - p_ana
+
+v_ana_mag = np.linalg.norm(v_ana, axis=1)
+v_err_mag = np.linalg.norm(v_err, axis=1)
+
+with np.errstate(divide="ignore", invalid="ignore"):
+    v_err_pct = np.where(v_ana_mag > 1.0e-14, 100.0 * v_err_mag / v_ana_mag, 0.0)
+    p_err_pct = np.where(np.abs(p_ana) > 1.0e-14, 100.0 * p_err / p_ana, 0.0)
+
+grid.point_data["V_a"] = v_ana
+grid.point_data["P_a"] = p_ana
+grid.point_data["RHO_a"] = rho_ana
+grid.point_data["V_e"] = v_err
+grid.point_data["P_e"] = p_err
+grid.point_data["V_err_pct"] = np.nan_to_num(v_err_pct)
+grid.point_data["P_err_pct"] = np.nan_to_num(p_err_pct)
+
+# %%
+legacy_limits = {
+    -1: {
+        "velocity": [0.0, 5.0],
+        "pressure": [-2.5, 2.5],
+        "rho": [-110.0, 110.0],
+        "velocity_error": [0.0, 0.05],
+        "velocity_pct": [0.0, 5.0],
+        "pressure_error": [-0.5, 0.5],
+        "pressure_pct": [-10.0, 10.0],
+    },
+    3: {
+        "velocity": [0.0, 20.0],
+        "pressure": [-4.0, 4.0],
+        "rho": [-35.0, 35.0],
+        "velocity_error": [0.0, 4.0],
+        "velocity_pct": [0.0, 5.0],
+        "pressure_error": [-0.5, 0.5],
+        "pressure_pct": [-10.0, 10.0],
+    },
+}
+
+if m in legacy_limits:
+    limits = legacy_limits[m]
+else:
+    limits = {
+        "velocity": [0.0, float(np.max(np.linalg.norm(v_u, axis=1)))],
+        "pressure": [float(np.min(p_u)), float(np.max(p_u))],
+        "rho": [float(np.min(rho_ana)), float(np.max(rho_ana))],
+        "velocity_error": [0.0, float(np.max(v_err_mag))],
+        "velocity_pct": [0.0, 5.0],
+        "pressure_error": [float(np.min(p_err)), float(np.max(p_err))],
+        "pressure_pct": [-10.0, 10.0],
+    }
+
+# %% [markdown]
+# ### Plot Helpers
+
+# %%
+def clip_grid(grid, clip_angle, crinkle=False):
+    """Match the legacy two-plane clip used by the original plotting helpers."""
+
+    normal_1 = (
+        np.cos(np.deg2rad(clip_angle)),
+        np.cos(np.deg2rad(clip_angle)),
+        0.0,
+    )
+    normal_2 = (
+        np.cos(np.deg2rad(clip_angle)),
+        -np.cos(np.deg2rad(clip_angle)),
+        0.0,
+    )
+
+    clip_1 = grid.clip(origin=(0.0, 0.0, 0.0), normal=normal_1, invert=False, crinkle=crinkle)
+    clip_2 = grid.clip(origin=(0.0, 0.0, 0.0), normal=normal_2, invert=False, crinkle=crinkle)
+
+    return [clip_1, clip_2]
+
+
+def save_colorbar(colormap, clim, label, fname, label_y):
+    """Save a horizontal colorbar using the legacy benchmark layout."""
+
+    fig = plt.figure(figsize=(5, 5))
+    plt.rc("font", size=18)
+    image = plt.imshow(np.array([[clim[0], clim[1]]]), cmap=colormap)
+    plt.gca().set_visible(False)
+
+    cax = plt.axes([0.1, 0.2, 1.15, 0.06])
+    cb = plt.colorbar(image, orientation="horizontal", cax=cax)
+    cb.ax.set_title(label, fontsize=18, x=0.5, y=label_y)
+
+    fig.savefig(
+        os.path.join(output_dir, f"{fname}_cbhorz.pdf"),
+        dpi=150,
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+def save_field_plot(field_name, png_name, colormap, clim, cb_label, cb_name, label_y, vector=False):
+    """Save a clipped field plot."""
+
+    work = grid.copy(deep=True)
+
+    if vector:
+        values = np.asarray(work.point_data[field_name], dtype=np.float64)
+        work.point_data[f"{field_name}_mag"] = np.linalg.norm(values, axis=1)
+        scalars = f"{field_name}_mag"
+    else:
+        scalars = field_name
+
+    plotter = pv.Plotter(window_size=(750, 750), off_screen=True)
+    plotter.image_scale = 3.5
+    plotter.set_background("white")
+
+    for clipped in clip_grid(work, clip_angle):
+        plotter.add_mesh(
+            clipped,
+            scalars=scalars,
+            cmap=colormap,
+            clim=clim,
+            edge_color="k",
+            show_edges=False,
+            show_scalar_bar=False,
+        )
+
+    plotter.camera_position = cpos
+    plotter.render()
+    plotter.camera.zoom(1.4)
+    plotter.screenshot(os.path.join(output_dir, png_name))
+    plotter.close()
+
+    save_colorbar(colormap, clim, cb_label, cb_name, label_y)
+
+# %% [markdown]
+# ### Analytical Function Plot
+
+# %%
+radius = np.linspace(r_i, r_o, 200)
+f_r, g_r, h_r, mu_r = thieulot_radial_functions(radius, m, r_i, r_o)
+
+fig, axs = plt.subplots(2, 2, figsize=(10, 6))
+
+fn_list = [f_r, g_r, h_r, mu_r]
+ylabel_list = [r"$f(r)$", r"$g(r)$", r"$h(r)$", "Viscosity"]
+
+for idx, ax in enumerate(axs.flatten()):
+    ax.plot(radius, fn_list[idx], color="green", linewidth=1.0)
+    ax.set_xlim(r_i, r_o)
+    ax.grid(linewidth=0.7)
+    ax.set_xlabel("r")
+    ax.set_ylabel(ylabel_list[idx])
+    ax.tick_params(axis="both", direction="in", pad=8)
+
+axs[1, 1].set_yscale("log")
+
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, "analy_fns.pdf"), format="pdf", bbox_inches="tight")
+plt.close(fig)
+
+# %% [markdown]
+# ### Mesh Plot
+
+# %%
+mesh_plotter = pv.Plotter(window_size=(750, 750), off_screen=True)
+mesh_plotter.image_scale = 3.5
+mesh_plotter.set_background("white")
+
+for clipped in clip_grid(grid, clip_angle, crinkle=True):
+    mesh_plotter.add_mesh(
+        clipped,
+        color="white",
+        edge_color="black",
+        show_edges=True,
+        show_scalar_bar=False,
+    )
+
+mesh_plotter.camera_position = cpos
+mesh_plotter.render()
+mesh_plotter.camera.zoom(1.4)
+mesh_plotter.screenshot(os.path.join(output_dir, "mesh.png"))
+mesh_plotter.close()
+
+# %% [markdown]
+# ### Field Plots
+
+# %%
+save_field_plot("V_a", "vel_ana.png", cmc.lapaz.resampled(21), limits["velocity"], "Velocity", "v_ana", -2.05, vector=True)
+save_field_plot("P_a", "p_ana.png", cmc.vik_r.resampled(41), limits["pressure"], "Pressure", "p_ana", -2.0)
+save_field_plot("RHO_a", "rho_ana.png", cmc.roma_r.resampled(31), limits["rho"], "Rho", "rho_ana", -2.0)
+
+save_field_plot("V_u", "vel_uw.png", cmc.lapaz.resampled(21), limits["velocity"], "Velocity", "v_uw", -2.05, vector=True)
+save_field_plot("V_e", "vel_r_err.png", cmc.lapaz.resampled(11), limits["velocity_error"], "Velocity", "v_err_rel", -2.05, vector=True)
+save_field_plot("V_err_pct", "vel_p_err.png", cmc.oslo_r.resampled(21), limits["velocity_pct"], "Velocity Error (%)", "v_err_perc", -2.05)
+
+save_field_plot("P_u", "p_uw.png", cmc.vik_r.resampled(41), limits["pressure"], "Pressure", "p_uw", -2.0)
+save_field_plot("P_e", "p_r_err.png", cmc.vik_r.resampled(41), limits["pressure_error"], "Pressure", "p_err_rel", -2.0)
+save_field_plot("P_err_pct", "p_p_err.png", cmc.vik_r.resampled(41), limits["pressure_pct"], "Pressure", "p_err_perc", -2.0)
