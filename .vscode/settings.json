@@ -13,10 +13,10 @@
 // Latest env settings for Python in VS Code
 {
   "editor.tabCompletion": "on",
-  "python.defaultInterpreterPath": "/Users/tgol0006/uw_folder/uw3_git_gthyagi_openmpi/worktrees/underworld3-feature-boundary-integrals/.pixi/envs/amr-dev/bin/python",
+  "python.defaultInterpreterPath": "/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest/underworld3/.pixi/envs/amr-dev/bin/python",
   "python-envs.defaultEnvManager": "ms-python.python:system",
   "python.terminal.activateEnvironment": true,
   "terminal.integrated.env.osx": {
-    "PATH": "/Users/tgol0006/uw_folder/uw3_git_gthyagi_openmpi/worktrees/underworld3-feature-boundary-integrals/.pixi/envs/amr-dev/bin:${env:PATH}"
+    "PATH": "/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest/underworld3/.pixi/envs/amr-dev/bin:${env:PATH}"
   }
 }

@@ -41,12 +41,13 @@
 # The radial component of the velocity is zero on the inside $r = R_1$ and outside $r = R_2$ of the domain, thereby ensuring a tangential flow on the boundaries, i.e.
 # $$ v_r(R_1, \theta) = v_r(R_2, \theta) = 0 $$
 #
-# The gravity vector is radial and of unit length. We set $R_1 = 1$ and $R_2 = 2$.
+# The gravity vector is radial and of unit length. We set $R_1 = 0.5$ and $R_2 = 1.0$.
 #
 # In this work, the following spherical coordinates conventions are used: $r$ is the radial distance, $\theta \in [0,\pi]$ is the polar angle and $\phi \in [0, 2\pi]$ is the azimuthal angle.
 
 # %%
 import os
+import sys
 import h5py
 import numpy as np
 import sympy as sp
@@ -68,11 +69,11 @@ params = uw.Params(
         description="Target spherical-shell mesh cell size",
     ),
     uw_r_i=uw.Param(
-        1.0,
+        0.5,
         description="Inner spherical-shell radius",
     ),
     uw_r_o=uw.Param(
-        2.0,
+        1.0,
         description="Outer spherical-shell radius",
     ),
     uw_m=uw.Param(
@@ -95,15 +96,27 @@ params = uw.Params(
         1e-10,
         description="Stokes solver tolerance",
     ),
+    uw_stokes_pen=uw.Param(
+        1e0,
+        description="Stokes penalty parameter",
+    ),
     uw_vel_penalty=uw.Param(
-        1.0e8,
+        1e8,
         description="Penalty for curved-boundary tangential flow",
     ),
     uw_analytical=uw.Param(
         True,
         description="Enable analytical error norms",
     ),
+    uw_pressure_reference=uw.Param(
+        0.0,
+        description="Target reference pressure for zero-mean normalization",
+    ),
 )
+
+if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
+    print(params.cli_help())
+    raise SystemExit(0)
 
 if int(params.uw_m) == -4:
     raise ValueError("The Thieulot spherical benchmark is undefined for m = -4.")
@@ -117,7 +130,7 @@ output_dir = os.path.join(
     (
         f"case_inv_lc_{int(1/params.uw_cellsize)}_m_{int(params.uw_m)}_vdeg_{int(params.uw_vdegree)}_pdeg_{int(params.uw_pdegree)}"
         f"_pcont_{str(bool(params.uw_pcont)).lower()}_vel_penalty_{params.uw_vel_penalty:.2g}"
-        f"_stokes_tol_{params.uw_stokes_tol:.2g}_ncpus_{uw.mpi.size}/"
+        f"_stokes_tol_{params.uw_stokes_tol:.2g}_stokes_pen_{params.uw_stokes_pen:.2g}_ncpus_{uw.mpi.size}/"
     ),
 )
 if uw.mpi.rank == 0:
@@ -282,7 +295,9 @@ p_err_expr = p_soln.sym[0] - p_ana_expr
 stokes = Stokes(mesh, velocityField=v_soln, pressureField=p_soln)
 stokes.constitutive_model = uw.constitutive_models.ViscousFlowModel
 stokes.constitutive_model.Parameters.viscosity = mu_expr
-stokes.saddle_preconditioner = 1.0 / mu_expr
+stokes.penalty = params.uw_stokes_pen
+stokes.saddle_preconditioner = 1.0 / (mu_expr + params.uw_stokes_pen)
+# stokes.saddle_preconditioner = 1.0 / mu_expr
 
 gravity_fn = -1.0 * unit_rvec
 stokes.bodyforce = rho_bodyforce_expr * gravity_fn
@@ -293,6 +308,22 @@ stokes.bodyforce = rho_bodyforce_expr * gravity_fn
 # %%
 stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Upper.name)
 stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Lower.name)
+
+# stokes.add_condition(
+#         p_soln.field_id,
+#         "dirichlet",
+#         sp.Matrix([0]),
+#         mesh.boundaries.Upper.name,
+#         components=(0),
+#     )
+# stokes.add_condition(
+#         p_soln.field_id,
+#         "dirichlet",
+#         sp.Matrix([0]),
+#         mesh.boundaries.Lower.name,
+#         components=(0),
+#     )
+
 
 # %% [markdown]
 # #### Solver Settings
@@ -325,7 +356,7 @@ uw.timing.reset()
 uw.timing.start()
 stokes.solve(verbose=False, debug=False)
 uw.timing.stop()
-uw.timing.print_table(filename=f"{output_dir}/stokes_timing.txt")
+uw.timing.print_table(filename=f"{output_dir}stokes_timing.txt")
 
 if uw.mpi.rank == 0:
     print(stokes.snes.getConvergedReason())
@@ -354,22 +385,6 @@ if uw.mpi.rank == 0:
 # $$ \mathbf{u} \leftarrow \mathbf{u} - \sum_i c_i \mathbf{r}_i. $$
 
 # %%
-def subtract_pressure_mean(mesh, pressure_var):
-    """
-    Subtract the domain-average pressure from the numerical pressure field.
-
-    Parameters
-    ----------
-    mesh : uw.discretisation.Mesh
-        Mesh used to evaluate the pressure and volume integrals.
-    pressure_var : uw.discretisation.MeshVariable
-        Scalar pressure field to shift to zero mean.
-    """
-    p_int = uw.maths.Integral(mesh, pressure_var.sym[0]).evaluate()
-    volume = uw.maths.Integral(mesh, 1.0).evaluate()
-    pressure_var.data[:, 0] -= p_int / volume
-
-
 def subtract_rigid_rotations(mesh, velocity_var, rotation_modes):
     """
     Remove rigid-body rotation components from the numerical velocity field.
@@ -403,6 +418,116 @@ def subtract_rigid_rotations(mesh, velocity_var, rotation_modes):
     dv = uw.function.evaluate(correction, velocity_var.coords)
     velocity_var.data[...] -= np.asarray(dv).reshape(velocity_var.data.shape)
 
+# %%
+def subtract_pressure_mean(mesh, pressure_var):
+    """
+    Subtract the domain-average pressure from the numerical pressure field.
+
+    Parameters
+    ----------
+    mesh : uw.discretisation.Mesh
+        Mesh used to evaluate the pressure and volume integrals.
+    pressure_var : uw.discretisation.MeshVariable
+        Scalar pressure field to shift to zero mean.
+    """
+    p_int_local = float(uw.maths.Integral(mesh, pressure_var.sym[0]).evaluate())
+    volume_local = float(uw.maths.Integral(mesh, 1.0).evaluate())
+
+    p_int = float(uw.mpi.comm.allreduce(p_int_local))
+    volume = float(uw.mpi.comm.allreduce(volume_local))
+
+    if np.isclose(volume, 0.0):
+        raise ValueError("The mesh has zero global volume; cannot normalize pressure.")
+
+    pressure_var.data[:, 0] -= p_int / volume
+
+# %%
+def enforce_pressure_reference(
+    mesh,
+    pressure_var,
+    pressure_reference,
+):
+    """
+    Shift the global nodal mean pressure to a prescribed reference value.
+
+    Parameters
+    ----------
+    mesh : uw.discretisation.Mesh
+        Mesh used to access the local pressure data.
+    pressure_var : uw.discretisation.MeshVariable
+        Scalar pressure field to shift to the target nodal mean.
+    reference_value : float
+        Target global nodal mean pressure in nondimensional units.
+
+    Returns
+    -------
+    current_mean_nd : float
+        Current global nodal mean pressure in nondimensional units.
+    shift_nd : float
+        Applied nondimensional pressure shift.
+    """
+    target_mean = float(pressure_reference)
+
+    p_local = np.asarray(pressure_var.data[:, 0], dtype=np.float64)
+    local_sum = float(p_local.sum())
+    local_count = int(p_local.size)
+
+    global_sum = uw.mpi.comm.allreduce(local_sum)
+    global_count = uw.mpi.comm.allreduce(local_count)
+
+    current_mean = global_sum / max(global_count, 1)
+    shift = current_mean - target_mean
+
+    pressure_var.data[:, 0] -= shift
+
+    return current_mean, shift
+
+# %%
+def report_pressure_gauge(
+    mean_before,
+    shift_applied,
+    pressure_reference,
+):
+    """
+    Print pressure gauge information for each MPI rank.
+
+    Parameters
+    ----------
+    mean_before : float
+        Mean pressure before normalization.
+    shift_applied : float
+        Applied pressure shift.
+    pressure_reference : float
+        Target reference pressure.
+    """
+
+    if uw.mpi.rank != 0:
+        return
+    
+    uw.pprint(
+        f"[pressure-gauge][rank {uw.mpi.rank}] "
+        f"mean_before={mean_before:.6g}, "
+        f"shift_applied={shift_applied:.6g}, "
+        f"target_mean={pressure_reference:.6g}",
+        flush=True,
+    )
+
+# %%
+def subtract_surface_pressure_mean(
+    mesh,
+    pressure_var,
+    boundary_name,
+):
+    """
+    Shift pressure so the average pressure on a named boundary is zero.
+    """
+    p_bd_int = uw.maths.BdIntegral(mesh=mesh, fn=pressure_var.sym[0], boundary=boundary_name).evaluate()
+    bd_measure = uw.maths.BdIntegral(mesh=mesh, fn=1.0, boundary=boundary_name).evaluate()
+
+    if np.isclose(bd_measure, 0.0):
+        return
+    
+    pressure_var.data[:, 0] -= p_bd_int / bd_measure
 
 # %%
 rotation_modes = [
@@ -410,8 +535,12 @@ rotation_modes = [
     sp.Matrix([z, 0, -x]),
     sp.Matrix([-y, x, 0]),
 ]
-subtract_rigid_rotations(mesh, v_soln, rotation_modes)
+# subtract_rigid_rotations(mesh, v_soln, rotation_modes)
 subtract_pressure_mean(mesh, p_soln)
+subtract_surface_pressure_mean(mesh, p_soln, mesh.boundaries.Upper.name)
+subtract_surface_pressure_mean(mesh, p_soln, mesh.boundaries.Lower.name)
+# mean_before, shift_applied = enforce_pressure_reference(mesh, p_soln, params.uw_pressure_reference)
+# report_pressure_gauge(mean_before, shift_applied, params.uw_pressure_reference)
 
 # %% [markdown]
 # ### Relative Error Norms
@@ -456,8 +585,9 @@ if uw.mpi.rank == 0:
         f_h5.create_dataset("p_l2_norm", data=p_err_l2)
 
 # %%
-mesh.petsc_save_checkpoint(
+mesh.write_timestep(
+    'output',
     index=0,
     meshVars=[v_soln, p_soln],
-    outputPath=os.path.relpath(output_dir) + "/output",
+    outputPath=str(output_dir),
 )

@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-UW_ROOT="/Users/tgol0006/uw_folder/uw3_git_gthyagi_openmpi/worktrees/underworld3-feature-boundary-integrals"
+UW_ROOT="/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest/underworld3"
 HOME_DIR="/Users/tgol0006"
 CONFIG_FILE="${UW_ROOT}/.pixi-env"
 DEFAULT_ENV="runtime"
