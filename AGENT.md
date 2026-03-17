@@ -1,14 +1,5 @@
 # AGENT.md
 
-## Required Startup Reads
-
-Before doing any repository-specific work, read these files in this order and follow them together with this `AGENT.md`:
-
-1. `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/rules/karpathy_guidelines.md`
-2. `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/rules/personal_agents.md`
-
-Do not start analysis, editing, command execution, or repo-specific recommendations until both files have been read.
-
 ## Purpose
 
 This repository contains Underworld3 benchmark scripts for annulus (2D) and spherical shell (3D) Stokes-flow validation. It is currently in a fresh-start/rebuild state.
@@ -30,6 +21,15 @@ For parity checks, compare latest-branch benchmark outputs against legacy-branch
   - `/Users/tgol0006/uw_folder/uw3_git_gthyagi/underworld3`
 
 These are local machine paths and are intended as quick references during debugging.
+
+## Required Startup Reads
+
+Before doing any repository-specific work, read these files in this order and follow them together with this `AGENT.md`:
+
+1. `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/rules/karpathy_guidelines.md`
+2. `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/rules/personal_agents.md`
+
+Do not start analysis, editing, command execution, or repo-specific recommendations until both files have been read.
 
 ## Primary Directories
 
@@ -91,12 +91,12 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
 ## Benchmark Priorities
 
 - Annulus:
-  - `benchmarks/annulus/ex_stokes_thieulot_legacy.py`
-  - `benchmarks/annulus/ex_stokes_thieulot_latest.py`
-  - `benchmarks/annulus/ex_stokes_kramer_latest.py`
+  - `benchmarks/annulus/legacy/ex_stokes_thieulot_legacy.py`
+  - `benchmarks/annulus/ex_stokes_thieulot.py`
+  - `benchmarks/annulus/ex_stokes_kramer.py`
 - Spherical:
-  - `benchmarks/spherical/ex_stokes_thieulot_legacy.py`
-  - `benchmarks/spherical/ex_stokes_thieulot_latest.py`
+  - `benchmarks/spherical/legacy/ex_stokes_thieulot_legacy.py`
+  - `benchmarks/spherical/ex_stokes_thieulot.py`
 
 ## Benchmark Troubleshooting Notes
 

@@ -47,11 +47,16 @@ analysis_radii = np.hstack(
 )
 
 # %%
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 output_dir = os.path.join(
-    "../../output/annulus/thieulot/legacy/",
+    repo_root,
+    "output",
+    "annulus",
+    "thieulot",
+    "legacy",
     (
         f"model_inv_lc_{int(1/cellsize)}_k_{k}_vdeg_{vdegree}_pdeg_{pdegree}"
-        f"_pcont_{pcont_str}_vel_penalty_{vel_penalty:.2g}_stokes_tol_{stokes_tol:.2g}/"
+        f"_pcont_{pcont_str}_vel_penalty_{vel_penalty:.2g}_stokes_tol_{stokes_tol:.2g}"
     ),
 )
 xdmf_path = os.path.join(

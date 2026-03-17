@@ -24,7 +24,8 @@ import pyvista as pv
 dirname = f'case1_inv_lc_32_n_2_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_1'
 
 # %%
-output_dir = os.path.join("../../output/annulus/kramer/legacy/", f'{dirname}/')
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+output_dir = os.path.join(repo_root, "output", "annulus", "kramer", "legacy", dirname)
 
 # %%
 pattern = (

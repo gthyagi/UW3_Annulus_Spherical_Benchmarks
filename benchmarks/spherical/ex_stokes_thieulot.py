@@ -66,50 +66,62 @@ is_serial = (uw.mpi.size == 1)
 params = uw.Params(
     uw_cellsize=uw.Param(
         1.0 / 8.0,
+        type=uw.ParamType.FLOAT,
         description="Target spherical-shell mesh cell size",
     ),
     uw_r_i=uw.Param(
         0.5,
+        type=uw.ParamType.FLOAT,
         description="Inner spherical-shell radius",
     ),
     uw_r_o=uw.Param(
         1.0,
+        type=uw.ParamType.FLOAT,
         description="Outer spherical-shell radius",
     ),
     uw_m=uw.Param(
         -1,
+        type=uw.ParamType.INTEGER,
         description="Viscosity exponent in the analytical solution",
     ),
     uw_vdegree=uw.Param(
         2,
+        type=uw.ParamType.INTEGER,
         description="Velocity polynomial degree",
     ),
     uw_pdegree=uw.Param(
         1,
+        type=uw.ParamType.INTEGER,
         description="Pressure polynomial degree",
     ),
     uw_pcont=uw.Param(
         True,
+        type=uw.ParamType.BOOLEAN,
         description="Pressure continuity flag",
     ),
     uw_stokes_tol=uw.Param(
         1e-10,
+        type=uw.ParamType.FLOAT,
         description="Stokes solver tolerance",
     ),
     uw_stokes_pen=uw.Param(
         1e0,
+        type=uw.ParamType.FLOAT,
         description="Stokes penalty parameter",
     ),
     uw_vel_penalty=uw.Param(
         1e8,
+        type=uw.ParamType.FLOAT,
         description="Penalty for curved-boundary tangential flow",
     ),
     uw_analytical=uw.Param(
         True,
+        type=uw.ParamType.BOOLEAN,
         description="Enable analytical error norms",
     ),
     uw_pressure_reference=uw.Param(
         0.0,
+        type=uw.ParamType.FLOAT,
         description="Target reference pressure for zero-mean normalization",
     ),
 )
@@ -118,21 +130,44 @@ if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
     print(params.cli_help())
     raise SystemExit(0)
 
-if int(params.uw_m) == -4:
+if params.uw_m == -4:
     raise ValueError("The Thieulot spherical benchmark is undefined for m = -4.")
 
 # %% [markdown]
 # ### Output Directory
 
 # %%
-output_dir = os.path.join(
-    "../../output/spherical/thieulot/latest/",
-    (
-        f"case_inv_lc_{int(1/params.uw_cellsize)}_m_{int(params.uw_m)}_vdeg_{int(params.uw_vdegree)}_pdeg_{int(params.uw_pdegree)}"
-        f"_pcont_{str(bool(params.uw_pcont)).lower()}_vel_penalty_{params.uw_vel_penalty:.2g}"
-        f"_stokes_tol_{params.uw_stokes_tol:.2g}_stokes_pen_{params.uw_stokes_pen:.2g}_ncpus_{uw.mpi.size}/"
-    ),
+def _case_value(value):
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, float):
+        return f"{value:.2g}"
+    return value
+
+
+def make_case_id(*, case, **kwargs):
+    parts = [case]
+    parts += [f"{key}_{_case_value(value)}" for key, value in kwargs.items() if value is not None]
+    return "_".join(parts)
+
+
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+output_root = os.path.join(repo_root, "output", "spherical", "thieulot", "latest")
+
+case_id = make_case_id(
+    case="case",
+    inv_lc=int(1 / params.uw_cellsize),
+    m=params.uw_m,
+    vdeg=params.uw_vdegree,
+    pdeg=params.uw_pdegree,
+    pcont=params.uw_pcont,
+    vel_penalty=params.uw_vel_penalty,
+    stokes_tol=params.uw_stokes_tol,
+    stokes_pen=params.uw_stokes_pen,
+    ncpus=uw.mpi.size,
 )
+
+output_dir = os.path.join(output_root, case_id)
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
 
@@ -244,7 +279,7 @@ mesh = uw.meshing.SphericalShell(
     cellSize=params.uw_cellsize,
     qdegree=max(params.uw_pdegree, params.uw_vdegree),
     degree=1,
-    filename=f"{output_dir}mesh.msh",
+    filename=os.path.join(output_dir, "mesh.msh"),
 )
 
 if is_serial:
@@ -280,7 +315,7 @@ v_ana_expr, p_ana_expr, rho_ana_expr, rho_bodyforce_expr, mu_expr = analytic_sol
     mesh,
     params.uw_r_i,
     params.uw_r_o,
-    int(params.uw_m),
+    params.uw_m,
 )
 v_err_expr = sp.Matrix(v_soln.sym).T - v_ana_expr
 p_err_expr = p_soln.sym[0] - p_ana_expr
@@ -356,7 +391,7 @@ uw.timing.reset()
 uw.timing.start()
 stokes.solve(verbose=False, debug=False)
 uw.timing.stop()
-uw.timing.print_table(filename=f"{output_dir}stokes_timing.txt")
+uw.timing.print_table(filename=os.path.join(output_dir, "stokes_timing.txt"))
 
 if uw.mpi.rank == 0:
     print(stokes.snes.getConvergedReason())
@@ -579,8 +614,8 @@ if uw.mpi.rank == 0:
     if os.path.isfile(err_h5):
         os.remove(err_h5)
     with h5py.File(err_h5, "w") as f_h5:
-        f_h5.create_dataset("m", data=int(params.uw_m))
-        f_h5.create_dataset("cellsize", data=float(params.uw_cellsize))
+        f_h5.create_dataset("m", data=params.uw_m)
+        f_h5.create_dataset("cellsize", data=params.uw_cellsize)
         f_h5.create_dataset("v_l2_norm", data=v_err_l2)
         f_h5.create_dataset("p_l2_norm", data=p_err_l2)
 

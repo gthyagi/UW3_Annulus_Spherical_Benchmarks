@@ -38,7 +38,7 @@ When comparing results, treat the legacy branch as baseline and validate migrate
 ### Annulus Benchmarks
 
 - **Thieulot annulus benchmark (legacy reference currently present)**
-  - `benchmarks/annulus/ex_stokes_thieulot_legacy.py`
+  - `benchmarks/annulus/legacy/ex_stokes_thieulot_legacy.py`
   - Manufactured analytical solution benchmark used for solver/error validation.
 
 ### Spherical Benchmarks
@@ -61,7 +61,7 @@ Benchmark scripts usually write to case-specific `output/` directories, includin
 From this repository root:
 
 ```bash
-cd benchmarks/annulus
+cd benchmarks/annulus/legacy
 python ex_stokes_thieulot_legacy.py --res 8 --vdegree 2 --pdegree 1
 ```
 

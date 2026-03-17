@@ -134,12 +134,17 @@ pressure_reference = uw.options.getReal(
 # ### Output Directory
 
 # %%
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 output_dir = os.path.join(
-    "../../output/spherical/thieulot/legacy/",
+    repo_root,
+    "output",
+    "spherical",
+    "thieulot",
+    "legacy",
     (
         f"case_inv_lc_{int(1/cellsize)}_m_{m}_vdeg_{vdegree}_pdeg_{pdegree}"
         f"_pcont_{pcont_str}_vel_penalty_{vel_penalty:.2g}"
-        f"_stokes_tol_{stokes_tol:.2g}_ncpus_{uw.mpi.size}/"
+        f"_stokes_tol_{stokes_tol:.2g}_ncpus_{uw.mpi.size}"
     ),
 )
 
@@ -560,5 +565,5 @@ if uw.mpi.rank == 0:
 mesh.petsc_save_checkpoint(
     index=0,
     meshVars=[v_soln, p_soln],
-    outputPath=os.path.relpath(output_dir) + "/output",
+    outputPath=os.path.join(os.path.relpath(output_dir), "output"),
 )

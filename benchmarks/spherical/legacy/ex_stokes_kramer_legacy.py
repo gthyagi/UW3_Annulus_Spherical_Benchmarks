@@ -90,11 +90,16 @@ else:
 # ### Output Directory
 
 # %%
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 output_dir = os.path.join(
-    "../../output/spherical/kramer/legacy/",
+    repo_root,
+    "output",
+    "spherical",
+    "kramer",
+    "legacy",
     (
         f"{case}_inv_lc_{int(1/cellsize)}_l_{l}_m_{m}_k_{k}_vdeg_{vdegree}_pdeg_{pdegree}"
-        f"_pcont_{pcont_str}_vel_penalty_{vel_penalty:.2g}_stokes_tol_{stokes_tol:.2g}_ncpus_{uw.mpi.size}/"
+        f"_pcont_{pcont_str}_vel_penalty_{vel_penalty:.2g}_stokes_tol_{stokes_tol:.2g}_ncpus_{uw.mpi.size}"
     ),
 )
 
@@ -356,7 +361,7 @@ if uw.mpi.rank == 0:
 mesh.petsc_save_checkpoint(
     index=0,
     meshVars=[v_uw, p_uw, v_ana, p_ana, rho_ana, v_err, p_err],
-    outputPath=os.path.relpath(output_dir) + "/output",
+    outputPath=os.path.join(os.path.relpath(output_dir), "output"),
 )
 
 # %%

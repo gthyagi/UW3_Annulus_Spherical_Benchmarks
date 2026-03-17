@@ -51,11 +51,16 @@ vel_penalty_str = str("{:.1e}".format(vel_penalty))
 stokes_tol_str = str("{:.1e}".format(stokes_tol))
 
 suffix = "_parallel" if parallel_output else ""
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 output_dir = os.path.join(
-    "../../output/annulus/kramer/legacy/",
+    repo_root,
+    "output",
+    "annulus",
+    "kramer",
+    "legacy",
     (
         f"{case}_n_{n}_k_{k}_res_{res}_vdeg_{vdegree}_pdeg_{pdegree}"
-        f"_pcont_{pcont_str}_vel_penalty_{vel_penalty_str}_stokes_tol_{stokes_tol_str}{suffix}/"
+        f"_pcont_{pcont_str}_vel_penalty_{vel_penalty_str}_stokes_tol_{stokes_tol_str}{suffix}"
     ),
 )
 

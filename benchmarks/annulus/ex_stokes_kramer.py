@@ -34,66 +34,82 @@ is_serial = (uw.mpi.size == 1)
 params = uw.Params(
     uw_case=uw.Param(
         "case2",
+        type=uw.ParamType.STRING,
         description="Benchmark case: case1, case2, case3, case4",
     ),
     uw_n=uw.Param(
         2,
+        type=uw.ParamType.INTEGER,
         description="Wave number for density perturbation",
     ),
     uw_k=uw.Param(
         3,
+        type=uw.ParamType.INTEGER,
         description="Power exponent for smooth density",
     ),
     uw_radius_inner=uw.Param(
         1.22,
+        type=uw.ParamType.FLOAT,
         description="Inner radius",
     ),
     uw_radius_internal=uw.Param(
         2.0,
+        type=uw.ParamType.FLOAT,
         description="Internal interface radius",
     ),
     uw_radius_outer=uw.Param(
         2.22,
+        type=uw.ParamType.FLOAT,
         description="Outer radius",
     ),
     uw_cellsize=uw.Param(
         1.0 / 32.0,
+        type=uw.ParamType.FLOAT,
         description="Background mesh cell size",
     ),
     uw_cellsize_internal_boundary_factor=uw.Param(
         2,
+        type=uw.ParamType.INTEGER,
         description="Internal-boundary cell-size refinement factor",
     ),
     uw_vdegree=uw.Param(
         2,
+        type=uw.ParamType.INTEGER,
         description="Velocity polynomial degree",
     ),
     uw_pdegree=uw.Param(
         1,
+        type=uw.ParamType.INTEGER,
         description="Pressure polynomial degree",
     ),
     uw_pcont=uw.Param(
         True,
+        type=uw.ParamType.BOOLEAN,
         description="Pressure continuity flag",
     ),
     uw_stokes_tol=uw.Param(
         1e-10,
+        type=uw.ParamType.FLOAT,
         description="Stokes solver tolerance",
     ),
     uw_vel_penalty=uw.Param(
         2.5e8,
+        type=uw.ParamType.FLOAT,
         description="Penalty for natural-BC velocity matching",
     ),
     uw_bc_type=uw.Param(
         "natural",
+        type=uw.ParamType.STRING,
         description="Boundary-condition mode: natural or essential",
     ),
     uw_ana_normal=uw.Param(
         False,
+        type=uw.ParamType.BOOLEAN,
         description="Use analytical radial normal (legacy option)",
     ),
     uw_petsc_normal=uw.Param(
         True,
+        type=uw.ParamType.BOOLEAN,
         description="Use PETSc Gamma normal (legacy option)",
     ),
 )
@@ -107,26 +123,26 @@ if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
 
 # %%
 case = params.uw_case
-n = int(params.uw_n)
-k = int(params.uw_k)
+n = params.uw_n
+k = params.uw_k
 
 # %% [markdown]
 # ### Mesh Parameters
 
 # %%
-r_i = float(params.uw_radius_inner)
-r_int = float(params.uw_radius_internal)
-r_o = float(params.uw_radius_outer)
-cellsize = float(params.uw_cellsize)
-cellsize_int_bd_fac = int(params.uw_cellsize_internal_boundary_factor)
+r_i = params.uw_radius_inner
+r_int = params.uw_radius_internal
+r_o = params.uw_radius_outer
+cellsize = params.uw_cellsize
+cellsize_int_bd_fac = params.uw_cellsize_internal_boundary_factor
 
 # %% [markdown]
 # ### Boundary Condition Parameters
 
 # %%
 # which normals to use
-ana_normal = bool(params.uw_ana_normal)  # mesh radial unit vectors
-petsc_normal = bool(params.uw_petsc_normal)  # PETSc Gamma
+ana_normal = params.uw_ana_normal  # mesh radial unit vectors
+petsc_normal = params.uw_petsc_normal  # PETSc Gamma
 
 # %% [markdown]
 # ### Case Mapping
@@ -159,14 +175,35 @@ else:
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 output_root = os.path.join(repo_root, "output", "annulus", "kramer", "latest")
 
-output_dir = os.path.join(
-    output_root,
-    (
-        f"{case}_inv_lc_{int(1/cellsize)}_n_{n}_k_{k}_vdeg_{params.uw_vdegree}_pdeg_{params.uw_pdegree}"
-        f"_pcont_{str(params.uw_pcont).lower()}_vel_penalty_{params.uw_vel_penalty:.2g}_stokes_tol_{params.uw_stokes_tol:.2g}"
-        f"_ncpus_{uw.mpi.size}_bc_{params.uw_bc_type}/"
-    ),
+def _case_value(value):
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, float):
+        return f"{value:.2g}"
+    return value
+
+
+def make_case_id(*, case, **kwargs):
+    parts = [case]
+    parts += [f"{key}_{_case_value(value)}" for key, value in kwargs.items() if value is not None]
+    return "_".join(parts)
+
+
+case_id = make_case_id(
+    case=case,
+    inv_lc=int(1 / cellsize),
+    n=n,
+    k=k,
+    vdeg=params.uw_vdegree,
+    pdeg=params.uw_pdegree,
+    pcont=params.uw_pcont,
+    vel_penalty=params.uw_vel_penalty,
+    stokes_tol=params.uw_stokes_tol,
+    ncpus=uw.mpi.size,
+    bc=params.uw_bc_type,
 )
+
+output_dir = os.path.join(output_root, case_id)
 
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)

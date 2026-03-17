@@ -46,6 +46,7 @@ import h5py
 import numpy as np
 import sympy as sp
 import underworld3 as uw
+from underworld3 import timing
 from underworld3.systems import Stokes
 
 os.environ["SYMPY_USE_CACHE"] = "no"
@@ -57,63 +58,77 @@ is_serial = (uw.mpi.size == 1)
 # ### Mesh Parameters
 
 # %%
-params = uw.Params(
-    uw_cellsize=uw.Param(
-        1.0 / 64.0,
-        description="Target annulus mesh cell size",
-    ),
-    uw_r_i=uw.Param(
-        1.0,
-        description="Inner annulus radius",
-    ),
-    uw_r_o=uw.Param(
-        2.0,
-        description="Outer annulus radius",
-    ),
-    uw_k=uw.Param(
-        2,
-        description="Convection-cell wave number",
-    ),
-    uw_vdegree=uw.Param(
-        2,
-        description="Velocity polynomial degree",
-    ),
-    uw_pdegree=uw.Param(
-        1,
-        description="Pressure polynomial degree",
-    ),
-    uw_pcont=uw.Param(
-        True,
-        description="Pressure continuity flag",
-    ),
-    uw_stokes_tol=uw.Param(
-        1e-10,
-        description="Stokes solver tolerance",
-    ),
-    uw_vel_penalty=uw.Param(
-        2.5e8,
-        description="Penalty for curved-boundary tangential flow",
-    ),
-    uw_analytical=uw.Param(
-        True,
-        description="Enable analytical error norms",
-    ),
+cellsize = uw.options.getReal(
+    "cellsize",
+    default=1 / 64,
+)
+r_i = uw.options.getReal(
+    "radius_inner",
+    default=1.0,
+)
+r_o = uw.options.getReal(
+    "radius_outer",
+    default=2.0,
+)
+
+# %% [markdown]
+# ### Convection Cells Parameter
+
+# %%
+k = uw.options.getInt(
+    "k",
+    default=2,
+)
+
+# %% [markdown]
+# ### Mesh Variable Parameters
+
+# %%
+vdegree = uw.options.getInt(
+    "vdegree",
+    default=2,
+)
+pdegree = uw.options.getInt(
+    "pdegree",
+    default=1,
+)
+pcont = uw.options.getBool(
+    "pcont",
+    default=True,
+)
+pcont_str = str(pcont).lower()
+
+# %% [markdown]
+# ### Solver Parameters
+
+# %%
+stokes_tol = uw.options.getReal(
+    "stokes_tol",
+    default=1e-10,
+)
+vel_penalty = uw.options.getReal(
+    "vel_penalty",
+    default=2.5e8,
 )
 
 # %% [markdown]
 # ### Output Directory
 
 # %%
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 output_dir = os.path.join(
-    "../../output/annulus/thieulot/latest/",
+    repo_root,
+    "output",
+    "annulus",
+    "thieulot",
+    "legacy",
     (
-        f"model_inv_lc_{int(1/params.uw_cellsize)}_k_{params.uw_k}_vdeg_{params.uw_vdegree}_pdeg_{params.uw_pdegree}"
-        f"_pcont_{str(params.uw_pcont).lower()}_vel_penalty_{params.uw_vel_penalty:.2g}_stokes_tol_{params.uw_stokes_tol:.2g}"
-        f"_ncpus_{uw.mpi.size}/"
+        f"model_inv_lc_{int(1/cellsize)}_k_{k}_vdeg_{vdegree}_pdeg_{pdegree}"
+        f"_pcont_{pcont_str}_vel_penalty_{vel_penalty:.2g}_stokes_tol_{stokes_tol:.2g}_ncpus_{uw.mpi.size}"
     ),
 )
 if uw.mpi.rank == 0:
-    os.makedirs(output_dir, exist_ok=True,)
+    os.makedirs(output_dir, exist_ok=True)
 
 
 # %% [markdown]
@@ -171,10 +186,10 @@ def analytic_solution(
 
 # %%
 mesh = uw.meshing.Annulus(
-    radiusOuter=params.uw_r_o,
-    radiusInner=params.uw_r_i,
-    cellSize=params.uw_cellsize,
-    qdegree=max(params.uw_pdegree, params.uw_vdegree),
+    radiusOuter=r_o,
+    radiusInner=r_i,
+    cellSize=cellsize,
+    qdegree=max(pdegree, vdegree),
     degree=1,
     filename=f"{output_dir}mesh.msh",
 )
@@ -186,37 +201,17 @@ if is_serial:
 x, y = mesh.CoordinateSystem.X
 r, th = mesh.CoordinateSystem.xR
 unit_rvec = mesh.CoordinateSystem.unit_e_0
-v_theta_fn_xy = r * mesh.CoordinateSystem.rRotN.T * sp.Matrix((0, 1))
 
 # %% [markdown]
 # ### Create Mesh Variables
 
 # %%
-v_soln = uw.discretisation.MeshVariable(
-    varname="Velocity", 
-    mesh=mesh, 
-    degree=params.uw_vdegree, 
-    vtype=uw.VarType.VECTOR, 
-    varsymbol=r"V"
-)
-
-p_soln = uw.discretisation.MeshVariable(
-    varname="Pressure",
-    mesh=mesh,
-    degree=params.uw_pdegree,
-    vtype=uw.VarType.SCALAR,
-    varsymbol=r"P",
-    continuous=params.uw_pcont,
-)
+v_soln = uw.discretisation.MeshVariable(r"{V_u}", mesh, mesh.data.shape[1], degree=vdegree)
+p_soln = uw.discretisation.MeshVariable(r"{P_u}", mesh, 1, degree=pdegree, continuous=pcont)
 
 # %%
 # Analytical solution and error expressions
-v_ana_expr, p_ana_expr, rho_ana_expr = analytic_solution(
-    mesh,
-    params.uw_r_i,
-    params.uw_r_o,
-    params.uw_k,
-)
+v_ana_expr, p_ana_expr, rho_ana_expr = analytic_solution(mesh, r_i, r_o, k)
 v_err_expr = sp.Matrix(v_soln.sym).T - v_ana_expr
 p_err_expr = p_soln.sym[0] - p_ana_expr
 
@@ -239,30 +234,30 @@ stokes.bodyforce = rho_ana_expr * gravity_fn
 # #### Boundary Conditions
 
 # %%
-stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Upper.name)
-stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Lower.name)
+stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Upper.name)
+stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Lower.name)
 
-if params.uw_k == 0:
+if k == 0:
     stokes.add_condition(
         p_soln.field_id,
         "dirichlet",
         sp.Matrix([0]),
         mesh.boundaries.Lower.name,
-        components=(0,),
+        components=(0),
     )
     stokes.add_condition(
         p_soln.field_id,
         "dirichlet",
         sp.Matrix([0]),
         mesh.boundaries.Upper.name,
-        components=(0,),
+        components=(0),
     )
 
 # %% [markdown]
 # #### Solver Settings
 
 # %%
-stokes.tolerance = params.uw_stokes_tol
+stokes.tolerance = stokes_tol
 stokes.petsc_options["ksp_monitor"] = None
 stokes.petsc_options["ksp_monitor_true_residual"] = None
 stokes.petsc_options["snes_monitor"] = None
@@ -285,58 +280,15 @@ stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
 # #### Solve Stokes
 
 # %%
-uw.timing.reset()
-uw.timing.start()
+timing.reset()
+timing.start()
 stokes.solve(verbose=False, debug=False)
-uw.timing.stop()
-uw.timing.print_table(filename=f"{output_dir}/stokes_timing.txt",)
+timing.stop()
+timing.print_table(display_fraction=0.999, output_file=f"{output_dir}/stokes_timing.txt")
 
 if uw.mpi.rank == 0:
     print(stokes.snes.getConvergedReason())
     print(stokes.snes.ksp.getConvergedReason())
-
-# %% [markdown]
-# ### Benchmark Calibrations
-
-# %%
-def subtract_pressure_mean(mesh, pressure_var):
-    """
-    Subtract the domain-average pressure from the numerical pressure field.
-
-    Parameters
-    ----------
-    mesh : uw.discretisation.Mesh
-        Mesh used to evaluate the pressure and volume integrals.
-    pressure_var : uw.discretisation.MeshVariable
-        Scalar pressure field to shift to zero mean.
-    """
-    p_int = uw.maths.Integral(mesh, pressure_var.sym[0]).evaluate()
-    volume = uw.maths.Integral(mesh, 1.0).evaluate()
-    pressure_var.data[:, 0] -= p_int / volume
-
-
-def subtract_rigid_rotation(mesh, velocity_var, rotation_mode):
-    """
-    Remove the rigid-body rotation component from the numerical velocity field.
-
-    Parameters
-    ----------
-    mesh : uw.discretisation.Mesh
-        Mesh used to evaluate the projection integrals.
-    velocity_var : uw.discretisation.MeshVariable
-        Vector velocity field to correct.
-    rotation_mode : sympy.Matrix
-        Rigid-body rotation null mode to project out, here `r * e_theta` in 2-D.
-    """
-    mode_int = uw.maths.Integral(mesh, rotation_mode.dot(velocity_var.sym)).evaluate()
-    mode_norm = uw.maths.Integral(mesh, rotation_mode.dot(rotation_mode)).evaluate()
-    dv = uw.function.evaluate((mode_int / mode_norm) * rotation_mode, velocity_var.coords)
-    velocity_var.data[...] -= np.asarray(dv).reshape(velocity_var.data.shape)
-
-
-if int(params.uw_k) != 0:
-    subtract_pressure_mean(mesh, p_soln)
-    subtract_rigid_rotation(mesh, v_soln, v_theta_fn_xy)
 
 
 # %% [markdown]
@@ -360,29 +312,28 @@ def relative_l2_error(mesh, err_expr, ana_expr):
 
 
 # %%
-if params.uw_analytical:
+v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
+p_err_l2 = np.inf if k == 0 else relative_l2_error(mesh, p_err_expr, p_ana_expr)
 
-    v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
-    p_err_l2 = np.inf if params.uw_k == 0 else relative_l2_error(mesh, p_err_expr, p_ana_expr)
+if uw.mpi.rank == 0:
+    print("Relative velocity L2 error:", v_err_l2)
 
-    uw.pprint("Relative velocity L2 error:", v_err_l2)
-
-    if params.uw_k == 0:
-        uw.pprint("Pressure L2 error undefined for k=0.")
+    if k == 0:
+        print("Pressure L2 error undefined for k=0.")
     else:
-        uw.pprint("Relative pressure L2 error:", p_err_l2)
+        print("Relative pressure L2 error:", p_err_l2)
 
 # %% [markdown]
 # ### Save Outputs
 
 # %%
 if uw.mpi.rank == 0:
-    err_h5 = os.path.join(output_dir, "error_norm.h5",)
+    err_h5 = os.path.join(output_dir, "error_norm.h5")
     if os.path.isfile(err_h5):
         os.remove(err_h5)
-    with h5py.File(err_h5, "w") as f_h5:
-        f_h5.create_dataset("k", data=params.uw_k)
-        f_h5.create_dataset("cellsize", data=params.uw_cellsize)
+    with h5py.File(err_h5,"w") as f_h5:
+        f_h5.create_dataset("k", data=k)
+        f_h5.create_dataset("cellsize", data=cellsize)
         f_h5.create_dataset("v_l2_norm", data=v_err_l2)
         f_h5.create_dataset("p_l2_norm", data=p_err_l2)
 
@@ -391,7 +342,7 @@ if uw.mpi.rank == 0:
 mesh.petsc_save_checkpoint(
     index=0,
     meshVars=[v_soln, p_soln],
-    outputPath=os.path.relpath(output_dir)+'/output',
+    outputPath=os.path.join(os.path.relpath(output_dir), "output"),
 )
 
 # %%
