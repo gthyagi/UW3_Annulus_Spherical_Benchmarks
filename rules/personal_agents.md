@@ -2,16 +2,10 @@
 
 ## Code Style
 
-- Comments in English only
-- Prefer functional programming over OOP
-- Use OOP classes only for connectors and interfaces to external systems
-- Write pure functions - only modify return values, never input parameters or global state
 - Follow DRY, KISS, and YAGNI principles
-- Use strict typing everywhere - function returns, variables, collections
 - Check if logic already exists before writing new code
 - Avoid untyped variables and generic types
 - Never use default parameter values - make all parameters explicit
-- Create proper type definitions for complex data structures
 - All imports at the top of the file
 - Write simple single-purpose functions - no multi-mode behavior, no flag parameters that switch logic
 
@@ -29,7 +23,6 @@
 
 ## Tooling and Dependencies
 
-- Prefer modern package management files like `pyproject.toml` and `package.json`
 - Install dependencies in project environments, not globally
 - Add dependencies to project config files, not as one-off manual installs
 - Read installed dependency source code when needed instead of guessing behavior

@@ -4,7 +4,7 @@
 
 Before doing any repository-specific work, read these files in this order and follow them together with this `AGENT.md`:
 
-1. `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/rules/karpathy-guidelines.md`
+1. `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/rules/karpathy_guidelines.md`
 2. `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/rules/personal_agents.md`
 
 Do not start analysis, editing, command execution, or repo-specific recommendations until both files have been read.
@@ -43,8 +43,8 @@ These are local machine paths and are intended as quick references during debugg
 Use these PDFs as the primary benchmark references when checking formulas, expected fields, convergence behaviour, and boundary-condition intent.
 
 - Curved-shell benchmark suite:
-  - `docs/benchmark_papers/Kramer_etal_GMD2021.pdf`
-  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/Kramer_etal_GMD2021.pdf`
+  - `docs/benchmark_papers/kramer_etal_gmd2021.pdf`
+  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/kramer_etal_gmd2021.pdf`
   - Scope:
     - analytical Stokes solutions in 2-D cylindrical shells and 3-D spherical shells
     - smooth polynomial forcing and delta-function forcing
@@ -56,8 +56,8 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
     - delta-function forcing can produce suboptimal convergence, especially for continuous-pressure discretisations
 
 - Spherical Thieulot benchmark:
-  - `docs/benchmark_papers/CedricThieulot_SE2017.pdf`
-  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/CedricThieulot_SE2017.pdf`
+  - `docs/benchmark_papers/cedric_thieulot_se2017.pdf`
+  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/cedric_thieulot_se2017.pdf`
   - Scope:
     - analytical incompressible Stokes flow in a spherical shell
     - tangential velocity on inner/outer boundaries
@@ -69,8 +69,8 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
     - use this paper when checking spherical `m=-1` and `m=3` velocity, pressure, density/body-force, and `vrms` expressions
 
 - Annulus Thieulot benchmark:
-  - `docs/benchmark_papers/Thieulot&Puckett_2018.pdf`
-  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/Thieulot&Puckett_2018.pdf`
+  - `docs/benchmark_papers/thieulot_puckett_2018.pdf`
+  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/thieulot_puckett_2018.pdf`
   - Scope:
     - analytical incompressible Stokes flow in a 2-D annulus
     - constant viscosity, inward radial gravity, tangential boundary flow
@@ -91,12 +91,12 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
 ## Benchmark Priorities
 
 - Annulus:
-  - `benchmarks/annulus/Ex_Stokes_Thieulot_legacy.py`
-  - `benchmarks/annulus/Ex_Stokes_Thieulot_latest.py`
-  - `benchmarks/annulus/Ex_Stokes_Kramer_latest.py`
+  - `benchmarks/annulus/ex_stokes_thieulot_legacy.py`
+  - `benchmarks/annulus/ex_stokes_thieulot_latest.py`
+  - `benchmarks/annulus/ex_stokes_kramer_latest.py`
 - Spherical:
-  - `benchmarks/spherical/Ex_Stokes_Thieulot_legacy.py`
-  - `benchmarks/spherical/Ex_Stokes_Thieulot_latest.py`
+  - `benchmarks/spherical/ex_stokes_thieulot_legacy.py`
+  - `benchmarks/spherical/ex_stokes_thieulot_latest.py`
 
 ## Benchmark Troubleshooting Notes
 

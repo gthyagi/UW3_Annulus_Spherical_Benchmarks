@@ -38,7 +38,7 @@ When comparing results, treat the legacy branch as baseline and validate migrate
 ### Annulus Benchmarks
 
 - **Thieulot annulus benchmark (legacy reference currently present)**
-  - `benchmarks/annulus/Ex_Stokes_Annulus_Benchmark_Thieulot_legacy.py`
+  - `benchmarks/annulus/ex_stokes_thieulot_legacy.py`
   - Manufactured analytical solution benchmark used for solver/error validation.
 
 ### Spherical Benchmarks
@@ -62,7 +62,7 @@ From this repository root:
 
 ```bash
 cd benchmarks/annulus
-python Ex_Stokes_Annulus_Benchmark_Thieulot_legacy.py --res 8 --vdegree 2 --pdegree 1
+python ex_stokes_thieulot_legacy.py --res 8 --vdegree 2 --pdegree 1
 ```
 
 Activate environment helpers:

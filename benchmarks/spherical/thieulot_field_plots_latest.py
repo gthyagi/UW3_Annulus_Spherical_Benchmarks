@@ -1,7 +1,8 @@
 # %% [markdown]
-# ## Spherical Thieulot Legacy Post-Processing
+# ## Spherical Thieulot Latest Post-Processing
 #
-# Edit `dirname` below, then run this script to recreate the legacy field plots.
+# Edit `dirname` below, then run this script to create field plots from the
+# latest split checkpoint files.
 
 # %%
 import os
@@ -17,10 +18,10 @@ import pyvista as pv
 # ### Parameters And Paths
 
 # %%
-dirname = "case_inv_lc_8_m_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_1e+08_stokes_tol_1e-10_ncpus_8"
+dirname = "case_inv_lc_8_m_-1_vdeg_2_pdeg_1_pcont_true_vel_penalty_1e+08_stokes_tol_1e-10_stokes_pen_1_ncpus_8"
 
 # %%
-output_dir = os.path.join("../../output/spherical/thieulot/legacy/", f"{dirname}/")
+output_dir = os.path.join("../../output/spherical/thieulot/latest/", f"{dirname}/")
 
 # %%
 pattern = (
@@ -31,6 +32,7 @@ pattern = (
     r"pcont_(?P<pcont>true|false)_"
     r"vel_penalty_(?P<vel_penalty>[0-9.eE+\-]+)_"
     r"stokes_tol_(?P<stokes_tol>[0-9.eE+\-]+)_"
+    r"(?:stokes_pen_(?P<stokes_pen>[0-9.eE+\-]+)_)?"
     r"ncpus_(?P<ncpus>\d+)"
 )
 
@@ -52,6 +54,7 @@ pcont_str = str(pcont).lower()
 
 vel_penalty = float(params["vel_penalty"])
 stokes_tol = float(params["stokes_tol"])
+stokes_pen = None if params["stokes_pen"] is None else float(params["stokes_pen"])
 ncpus = int(params["ncpus"])
 
 r_i = 0.5
@@ -60,10 +63,13 @@ clip_angle = 135.0
 cpos = "yz"
 
 # %%
-h5_path = os.path.join(output_dir, "output_step_00000.h5")
+mesh_h5_path = os.path.join(output_dir, "output.mesh.00000.h5")
+velocity_h5_path = os.path.join(output_dir, "output.mesh.Velocity.00000.h5")
+pressure_h5_path = os.path.join(output_dir, "output.mesh.Pressure.00000.h5")
 
-if not os.path.isfile(h5_path):
-    raise FileNotFoundError(f"Missing H5 file: {h5_path}")
+for path in (mesh_h5_path, velocity_h5_path, pressure_h5_path):
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"Missing latest checkpoint file: {path}")
 
 # %% [markdown]
 # ### Analytical Solution
@@ -73,9 +79,9 @@ def thieulot_coefficients(
     m,
     r_i,
     r_o,
-    gamma=1.0,
+    gamma,
 ):
-    """Return alpha and beta for the Thieulot spherical benchmark."""
+    """Return alpha and beta for the spherical Thieulot benchmark."""
 
     if m == -1:
         alpha = -gamma * (
@@ -103,12 +109,12 @@ def thieulot_radial_functions(
     m,
     r_i,
     r_o,
-    gamma=1.0,
-    mu_0=1.0,
+    gamma,
+    mu_0,
 ):
     """Return f(r), g(r), h(r), and mu(r)."""
 
-    alpha, beta = thieulot_coefficients(m, r_i, r_o, gamma=gamma)
+    alpha, beta = thieulot_coefficients(m, r_i, r_o, gamma)
     mu = mu_0 * radius ** (m + 1)
     f = alpha * radius ** (-(m + 3)) + beta * radius
 
@@ -136,6 +142,9 @@ def analytical_solution(
 ):
     """Return analytical velocity, pressure, and density at mesh points."""
 
+    gamma = 1.0
+    mu_0 = 1.0
+
     x = points_xyz[:, 0]
     y = points_xyz[:, 1]
     z = points_xyz[:, 2]
@@ -144,20 +153,20 @@ def analytical_solution(
     theta = np.arccos(np.clip(z / radius, -1.0, 1.0))
     phi = np.mod(np.arctan2(y, x), 2.0 * np.pi)
 
-    alpha, beta = thieulot_coefficients(m, r_i, r_o)
-    f, g, h, _ = thieulot_radial_functions(radius, m, r_i, r_o)
+    alpha, beta = thieulot_coefficients(m, r_i, r_o, gamma)
+    f, g, h, _ = thieulot_radial_functions(radius, m, r_i, r_o, gamma, mu_0)
 
     if m == -1:
         rho = (
             (alpha / radius**4) * (8.0 * np.log(radius) - 6.0)
             + 8.0 * beta / (3.0 * radius)
-            + 8.0 / radius**4
+            + 8.0 * gamma / radius**4
         ) * np.cos(theta)
     else:
         rho = (
             2.0 * alpha * radius ** (-(m + 4)) * ((m + 3) / (m + 1)) * (m - 1)
             - (2.0 * beta / 3.0) * (m - 1) * (m + 3)
-            - m * (m + 5) * (2.0 / radius**3)
+            - m * (m + 5) * (2.0 * gamma / radius**3)
         ) * np.cos(theta)
 
     p_ana = h * np.cos(theta)
@@ -183,41 +192,62 @@ def analytical_solution(
     return v_ana, p_ana, rho
 
 # %% [markdown]
-# ### Read Checkpoint
+# ### Read Latest Checkpoint
 
 # %%
-with h5py.File(h5_path, "r") as h5f:
+def read_vertex_field(
+    h5_path,
+    field_name,
+    n_points,
+):
+    """Read a point field from a latest split checkpoint H5 file."""
+
+    with h5py.File(h5_path, "r") as h5f:
+        preferred = (
+            f"vertex_fields/{field_name}_{field_name}",
+            f"vertex_fields/{field_name}",
+            f"fields/{field_name}",
+            field_name,
+        )
+
+        array = None
+        for path in preferred:
+            if path in h5f:
+                array = np.asarray(h5f[path], dtype=np.float64)
+                break
+
+    if array is None:
+        raise KeyError(f"Field '{field_name}' not found in {h5_path}")
+
+    if array.ndim == 2 and array.shape[0] != n_points and array.shape[1] == n_points:
+        array = array.T
+
+    if array.ndim == 2 and array.shape[1] == 1:
+        array = array.reshape(-1)
+
+    if array.shape[0] != n_points:
+        raise ValueError(
+            f"Field {field_name} has shape {array.shape}, expected first dim {n_points}."
+        )
+
+    return array
+
+
+with h5py.File(mesh_h5_path, "r") as h5f:
     points = np.asarray(h5f["geometry/vertices"], dtype=np.float64)
     cells = np.asarray(h5f["viz/topology/cells"], dtype=np.int64)
 
-    if "vertex_fields/V_u_V_u" in h5f:
-        v_u = np.asarray(h5f["vertex_fields/V_u_V_u"], dtype=np.float64)
-    else:
-        v_u = np.asarray(h5f["fields/V_u"], dtype=np.float64)
+v_u = read_vertex_field(velocity_h5_path, "Velocity", points.shape[0])
+p_u = read_vertex_field(pressure_h5_path, "Pressure", points.shape[0]).reshape(-1)
 
-    if "vertex_fields/P_u_P_u" in h5f:
-        p_u = np.asarray(h5f["vertex_fields/P_u_P_u"], dtype=np.float64).reshape(-1)
-    else:
-        p_u = np.asarray(h5f["fields/P_u"], dtype=np.float64).reshape(-1)
-
-if v_u.shape[0] != points.shape[0] and v_u.ndim == 2 and v_u.shape[1] == points.shape[0]:
-    v_u = v_u.T
-
-if v_u.shape[0] != points.shape[0]:
-    raise ValueError(f"Unexpected velocity shape: {v_u.shape}")
-
-if p_u.shape[0] != points.shape[0]:
-    raise ValueError(f"Unexpected pressure shape: {p_u.shape}")
-
-# %%
 cells_flat = np.hstack(
     [np.full((cells.shape[0], 1), cells.shape[1], dtype=np.int64), cells]
 ).ravel()
 celltypes = np.full(cells.shape[0], pv.CellType.TETRA, dtype=np.uint8)
 
 grid = pv.UnstructuredGrid(cells_flat, celltypes, points)
-grid.point_data["V_u"] = v_u
-grid.point_data["P_u"] = p_u
+grid.point_data["Velocity"] = v_u
+grid.point_data["Pressure"] = p_u
 
 # %% [markdown]
 # ### Analytical And Error Fields
@@ -243,7 +273,7 @@ grid.point_data["V_err_pct"] = np.nan_to_num(v_err_pct)
 grid.point_data["P_err_pct"] = np.nan_to_num(p_err_pct)
 
 # %%
-legacy_limits = {
+reference_limits = {
     -1: {
         "velocity": [0.0, 5.0],
         "pressure": [-2.5, 2.5],
@@ -264,8 +294,8 @@ legacy_limits = {
     },
 }
 
-if m in legacy_limits:
-    limits = legacy_limits[m]
+if m in reference_limits:
+    limits = reference_limits[m]
 else:
     limits = {
         "velocity": [0.0, float(np.max(np.linalg.norm(v_u, axis=1)))],
@@ -295,14 +325,24 @@ def clip_grid(grid, clip_angle, crinkle=False):
         0.0,
     )
 
-    clip_1 = grid.clip(origin=(0.0, 0.0, 0.0), normal=normal_1, invert=False, crinkle=crinkle)
-    clip_2 = grid.clip(origin=(0.0, 0.0, 0.0), normal=normal_2, invert=False, crinkle=crinkle)
+    clip_1 = grid.clip(
+        origin=(0.0, 0.0, 0.0),
+        normal=normal_1,
+        invert=False,
+        crinkle=crinkle,
+    )
+    clip_2 = grid.clip(
+        origin=(0.0, 0.0, 0.0),
+        normal=normal_2,
+        invert=False,
+        crinkle=crinkle,
+    )
 
     return [clip_1, clip_2]
 
 
 def save_colorbar(colormap, clim, label, fname, label_y):
-    """Save a horizontal colorbar using the legacy benchmark layout."""
+    """Save a horizontal colorbar using the benchmark layout."""
 
     fig = plt.figure(figsize=(5, 5))
     plt.rc("font", size=18)
@@ -321,7 +361,16 @@ def save_colorbar(colormap, clim, label, fname, label_y):
     plt.close(fig)
 
 
-def save_field_plot(field_name, png_name, colormap, clim, cb_label, cb_name, label_y, vector=False):
+def save_field_plot(
+    field_name,
+    png_name,
+    colormap,
+    clim,
+    cb_label,
+    cb_name,
+    label_y,
+    vector=False,
+):
     """Save a clipped field plot."""
 
     work = grid.copy(deep=True)
@@ -361,7 +410,7 @@ def save_field_plot(field_name, png_name, colormap, clim, cb_label, cb_name, lab
 
 # %%
 radius = np.linspace(r_i, r_o, 200)
-f_r, g_r, h_r, mu_r = thieulot_radial_functions(radius, m, r_i, r_o)
+f_r, g_r, h_r, mu_r = thieulot_radial_functions(radius, m, r_i, r_o, 1.0, 1.0)
 
 fig, axs = plt.subplots(2, 2, figsize=(10, 6))
 
@@ -410,13 +459,13 @@ mesh_plotter.close()
 
 # %%
 save_field_plot("V_a", "vel_ana.png", cmc.lapaz.resampled(21), limits["velocity"], "Velocity", "v_ana", -2.05, vector=True)
-save_field_plot("P_a", "p_ana.png", cmc.vik_r.resampled(41), limits["pressure"], "Pressure", "p_ana", -2.0)
+save_field_plot("P_a", "p_ana.png", cmc.vik.resampled(41), limits["pressure"], "Pressure", "p_ana", -2.0)
 save_field_plot("RHO_a", "rho_ana.png", cmc.roma_r.resampled(31), limits["rho"], "Rho", "rho_ana", -2.0)
 
-save_field_plot("V_u", "vel_uw.png", cmc.lapaz.resampled(21), limits["velocity"], "Velocity", "v_uw", -2.05, vector=True)
+save_field_plot("Velocity", "vel_uw.png", cmc.lapaz.resampled(21), limits["velocity"], "Velocity", "v_uw", -2.05, vector=True)
 save_field_plot("V_e", "vel_r_err.png", cmc.lapaz.resampled(11), limits["velocity_error"], "Velocity", "v_err_rel", -2.05, vector=True)
 save_field_plot("V_err_pct", "vel_p_err.png", cmc.oslo_r.resampled(21), limits["velocity_pct"], "Velocity Error (%)", "v_err_perc", -2.05)
 
-save_field_plot("P_u", "p_uw.png", cmc.vik_r.resampled(41), limits["pressure"], "Pressure", "p_uw", -2.0)
-save_field_plot("P_e", "p_r_err.png", cmc.vik_r.resampled(41), limits["pressure_error"], "Pressure", "p_err_rel", -2.0)
-save_field_plot("P_err_pct", "p_p_err.png", cmc.vik_r.resampled(41), limits["pressure_pct"], "Pressure", "p_err_perc", -2.0)
+save_field_plot("Pressure", "p_uw.png", cmc.vik.resampled(41), limits["pressure"], "Pressure", "p_uw", -2.0)
+save_field_plot("P_e", "p_r_err.png", cmc.vik.resampled(41), limits["pressure_error"], "Pressure", "p_err_rel", -2.0)
+save_field_plot("P_err_pct", "p_p_err.png", cmc.vik.resampled(41), limits["pressure_pct"], "Pressure", "p_err_perc", -2.0)

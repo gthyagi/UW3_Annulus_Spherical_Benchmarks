@@ -17,7 +17,7 @@
 # $$ p(r, \theta) = h(r) \cos(\theta) $$
 # $$ \mu(r) = \mu_{0}r^{m+1} $$
 #
-# where $m$ is an integer (positive or negative). Note that $m = -1$ yields a constant viscosity.
+# where $m$ is an integer (positive or negative). Note that $m = −1$ yields a constant viscosity.
 #
 # $$ f(r) = {\alpha} r^{-(m+3)} + \beta r $$
 #
@@ -36,103 +36,113 @@
 # $$ \rho(r, \theta) = \bigg[2\alpha r^{-(m+4)}\frac{m+3}{m+1}(m-1) - \frac{2\beta}{3}(m-1)(m+3) - m(m+5)\frac{2\gamma}{r^3} \bigg] \cos(\theta) $$
 # $$ \alpha = \gamma (m+1) \frac{R_1^{-3} - R_2^{-3}}{R_1^{-(m+4)} - R_2^{-(m+4)}} $$
 # $$ \beta = -3\gamma \frac{R_1^{m+1} - R_2^{m+1}}{R_1^{m+4} - R_2^{m+4}} $$
-# Note that this imposes that $m \neq -4$.
+# Note that this imposes that $m \neq −4$.
 #
-# The radial component of the velocity is zero on the inside $r = R_1$ and outside $r = R_2$ of the domain, thereby ensuring a tangential flow on the boundaries, i.e.
+# The radial component of the velocity is nul on the inside $r = R_1$ and outside $r = R_2$ of the domain, thereby insuring a
+# tangential flow on the boundaries, i.e.
 # $$ v_r(R_1, \theta) = v_r(R_2, \theta) = 0 $$
 #
-# The gravity vector is radial and of unit length. We set $R_1 = 0.5$ and $R_2 = 1.0$.
+# The gravity vector is radial and of unit length. We set $R_1 = 0.5$ and $R_2 = 1$.
 #
 # In this work, the following spherical coordinates conventions are used: $r$ is the radial distance, $\theta \in [0,\pi]$ is the polar angle and $\phi \in [0, 2\pi]$ is the azimuthal angle.
 
 # %%
 import os
-import sys
 import h5py
 import numpy as np
 import sympy as sp
 import underworld3 as uw
+from underworld3 import timing
 from underworld3.systems import Stokes
 
 os.environ["SYMPY_USE_CACHE"] = "no"
 os.environ["UW_TIMING_ENABLE"] = "1"
 
-is_serial = (uw.mpi.size == 1)
+is_serial = uw.mpi.size == 1
 
 # %% [markdown]
 # ### Mesh Parameters
 
 # %%
-params = uw.Params(
-    uw_cellsize=uw.Param(
-        1.0 / 8.0,
-        description="Target spherical-shell mesh cell size",
-    ),
-    uw_r_i=uw.Param(
-        0.5,
-        description="Inner spherical-shell radius",
-    ),
-    uw_r_o=uw.Param(
-        1.0,
-        description="Outer spherical-shell radius",
-    ),
-    uw_m=uw.Param(
-        -1,
-        description="Viscosity exponent in the analytical solution",
-    ),
-    uw_vdegree=uw.Param(
-        2,
-        description="Velocity polynomial degree",
-    ),
-    uw_pdegree=uw.Param(
-        1,
-        description="Pressure polynomial degree",
-    ),
-    uw_pcont=uw.Param(
-        True,
-        description="Pressure continuity flag",
-    ),
-    uw_stokes_tol=uw.Param(
-        1e-10,
-        description="Stokes solver tolerance",
-    ),
-    uw_stokes_pen=uw.Param(
-        1e0,
-        description="Stokes penalty parameter",
-    ),
-    uw_vel_penalty=uw.Param(
-        1e8,
-        description="Penalty for curved-boundary tangential flow",
-    ),
-    uw_analytical=uw.Param(
-        True,
-        description="Enable analytical error norms",
-    ),
-    uw_pressure_reference=uw.Param(
-        0.0,
-        description="Target reference pressure for zero-mean normalization",
-    ),
+cellsize = uw.options.getReal(
+    "cellsize",
+    default=1. / 8,
+)
+r_i = uw.options.getReal(
+    "radius_inner",
+    default=0.5,
+)
+r_o = uw.options.getReal(
+    "radius_outer",
+    default=1.0,
 )
 
-if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
-    print(params.cli_help())
-    raise SystemExit(0)
+# %% [markdown]
+# ### Viscosity Exponent
 
-if int(params.uw_m) == -4:
-    raise ValueError("The Thieulot spherical benchmark is undefined for m = -4.")
+# %%
+m = uw.options.getInt(
+    "m",
+    default=-1,
+)
+
+# %% [markdown]
+# ### Mesh Variable Parameters
+
+# %%
+vdegree = uw.options.getInt(
+    "vdegree",
+    default=2,
+)
+pdegree = uw.options.getInt(
+    "pdegree",
+    default=1,
+)
+pcont = uw.options.getBool(
+    "pcont",
+    default=True,
+)
+pcont_str = str(pcont).lower()
+
+# %% [markdown]
+# ### Solver Parameters
+
+# %%
+vel_penalty = uw.options.getReal(
+    "vel_penalty",
+    default=1e8,
+)
+stokes_tol = uw.options.getReal(
+    "stokes_tol",
+    default=1e-10,
+)
+
+# %% [markdown]
+# ### Pressure Normalisation Parameters
+
+# %%
+pressure_zero_mean = uw.options.getBool(
+    "pressure_zero_mean", 
+    default=True
+)  # Remove constant pressure null mode after solve.
+pressure_reference = uw.options.getReal(
+    "pressure_reference", 
+    default=0.0
+)  # Reference mean pressure in MPa after solve.
 
 # %% [markdown]
 # ### Output Directory
 
 # %%
 output_dir = os.path.join(
-    "../../output/spherical/thieulot/latest/",
+    "../../output/spherical/thieulot/legacy/",
     (
-        f"case_inv_lc_{int(1/params.uw_cellsize)}_m_{int(params.uw_m)}_vdeg_{int(params.uw_vdegree)}_pdeg_{int(params.uw_pdegree)}"
-        f"_pcont_{str(bool(params.uw_pcont)).lower()}_vel_penalty_{params.uw_vel_penalty:.2g}"
-        f"_stokes_tol_{params.uw_stokes_tol:.2g}_stokes_pen_{params.uw_stokes_pen:.2g}_ncpus_{uw.mpi.size}/"
+        f"case_inv_lc_{int(1/cellsize)}_m_{m}_vdeg_{vdegree}_pdeg_{pdegree}"
+        f"_pcont_{pcont_str}_vel_penalty_{vel_penalty:.2g}"
+        f"_stokes_tol_{stokes_tol:.2g}_ncpus_{uw.mpi.size}/"
     ),
 )
+
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
 
@@ -149,7 +159,7 @@ def analytic_solution(
     gamma=1.0,
     mu_0=1.0,
 ):
-    """Return spherical benchmark fields (v, p, rho, bodyforce-rho, mu) as UW expressions."""
+    """Return spherical benchmark velocity, pressure, density, and viscosity."""
 
     r = mesh.CoordinateSystem.xR[0]
     theta = mesh.CoordinateSystem.xR[1]
@@ -166,20 +176,26 @@ def analytic_solution(
             (r_o**3 - r_i**3)
             / ((r_o**3) * np.log(r_i) - (r_i**3) * np.log(r_o))
         )
-        beta = -3.0 * gamma * (
+        beta = -3 * gamma * (
             (np.log(r_o) - np.log(r_i))
             / ((r_i**3) * np.log(r_o) - (r_o**3) * np.log(r_i))
         )
 
         f = alpha * (r ** -(m + 3)) + beta * r
-        g = (-2.0 / (r**2)) * (alpha * sp.log(r) + (beta / 3.0) * (r**3) + gamma)
-        h = (2.0 / r) * mu_0 * g
+        g = (-2 / (r**2)) * (alpha * sp.ln(r) + (beta / 3) * (r**3) + gamma)
+        h = (2 / r) * mu_0 * g
+
+        f_fd = sp.diff(f, r)
+        f_sd = sp.diff(f_fd, r)
+        f_td = sp.diff(f_sd, r)
+        g_fd = sp.diff(g, r)
+        g_sd = sp.diff(g_fd, r)
 
         force_term = (
-            -(r * sp.diff(f, r, 3))
-            - (3.0 * sp.diff(f, r, 2))
-            + ((2.0 * sp.diff(f, r) / r) - sp.diff(g, r, 2))
-            + 2.0 * ((f + g) / r**2)
+            -(r * f_td)
+            - (3 * f_sd)
+            + ((2 * f_fd / r) - g_sd)
+            + 2 * ((f + g) / r**2)
         )
         rho_expr = sp.simplify(force_term * sp.cos(theta))
         rho_bodyforce_expr = -rho_expr
@@ -187,26 +203,32 @@ def analytic_solution(
         alpha = gamma * (m + 1) * (
             (r_i**-3 - r_o**-3) / ((r_i ** -(m + 4)) - (r_o ** -(m + 4)))
         )
-        beta = -3.0 * gamma * (
+        beta = -3 * gamma * (
             ((r_i ** (m + 1)) - (r_o ** (m + 1)))
             / ((r_i ** (m + 4)) - (r_o ** (m + 4)))
         )
 
         f = alpha * (r ** -(m + 3)) + beta * r
-        g = (-2.0 / (r**2)) * (
+        g = (-2 / (r**2)) * (
             (-alpha / (m + 1)) * r ** (-(m + 1))
-            + (beta / 3.0) * (r**3)
+            + (beta / 3) * (r**3)
             + gamma
         )
         h = ((m + 3) / r) * mu_expr * g
 
+        f_fd = sp.diff(f, r)
+        f_sd = sp.diff(f_fd, r)
+        f_td = sp.diff(f_sd, r)
+        g_fd = sp.diff(g, r)
+        g_sd = sp.diff(g_fd, r)
+
         force_term = (
-            (-r**2) * sp.diff(f, r, 3)
-            - ((2 * m) + 5) * r * sp.diff(f, r, 2)
-            - (m * (m + 3)) * sp.diff(f, r)
+            (-r**2) * f_td
+            - ((2 * m) + 5) * r * f_sd
+            - (m * (m + 3)) * f_fd
             + (m * (m + 3) + 4) * ((f + g) / r)
-            - (m + 1) * sp.diff(g, r)
-            - r * sp.diff(g, r, 2)
+            - (m + 1) * g_fd
+            - r * g_sd
         )
         rho_expr = sp.simplify((r**m) * force_term * sp.cos(theta))
         rho_bodyforce_expr = rho_expr
@@ -229,7 +251,7 @@ def analytic_solution(
     )
     v_z = v_r * sp.cos(theta) - v_theta * sp.sin(theta)
 
-    v_expr = sp.Matrix([v_x, v_y, v_z])
+    v_expr = sp.Matrix([[v_x, v_y, v_z]])
 
     return v_expr, p_expr, rho_expr, rho_bodyforce_expr, mu_expr
 
@@ -239,11 +261,10 @@ def analytic_solution(
 
 # %%
 mesh = uw.meshing.SphericalShell(
-    radiusInner=params.uw_r_i,
-    radiusOuter=params.uw_r_o,
-    cellSize=params.uw_cellsize,
-    qdegree=max(params.uw_pdegree, params.uw_vdegree),
-    degree=1,
+    radiusInner=r_i,
+    radiusOuter=r_o,
+    cellSize=cellsize,
+    qdegree=max(pdegree, vdegree),
     filename=f"{output_dir}mesh.msh",
 )
 
@@ -258,32 +279,20 @@ unit_rvec = mesh.CoordinateSystem.unit_e_0
 # ### Create Mesh Variables
 
 # %%
-v_soln = uw.discretisation.MeshVariable(
-    varname="Velocity",
-    mesh=mesh,
-    degree=params.uw_vdegree,
-    vtype=uw.VarType.VECTOR,
-    varsymbol=r"V",
-)
-
-p_soln = uw.discretisation.MeshVariable(
-    varname="Pressure",
-    mesh=mesh,
-    degree=params.uw_pdegree,
-    vtype=uw.VarType.SCALAR,
-    varsymbol=r"P",
-    continuous=params.uw_pcont,
-)
+v_soln = uw.discretisation.MeshVariable("V_u", mesh, mesh.data.shape[1], degree=vdegree)
+p_soln = uw.discretisation.MeshVariable("P_u", mesh, 1, degree=pdegree, continuous=pcont)
 
 # %%
+# Analytical solution and error expressions
 v_ana_expr, p_ana_expr, rho_ana_expr, rho_bodyforce_expr, mu_expr = analytic_solution(
     mesh,
-    params.uw_r_i,
-    params.uw_r_o,
-    int(params.uw_m),
+    r_i,
+    r_o,
+    m,
 )
-v_err_expr = sp.Matrix(v_soln.sym).T - v_ana_expr
+v_err_expr = sp.Matrix(v_soln.sym) - v_ana_expr
 p_err_expr = p_soln.sym[0] - p_ana_expr
+
 
 # %% [markdown]
 # ### Stokes
@@ -295,9 +304,7 @@ p_err_expr = p_soln.sym[0] - p_ana_expr
 stokes = Stokes(mesh, velocityField=v_soln, pressureField=p_soln)
 stokes.constitutive_model = uw.constitutive_models.ViscousFlowModel
 stokes.constitutive_model.Parameters.viscosity = mu_expr
-stokes.penalty = params.uw_stokes_pen
-stokes.saddle_preconditioner = 1.0 / (mu_expr + params.uw_stokes_pen)
-# stokes.saddle_preconditioner = 1.0 / mu_expr
+stokes.saddle_preconditioner = 1.0 / mu_expr
 
 gravity_fn = -1.0 * unit_rvec
 stokes.bodyforce = rho_bodyforce_expr * gravity_fn
@@ -306,30 +313,14 @@ stokes.bodyforce = rho_bodyforce_expr * gravity_fn
 # #### Boundary Conditions
 
 # %%
-stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Upper.name)
-stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Lower.name)
-
-# stokes.add_condition(
-#         p_soln.field_id,
-#         "dirichlet",
-#         sp.Matrix([0]),
-#         mesh.boundaries.Upper.name,
-#         components=(0),
-#     )
-# stokes.add_condition(
-#         p_soln.field_id,
-#         "dirichlet",
-#         sp.Matrix([0]),
-#         mesh.boundaries.Lower.name,
-#         components=(0),
-#     )
-
+stokes.add_natural_bc(vel_penalty * v_err_expr, "Upper")
+stokes.add_natural_bc(vel_penalty * v_err_expr, "Lower")
 
 # %% [markdown]
 # #### Solver Settings
 
 # %%
-stokes.tolerance = params.uw_stokes_tol
+stokes.tolerance = stokes_tol
 stokes.petsc_options["ksp_monitor"] = None
 stokes.petsc_options["ksp_monitor_true_residual"] = None
 stokes.petsc_options["snes_monitor"] = None
@@ -347,23 +338,28 @@ stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_converged_maxits"] = Non
 stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", "mg")
 stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative")
 stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
+stokes.petsc_options["fieldsplit_pressure_mg_coarse_pc_type"] = "svd"
 
 # %% [markdown]
 # #### Solve Stokes
 
 # %%
-uw.timing.reset()
-uw.timing.start()
+timing.reset()
+timing.start()
 stokes.solve(verbose=False, debug=False)
-uw.timing.stop()
-uw.timing.print_table(filename=f"{output_dir}stokes_timing.txt")
+timing.stop()
+timing.print_table(
+    group_by="line_routine",
+    output_file=f"{output_dir}stokes_solve_time.txt",
+    display_fraction=1.00,
+)
 
 if uw.mpi.rank == 0:
     print(stokes.snes.getConvergedReason())
     print(stokes.snes.ksp.getConvergedReason())
 
 # %% [markdown]
-# ### Benchmark Calibrations
+# ### Rigid-Body Rotation Calibration
 #
 # In a 3-D spherical shell, the velocity null space contains the three rigid-body
 # rotation modes
@@ -385,20 +381,14 @@ if uw.mpi.rank == 0:
 # $$ \mathbf{u} \leftarrow \mathbf{u} - \sum_i c_i \mathbf{r}_i. $$
 
 # %%
-def subtract_rigid_rotations(mesh, velocity_var, rotation_modes):
-    """
-    Remove rigid-body rotation components from the numerical velocity field.
+def subtract_rigid_rotations(
+    mesh,
+    velocity_var,
+    rotation_modes,
+):
+    """Remove rigid-body rotation components from a 3-D velocity field."""
 
-    Parameters
-    ----------
-    mesh : uw.discretisation.Mesh
-        Mesh used to evaluate the projection integrals.
-    velocity_var : uw.discretisation.MeshVariable
-        Vector velocity field to correct.
-    rotation_modes : list[sympy.Matrix]
-        Rigid-body rotation null modes, here the Cartesian basis fields for `omega x x`.
-    """
-    velocity_expr = sp.Matrix(velocity_var.sym).T
+    velocity_expr = sp.Matrix(velocity_var.sym)
     nmodes = len(rotation_modes)
 
     gram = np.zeros((nmodes, nmodes))
@@ -415,11 +405,15 @@ def subtract_rigid_rotations(mesh, velocity_var, rotation_modes):
     for coeff, mode in zip(coeffs[1:], rotation_modes[1:]):
         correction += coeff * mode
 
-    dv = uw.function.evaluate(correction, velocity_var.coords)
-    velocity_var.data[...] -= np.asarray(dv).reshape(velocity_var.data.shape)
+    with mesh.access(velocity_var):
+        dv = uw.function.evaluate(correction, velocity_var.coords)
+        velocity_var.data[...] -= np.asarray(dv).reshape(velocity_var.data.shape)
 
-# %%
-def subtract_pressure_mean(mesh, pressure_var):
+
+def subtract_pressure_mean(
+    mesh,
+    pressure_var,
+):
     """
     Subtract the domain-average pressure from the numerical pressure field.
 
@@ -430,18 +424,12 @@ def subtract_pressure_mean(mesh, pressure_var):
     pressure_var : uw.discretisation.MeshVariable
         Scalar pressure field to shift to zero mean.
     """
-    p_int_local = float(uw.maths.Integral(mesh, pressure_var.sym[0]).evaluate())
-    volume_local = float(uw.maths.Integral(mesh, 1.0).evaluate())
+    p_int = uw.maths.Integral(mesh, pressure_var.sym[0]).evaluate()
+    volume = uw.maths.Integral(mesh, 1.0).evaluate()
+    with mesh.access(pressure_var):
+        pressure_var.data[:, 0] -= p_int / volume
 
-    p_int = float(uw.mpi.comm.allreduce(p_int_local))
-    volume = float(uw.mpi.comm.allreduce(volume_local))
 
-    if np.isclose(volume, 0.0):
-        raise ValueError("The mesh has zero global volume; cannot normalize pressure.")
-
-    pressure_var.data[:, 0] -= p_int / volume
-
-# %%
 def enforce_pressure_reference(
     mesh,
     pressure_var,
@@ -468,9 +456,10 @@ def enforce_pressure_reference(
     """
     target_mean = float(pressure_reference)
 
-    p_local = np.asarray(pressure_var.data[:, 0], dtype=np.float64)
-    local_sum = float(p_local.sum())
-    local_count = int(p_local.size)
+    with mesh.access(pressure_var):
+        p_local = np.asarray(pressure_var.data[:, 0], dtype=np.float64)
+        local_sum = float(p_local.sum())
+        local_count = int(p_local.size)
 
     global_sum = uw.mpi.comm.allreduce(local_sum)
     global_count = uw.mpi.comm.allreduce(local_count)
@@ -478,11 +467,12 @@ def enforce_pressure_reference(
     current_mean = global_sum / max(global_count, 1)
     shift = current_mean - target_mean
 
-    pressure_var.data[:, 0] -= shift
+    with mesh.access(pressure_var):
+        pressure_var.data[:, 0] -= shift
 
     return current_mean, shift
 
-# %%
+
 def report_pressure_gauge(
     mean_before,
     shift_applied,
@@ -500,11 +490,7 @@ def report_pressure_gauge(
     pressure_reference : float
         Target reference pressure.
     """
-
-    if uw.mpi.rank != 0:
-        return
-    
-    uw.pprint(
+    print(
         f"[pressure-gauge][rank {uw.mpi.rank}] "
         f"mean_before={mean_before:.6g}, "
         f"shift_applied={shift_applied:.6g}, "
@@ -513,40 +499,25 @@ def report_pressure_gauge(
     )
 
 # %%
-def subtract_surface_pressure_mean(
-    mesh,
-    pressure_var,
-    boundary_name,
-):
-    """
-    Shift pressure so the average pressure on a named boundary is zero.
-    """
-    p_bd_int = uw.maths.BdIntegral(mesh=mesh, fn=pressure_var.sym[0], boundary=boundary_name).evaluate()
-    bd_measure = uw.maths.BdIntegral(mesh=mesh, fn=1.0, boundary=boundary_name).evaluate()
-
-    if np.isclose(bd_measure, 0.0):
-        return
-    
-    pressure_var.data[:, 0] -= p_bd_int / bd_measure
-
-# %%
 rotation_modes = [
-    sp.Matrix([0, -z, y]),
-    sp.Matrix([z, 0, -x]),
-    sp.Matrix([-y, x, 0]),
+    sp.Matrix([[0, -z, y]]),
+    sp.Matrix([[z, 0, -x]]),
+    sp.Matrix([[-y, x, 0]]),
 ]
-# subtract_rigid_rotations(mesh, v_soln, rotation_modes)
-subtract_pressure_mean(mesh, p_soln)
-subtract_surface_pressure_mean(mesh, p_soln, mesh.boundaries.Upper.name)
-subtract_surface_pressure_mean(mesh, p_soln, mesh.boundaries.Lower.name)
-# mean_before, shift_applied = enforce_pressure_reference(mesh, p_soln, params.uw_pressure_reference)
-# report_pressure_gauge(mean_before, shift_applied, params.uw_pressure_reference)
+subtract_rigid_rotations(mesh, v_soln, rotation_modes)
+# subtract_pressure_mean(mesh, p_soln)
+mean_before, shift_applied = enforce_pressure_reference(mesh, p_soln, pressure_reference)
+report_pressure_gauge(mean_before, shift_applied, pressure_reference)
 
 # %% [markdown]
 # ### Relative Error Norms
 
 # %%
-def relative_l2_error(mesh, err_expr, ana_expr):
+def relative_l2_error(
+    mesh,
+    err_expr,
+    ana_expr,
+):
     """Relative L2 error for scalar or vector expressions."""
 
     if isinstance(err_expr, sp.MatrixBase):
@@ -561,14 +532,14 @@ def relative_l2_error(mesh, err_expr, ana_expr):
 
     return np.sqrt(err_I.evaluate()) / np.sqrt(ana_I.evaluate())
 
-
 # %%
-if params.uw_analytical:
-    v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
-    p_err_l2 = relative_l2_error(mesh, p_err_expr, p_ana_expr)
+v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
+p_err_l2 = relative_l2_error(mesh, p_err_expr, p_ana_expr)
 
-    uw.pprint("Relative velocity L2 error:", v_err_l2)
-    uw.pprint("Relative pressure L2 error:", p_err_l2)
+if uw.mpi.rank == 0:
+    print("Relative velocity L2 error:", v_err_l2)
+    print("Relative pressure L2 error:", p_err_l2)
+
 
 # %% [markdown]
 # ### Save Outputs
@@ -579,15 +550,15 @@ if uw.mpi.rank == 0:
     if os.path.isfile(err_h5):
         os.remove(err_h5)
     with h5py.File(err_h5, "w") as f_h5:
-        f_h5.create_dataset("m", data=int(params.uw_m))
-        f_h5.create_dataset("cellsize", data=float(params.uw_cellsize))
+        f_h5.create_dataset("m", data=m)
+        f_h5.create_dataset("cellsize", data=cellsize)
         f_h5.create_dataset("v_l2_norm", data=v_err_l2)
         f_h5.create_dataset("p_l2_norm", data=p_err_l2)
 
 # %%
-mesh.write_timestep(
-    'output',
+# Serial post-processing plots are generated by thieulot_field_plots_legacy.py.
+mesh.petsc_save_checkpoint(
     index=0,
     meshVars=[v_soln, p_soln],
-    outputPath=str(output_dir),
+    outputPath=os.path.relpath(output_dir) + "/output",
 )

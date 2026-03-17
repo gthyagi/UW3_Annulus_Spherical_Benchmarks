@@ -14,9 +14,17 @@
 {
   "editor.tabCompletion": "on",
   "python.defaultInterpreterPath": "/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest/underworld3/.pixi/envs/amr-dev/bin/python",
+  "python.analysis.indexing": true,
+  "python.analysis.useLibraryCodeForTypes": true,
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.extraPaths": [
+    "/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest/underworld3/src"
+  ],
   "python-envs.defaultEnvManager": "ms-python.python:system",
   "python.terminal.activateEnvironment": true,
-  "terminal.integrated.env.osx": {
-    "PATH": "/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest/underworld3/.pixi/envs/amr-dev/bin:${env:PATH}"
-  }
+  // "terminal.integrated.env.osx": {
+  //   "PATH": "/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest/underworld3/.pixi/envs/amr-dev/bin:${env:PATH}"
+  // },
+  "terminal.integrated.enablePersistentSessions": true,
+  "terminal.integrated.confirmOnExit": "always"
 }
