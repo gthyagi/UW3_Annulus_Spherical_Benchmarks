@@ -2,6 +2,8 @@
 # %% [markdown]
 # # Exact annulus mesh with level-based refinement (Notebook-first)
 #
+# This reproduces the exact annulus mesh used by the authors in the Kramer benchmark paper.
+#
 # Base setup:
 # - `r_inner = 1.22`
 # - `r_outer = 2.22`
@@ -40,7 +42,7 @@ level = 5
 msh_version = 4.1
 show_gui = True
 
-output_path = f'/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/annulus_baseline_4096/mesh_level_{level}.msh'
+output_path = f'/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/kramer_annulus_mesh/mesh_level_{level}.msh'
 
 
 # %%
@@ -168,4 +170,3 @@ n_tri, n_theta, n_radial = build_annulus_mesh(
 print(f"Wrote mesh: {output_path}")
 print(f"Refinement level: {level} | n_theta={n_theta}, n_radial={n_radial}")
 print(f"Triangle count: {n_tri} (expected {n_theta * n_radial * 2})")
-

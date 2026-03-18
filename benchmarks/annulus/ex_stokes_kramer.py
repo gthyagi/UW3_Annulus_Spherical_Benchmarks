@@ -610,11 +610,13 @@ elif noslip:
 
 # %%
 stokes.tolerance = params.uw_stokes_tol
+
 stokes.petsc_options["ksp_monitor"] = None
 stokes.petsc_options["ksp_monitor_true_residual"] = None
+stokes.petsc_options["ksp_type"] = "fgmres"
+
 stokes.petsc_options["snes_monitor"] = None
 stokes.petsc_options["snes_type"] = "newtonls"
-stokes.petsc_options["ksp_type"] = "fgmres"
 
 stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_type", "kaskade")
 stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_cycle_type", "w")

@@ -38,7 +38,7 @@
 #
 # The parameter $k$ controls the number of convection cells present in the domain
 #
-# In the present case, we set $ R_1 = 0.5, R_2 = 1.0$ and $C = -1 $.
+# In the present case, we set $ R_1 = 1.0, R_2 = 2.0$ and $C = -1 $.
 
 # %%
 import os
@@ -64,12 +64,12 @@ params = uw.Params(
         description="Target annulus mesh cell size",
     ),
     uw_r_i=uw.Param(
-        0.5,
+        1.0,
         type=uw.ParamType.FLOAT,
         description="Inner annulus radius",
     ),
     uw_r_o=uw.Param(
-        1.0,
+        2.0,
         type=uw.ParamType.FLOAT,
         description="Outer annulus radius",
     ),
@@ -103,10 +103,10 @@ params = uw.Params(
         type=uw.ParamType.FLOAT,
         description="Penalty for curved-boundary tangential flow",
     ),
-    uw_analytical=uw.Param(
-        True,
-        type=uw.ParamType.BOOLEAN,
-        description="Enable analytical error norms",
+    uw_bc_type=uw.Param(
+        "natural",
+        type=uw.ParamType.STRING,
+        description="Boundary-condition mode: natural or essential",
     ),
 )
 
@@ -141,6 +141,7 @@ case_id = make_case_id(
     vel_penalty=params.uw_vel_penalty,
     stokes_tol=params.uw_stokes_tol,
     ncpus=uw.mpi.size,
+    bc=params.uw_bc_type,
 )
 
 output_dir = os.path.join(output_root, case_id)
@@ -271,8 +272,14 @@ stokes.bodyforce = rho_ana_expr * gravity_fn
 # #### Boundary Conditions
 
 # %%
-stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Upper.name)
-stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Lower.name)
+if params.uw_bc_type == "natural":
+    stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Upper.name)
+    stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Lower.name)
+elif params.uw_bc_type == "essential":
+    stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Upper.name)
+    stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Lower.name)
+else:
+    raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
 
 if params.uw_k == 0:
     stokes.add_condition(
@@ -291,15 +298,50 @@ if params.uw_k == 0:
     )
 
 # %% [markdown]
+# #### Solver Notes
+#
+# This benchmark is linear: the viscosity is prescribed, and both the
+# `essential` and `natural` boundary conditions are linear in the unknown
+# velocity and pressure fields. For a linear problem we use
+# `snes_type = "ksponly"`, which bypasses Newton iterations and calls the
+# PETSc linear solver (`KSP`) directly.
+#
+# If we instead use `snes_type = "newtonls"`, PETSc wraps the same linear
+# system inside a nonlinear Newton solve. That is useful for genuinely
+# nonlinear problems, but here it makes the reported `SNES` iteration count
+# harder to interpret because the benchmark itself is still linear.
+#
+# `stokes.tolerance` is the UW-level solver tolerance. In this branch it sets
+# the `SNES` relative tolerance and related defaults, but it does not set
+# `ksp_rtol`. Because we use `ksponly`, the important stopping criterion is
+# `ksp_rtol`, which controls the required relative reduction in the linear
+# residual. `ksp_atol` is the absolute residual tolerance; we set it to `0.0`
+# so convergence is controlled by the relative tolerance rather than by an
+# absolute threshold.
+#
+# In short:
+# - `newtonls`: nonlinear Newton solve
+# - `ksponly`: direct linear solve through `KSP`
+# - `ksp_rtol`: relative linear residual tolerance
+# - `ksp_atol`: absolute linear residual tolerance
+# - `stokes.tolerance`: UW convenience tolerance kept consistent with `ksp_rtol`
+#
+# %% [markdown]
 # #### Solver Settings
 
 # %%
 stokes.tolerance = params.uw_stokes_tol
+
+stokes.petsc_options["ksp_type"] = "fgmres"
+stokes.petsc_options["ksp_rtol"] = params.uw_stokes_tol
+stokes.petsc_options["ksp_atol"] = 0.0
 stokes.petsc_options["ksp_monitor"] = None
 stokes.petsc_options["ksp_monitor_true_residual"] = None
-stokes.petsc_options["snes_monitor"] = None
-stokes.petsc_options["snes_type"] = "newtonls"
-stokes.petsc_options["ksp_type"] = "fgmres"
+stokes.petsc_options["ksp_converged_reason"] = None
+
+# stokes.petsc_options["snes_monitor"] = None
+# stokes.petsc_options["snes_type"] = "newtonls"
+stokes.petsc_options["snes_type"] = "ksponly"
 
 stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_type", "kaskade")
 stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_cycle_type", "w")
@@ -368,7 +410,8 @@ def subtract_rigid_rotation(mesh, velocity_var, rotation_mode):
 
 if params.uw_k != 0:
     subtract_pressure_mean(mesh, p_soln)
-    subtract_rigid_rotation(mesh, v_soln, v_theta_fn_xy)
+    if params.uw_bc_type == "natural":
+        subtract_rigid_rotation(mesh, v_soln, v_theta_fn_xy)
 
 
 # %% [markdown]
@@ -392,17 +435,15 @@ def relative_l2_error(mesh, err_expr, ana_expr):
 
 
 # %%
-if params.uw_analytical:
+v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
+p_err_l2 = np.inf if params.uw_k == 0 else relative_l2_error(mesh, p_err_expr, p_ana_expr)
 
-    v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
-    p_err_l2 = np.inf if params.uw_k == 0 else relative_l2_error(mesh, p_err_expr, p_ana_expr)
+uw.pprint("Relative velocity L2 error:", v_err_l2)
 
-    uw.pprint("Relative velocity L2 error:", v_err_l2)
-
-    if params.uw_k == 0:
-        uw.pprint("Pressure L2 error undefined for k=0.")
-    else:
-        uw.pprint("Relative pressure L2 error:", p_err_l2)
+if params.uw_k == 0:
+    uw.pprint("Pressure L2 error undefined for k=0.")
+else:
+    uw.pprint("Relative pressure L2 error:", p_err_l2)
 
 # %% [markdown]
 # ### Save Outputs
@@ -420,10 +461,11 @@ if uw.mpi.rank == 0:
 
 # %%
 # Save solution checkpoint for post-processing script
-mesh.petsc_save_checkpoint(
+mesh.write_timestep(
+    "output",
     index=0,
     meshVars=[v_soln, p_soln],
-    outputPath=os.path.join(os.path.relpath(output_dir), "output"),
+    outputPath=str(output_dir),
 )
 
 # %%

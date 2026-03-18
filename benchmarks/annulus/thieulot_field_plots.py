@@ -1,0 +1,802 @@
+# %% [markdown]
+# ## Thieulot Latest Post-Processing (PyVista Only)
+#
+# Uses latest annulus checkpoint output and reconstructs analytical/error
+# fields for plotting.
+
+# %%
+# to fix trame issue
+import nest_asyncio
+
+nest_asyncio.apply()
+
+# %%
+import os
+import re
+import sys
+
+import cmcrameri.cm as cmc
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+import pyvista as pv
+
+try:
+    from IPython.display import display
+except ImportError:
+    display = None
+
+IS_INTERACTIVE = (
+    hasattr(sys, "ps1") or sys.flags.interactive or "ipykernel" in sys.modules
+)
+JUPYTER_BACKEND = "html"
+
+if IS_INTERACTIVE:
+    pv.global_theme.jupyter_backend = JUPYTER_BACKEND
+
+# %% [markdown]
+# ### Parameters And Paths
+
+# %%
+dirname = "model_inv_lc_64_k_2_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_8_bc_natural"
+
+# %%
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+output_dir = os.path.join(repo_root, "output", "annulus", "thieulot", "latest", dirname)
+
+# %%
+pattern = (
+    r"inv_lc_(?P<inv_lc>\d+)_"
+    r"k_(?P<k>\d+)_"
+    r"vdeg_(?P<vdeg>\d+)_"
+    r"pdeg_(?P<pdeg>\d+)_"
+    r"pcont_(?P<pcont>true|false)_"
+    r"vel_penalty_(?P<vel_penalty>[0-9.eE+\-]+)_"
+    r"stokes_tol_(?P<stokes_tol>[0-9.eE+\-]+)_"
+    r"ncpus_(?P<ncpus>\d+)"
+    r"(?:_bc_(?P<bc_type>\w+))?"
+)
+
+match = re.search(pattern, dirname)
+if match is None:
+    raise ValueError(f"Could not parse dirname: {dirname}")
+
+params = match.groupdict()
+
+# %%
+inv_lc = int(params["inv_lc"])
+cellsize = 1.0 / inv_lc
+
+k = int(params["k"])
+vdegree = int(params["vdeg"])
+pdegree = int(params["pdeg"])
+pcont = params["pcont"] == "true"
+
+vel_penalty = float(params["vel_penalty"])
+stokes_tol = float(params["stokes_tol"])
+ncpus = int(params["ncpus"])
+bc_type = params["bc_type"]
+
+r_i = 1.0
+r_o = 2.0
+
+arrow_target = 1400
+plot_size = (750, 750)
+
+
+# %%
+def resolve_checkpoint_paths(output_path):
+    """Pick an available latest checkpoint naming scheme."""
+
+    preferred = (
+        (
+            os.path.join(output_path, "output.mesh.00000.xdmf"),
+            os.path.join(output_path, "output.mesh.00000.h5"),
+            os.path.join(output_path, "output.mesh.Velocity.00000.h5"),
+            os.path.join(output_path, "output.mesh.Pressure.00000.h5"),
+        ),
+        (
+            os.path.join(output_path, "output_step_00000.xdmf"),
+            os.path.join(output_path, "output_step_00000.h5"),
+            None,
+            None,
+        ),
+    )
+
+    for xdmf_file, mesh_h5_file, velocity_h5_file, pressure_h5_file in preferred:
+        if os.path.isfile(mesh_h5_file):
+            return xdmf_file, mesh_h5_file, velocity_h5_file, pressure_h5_file
+
+    h5_candidates = sorted(
+        [name for name in os.listdir(output_path) if name.endswith(".h5")]
+    )
+    raise FileNotFoundError(
+        f"No checkpoint mesh H5 found in {output_path}. H5 files: {h5_candidates}"
+    )
+
+
+# %%
+xdmf_path, mesh_h5_path, velocity_h5_path, pressure_h5_path = resolve_checkpoint_paths(output_dir)
+if not os.path.isfile(xdmf_path):
+    print(f"Warning: XDMF not found: {xdmf_path}. Using H5-only reconstruction.")
+
+
+# %%
+def list_h5_datasets(h5f):
+    """Return all dataset paths in an H5 file."""
+
+    paths = []
+
+    def visitor(name, obj):
+        if isinstance(obj, h5py.Dataset):
+            paths.append(name)
+
+    h5f.visititems(visitor)
+    return paths
+
+
+# %%
+def normalize_name(text):
+    """Normalize field names for relaxed H5 matching."""
+
+    return text.replace("{", "").replace("}", "").replace("\\", "").lower()
+
+
+# %%
+def find_field_path(h5f, field_names):
+    """Find the best-matching dataset path for any logical field alias."""
+
+    for field_name in field_names:
+        direct_candidates = (
+            f"vertex_fields/{field_name}_{field_name}",
+            f"vertex_fields/{field_name}",
+            f"fields/{field_name}",
+            field_name,
+        )
+        for candidate in direct_candidates:
+            if candidate in h5f:
+                return candidate
+
+    datasets = list_h5_datasets(h5f)
+    wanted = [normalize_name(name) for name in field_names]
+
+    exact = []
+    contains = []
+    for dset in datasets:
+        tail = dset.split("/")[-1]
+        tail_norm = normalize_name(tail)
+        for name_norm in wanted:
+            if tail_norm == name_norm or tail_norm == f"{name_norm}_{name_norm}":
+                exact.append(dset)
+            elif name_norm in tail_norm:
+                contains.append(dset)
+
+    if exact:
+        return sorted(set(exact), key=len)[0]
+    if contains:
+        return sorted(set(contains), key=len)[0]
+
+    raise KeyError(f"Fields {field_names} not found in H5 datasets.")
+
+
+# %%
+def read_field(h5f, field_names, n_points):
+    """Read a field array and align it to point-major storage."""
+
+    path = find_field_path(h5f, field_names)
+    array = np.asarray(h5f[path], dtype=np.float64)
+
+    if array.ndim == 2 and array.shape[0] != n_points and array.shape[1] == n_points:
+        array = array.T
+
+    if array.ndim == 2 and array.shape[1] == 1:
+        array = array.reshape(-1)
+
+    if array.shape[0] != n_points:
+        raise ValueError(
+            f"Field {field_names} has shape {array.shape}, expected first dim {n_points}."
+        )
+
+    return array
+
+
+# %%
+def read_field_from_files(mesh_h5_file, mesh_h5f, field_names, n_points, split_h5_file=None):
+    """Read a field from the mesh H5 first, then fallback to a split field file."""
+
+    mesh_read_error = None
+    try:
+        return read_field(mesh_h5f, field_names, n_points)
+    except Exception as exc:
+        mesh_read_error = exc
+
+    if split_h5_file and os.path.isfile(split_h5_file):
+        with h5py.File(split_h5_file, "r") as field_h5f:
+            return read_field(field_h5f, field_names, n_points)
+
+    if split_h5_file is None:
+        split_h5_candidates = [
+            mesh_h5_file.replace(".00000.h5", f".{field_name}.00000.h5")
+            for field_name in field_names
+        ]
+    else:
+        split_h5_candidates = [split_h5_file]
+
+    raise ValueError(
+        f"Could not read point field {field_names} from {mesh_h5_file}. "
+        "If this is a latest serial output_step checkpoint, rerun or post-process a split "
+        "checkpoint directory with output.mesh.*.h5 files."
+    ) from mesh_read_error
+
+
+# %%
+def load_grid_and_fields(xdmf_file, mesh_h5_file, velocity_file=None, pressure_file=None):
+    """Load mesh plus velocity/pressure fields from latest checkpoint files."""
+
+    grid = None
+    if os.path.isfile(xdmf_file):
+        try:
+            xobj = pv.read(xdmf_file)
+            if isinstance(xobj, pv.MultiBlock):
+                for block in xobj:
+                    if isinstance(block, pv.DataSet):
+                        grid = block
+                        break
+            elif isinstance(xobj, pv.DataSet):
+                grid = xobj
+        except Exception:
+            grid = None
+
+    with h5py.File(mesh_h5_file, "r") as mesh_h5f:
+        vertices = np.asarray(mesh_h5f["geometry/vertices"], dtype=np.float64)
+        triangles = np.asarray(mesh_h5f["viz/topology/cells"], dtype=np.int64)
+
+        if grid is None:
+            points3 = np.c_[vertices, np.zeros(vertices.shape[0], dtype=np.float64)]
+            n_cells = triangles.shape[0]
+            cells = np.hstack(
+                [np.full((n_cells, 1), 3, dtype=np.int64), triangles]
+            ).ravel()
+            celltypes = np.full(n_cells, pv.CellType.TRIANGLE, dtype=np.uint8)
+            grid = pv.UnstructuredGrid(cells, celltypes, points3)
+
+        n_points = grid.n_points
+
+        velocity = read_field_from_files(
+            mesh_h5_file,
+            mesh_h5f,
+            ["Velocity", "V_u"],
+            n_points,
+            split_h5_file=velocity_file,
+        )
+        pressure = read_field_from_files(
+            mesh_h5_file,
+            mesh_h5f,
+            ["Pressure", "P_u"],
+            n_points,
+            split_h5_file=pressure_file,
+        )
+
+    if velocity.ndim == 1:
+        velocity = velocity.reshape(-1, 1)
+
+    if velocity.shape[1] == 2:
+        velocity = np.c_[velocity, np.zeros(velocity.shape[0], dtype=np.float64)]
+
+    grid.point_data["V_u"] = np.asarray(velocity, dtype=np.float64)
+    grid.point_data["P_u"] = np.asarray(pressure, dtype=np.float64).reshape(-1)
+
+    return grid
+
+
+# %%
+def analytical_solution(points_xy, r_inner, r_outer, wavemode, C=-1.0, rho0=0.0):
+    """Return analytical velocity, pressure, and density on XY points."""
+
+    x = points_xy[:, 0]
+    y = points_xy[:, 1]
+
+    radius = np.sqrt(x**2 + y**2)
+    theta = np.arctan2(y, x)
+
+    denom = (r_outer**2) * np.log(r_inner) - (r_inner**2) * np.log(r_outer)
+    A = -C * (2.0 * (np.log(r_inner) - np.log(r_outer)) / denom)
+    B = -C * ((r_outer**2 - r_inner**2) / denom)
+
+    log_r = np.log(radius)
+
+    f = A * radius + B / radius
+    g = 0.5 * A * radius + (B / radius) * log_r + C / radius
+
+    f_r = A - B / radius**2
+    g_r = 0.5 * A + B * (1.0 - log_r) / radius**2 - C / radius**2
+    g_rr = B * (2.0 * log_r - 3.0) / radius**3 + 2.0 * C / radius**3
+
+    h = (2.0 * g - f) / radius
+    m = g_rr - g_r / radius - g * (wavemode**2 - 1.0) / radius**2 + f / radius**2 + f_r / radius
+
+    sin_kth = np.sin(wavemode * theta)
+    cos_kth = np.cos(wavemode * theta)
+
+    v_r = g * wavemode * sin_kth
+    v_th = f * cos_kth
+
+    cos_th = np.cos(theta)
+    sin_th = np.sin(theta)
+
+    v_x = v_r * cos_th - v_th * sin_th
+    v_y = v_r * sin_th + v_th * cos_th
+
+    v_ana = np.c_[v_x, v_y, np.zeros_like(v_x)]
+    p_ana = wavemode * h * sin_kth + rho0 * (r_outer - radius)
+    rho_ana = m * wavemode * sin_kth + rho0
+
+    return v_ana, p_ana, rho_ana
+
+
+# %%
+def regular_arrow_points(r_inner, r_outer, n_target):
+    """Return regular annulus arrow points and nearby sample points."""
+
+    n_r = max(3, int(np.sqrt(max(1, n_target)) / 2))
+    n_theta = max(8, int(max(1, n_target) / n_r))
+    sample_offset = max(1.0e-6, 1.0e-3 * (r_outer - r_inner))
+
+    radius_inner = np.array([r_inner], dtype=np.float64)
+    radius_outer = np.array([r_outer], dtype=np.float64)
+    radius_mid = np.linspace(r_inner, r_outer, n_r)[1:-1]
+    radius_plot = np.concatenate((radius_inner, radius_mid, radius_outer))
+    radius_sample = radius_plot.copy()
+    radius_sample[0] = min(r_outer, r_inner + sample_offset)
+    radius_sample[-1] = max(r_inner, r_outer - sample_offset)
+
+    theta = np.linspace(0.0, 2.0 * np.pi, n_theta, endpoint=False)
+    radius_plot_grid, theta_plot_grid = np.meshgrid(radius_plot, theta, indexing="ij")
+    radius_sample_grid, theta_sample_grid = np.meshgrid(
+        radius_sample, theta, indexing="ij"
+    )
+
+    x_plot = radius_plot_grid * np.cos(theta_plot_grid)
+    y_plot = radius_plot_grid * np.sin(theta_plot_grid)
+    x_sample = radius_sample_grid * np.cos(theta_sample_grid)
+    y_sample = radius_sample_grid * np.sin(theta_sample_grid)
+
+    plot_points = np.c_[
+        x_plot.ravel(),
+        y_plot.ravel(),
+        np.zeros(x_plot.size, dtype=np.float64),
+    ]
+    sample_points = np.c_[
+        x_sample.ravel(),
+        y_sample.ravel(),
+        np.zeros(x_sample.size, dtype=np.float64),
+    ]
+
+    return plot_points, sample_points
+
+
+# %%
+def save_colorbar(
+    colormap,
+    output_path,
+    fname,
+    cb_axis_label,
+    vmin,
+    vmax,
+    figsize_cb=(5, 5),
+    primary_fs=18,
+    cb_label_xpos=0.5,
+    cb_label_ypos=-2.0,
+):
+    """Save a standalone horizontal colorbar."""
+
+    fig = plt.figure(figsize=figsize_cb)
+    plt.rc("font", size=primary_fs)
+    img = plt.imshow(np.array([[vmin, vmax]]), cmap=colormap)
+    plt.gca().set_visible(False)
+
+    cax = plt.axes([0.1, 0.2, 1.15, 0.06])
+    cb = plt.colorbar(img, orientation="horizontal", cax=cax)
+    cb.ax.set_title(cb_axis_label, fontsize=primary_fs, x=cb_label_xpos, y=cb_label_ypos)
+    fig.savefig(
+        os.path.join(output_path, f"{fname}_cbhorz.pdf"),
+        dpi=150,
+        bbox_inches="tight",
+    )
+    if IS_INTERACTIVE and display is not None:
+        display(fig)
+    plt.close(fig)
+
+
+# %%
+def plot_vector(
+    grid,
+    vector_name,
+    cmap,
+    clim,
+    vmag,
+    show_arrows,
+    window_size,
+    dir_fname,
+    image_scale=3.5,
+    n_arrows=None,
+):
+    """Plot a vector magnitude field with optional arrows."""
+
+    vector = np.asarray(grid.point_data[vector_name], dtype=np.float64)
+    vector_mag = np.linalg.norm(vector[:, :2], axis=1)
+
+    work = grid.copy(deep=True)
+    mag_name = f"{vector_name}_mag"
+    work.point_data[mag_name] = vector_mag
+
+    plotter = pv.Plotter(window_size=window_size, off_screen=not IS_INTERACTIVE)
+    plotter.image_scale = image_scale
+    plotter.add_mesh(
+        work,
+        scalars=mag_name,
+        cmap=cmap,
+        clim=clim,
+        edge_color="k",
+        show_edges=False,
+        opacity=1.0,
+        show_scalar_bar=False,
+    )
+
+    if show_arrows:
+        arrow_points, sample_points = regular_arrow_points(r_i, r_o, n_arrows)
+        if arrow_points.size:
+            arrow_cloud = pv.PolyData(sample_points).sample(work)
+            arrow_vectors = np.asarray(arrow_cloud.point_data[vector_name], dtype=np.float64)
+            valid = np.all(np.isfinite(arrow_vectors), axis=1)
+            if np.any(valid):
+                plotter.add_arrows(
+                    arrow_points[valid],
+                    arrow_vectors[valid],
+                    mag=vmag,
+                    color="k",
+                )
+
+    plotter.camera_position = "xy"
+    plotter.camera.zoom(1.4)
+    plotter.render()
+
+    if IS_INTERACTIVE:
+        plotter.show(jupyter_backend=JUPYTER_BACKEND, screenshot=dir_fname)
+        return
+
+    plotter.screenshot(dir_fname)
+    plotter.close()
+
+
+# %%
+def plot_scalar(
+    grid,
+    scalar_name,
+    cmap,
+    clim,
+    window_size,
+    dir_fname,
+    image_scale=3.5,
+):
+    """Plot a scalar field."""
+
+    plotter = pv.Plotter(window_size=window_size, off_screen=not IS_INTERACTIVE)
+    plotter.image_scale = image_scale
+    plotter.add_mesh(
+        grid,
+        scalars=scalar_name,
+        cmap=cmap,
+        clim=clim,
+        edge_color="k",
+        show_edges=False,
+        opacity=1.0,
+        show_scalar_bar=False,
+    )
+
+    plotter.camera_position = "xy"
+    plotter.camera.zoom(1.4)
+    plotter.render()
+
+    if IS_INTERACTIVE:
+        plotter.show(jupyter_backend=JUPYTER_BACKEND, screenshot=dir_fname)
+        return
+
+    plotter.screenshot(dir_fname)
+    plotter.close()
+
+
+# %%
+def plot_scalar_with_colorbar(grid, scalar_name, png_name, cmap, clim, cb_label, cb_name):
+    """Plot a scalar field and save a matching horizontal colorbar."""
+
+    plot_scalar(
+        grid,
+        scalar_name=scalar_name,
+        cmap=cmap,
+        clim=clim,
+        window_size=plot_size,
+        dir_fname=os.path.join(output_dir, png_name),
+    )
+    save_colorbar(
+        colormap=cmap,
+        output_path=output_dir,
+        fname=cb_name,
+        cb_axis_label=cb_label,
+        vmin=clim[0],
+        vmax=clim[1],
+    )
+
+
+# %%
+def plot_vector_with_colorbar(
+    grid,
+    vector_name,
+    png_name,
+    cmap,
+    clim,
+    cb_label,
+    cb_name,
+    vmag,
+    show_arrows,
+    n_arrows,
+):
+    """Plot a vector field and save a matching horizontal colorbar."""
+
+    plot_vector(
+        grid,
+        vector_name=vector_name,
+        cmap=cmap,
+        clim=clim,
+        vmag=vmag,
+        show_arrows=show_arrows,
+        window_size=plot_size,
+        dir_fname=os.path.join(output_dir, png_name),
+        n_arrows=n_arrows,
+    )
+    save_colorbar(
+        colormap=cmap,
+        output_path=output_dir,
+        fname=cb_name,
+        cb_axis_label=cb_label,
+        vmin=clim[0],
+        vmax=clim[1],
+    )
+
+
+# %%
+def finite_concat(*arrays):
+    """Return finite values from one or more arrays as a single vector."""
+
+    parts = []
+    for array in arrays:
+        values = np.asarray(array, dtype=np.float64).reshape(-1)
+        values = values[np.isfinite(values)]
+        if values.size:
+            parts.append(values)
+
+    if not parts:
+        return np.array([], dtype=np.float64)
+
+    return np.concatenate(parts)
+
+
+# %%
+def positive_clim(*arrays, percentile=100.0, default=1.0):
+    """Return [0, vmax] from finite data."""
+
+    values = finite_concat(*arrays)
+    if values.size == 0:
+        return [0.0, default]
+
+    vmax = float(np.percentile(values, percentile))
+    if vmax <= 0.0:
+        vmax = default
+
+    return [0.0, vmax]
+
+
+# %%
+def symmetric_clim(*arrays, percentile=100.0, default=1.0):
+    """Return [-vmax, vmax] from finite data."""
+
+    values = finite_concat(*arrays)
+    if values.size == 0:
+        return [-default, default]
+
+    vmax = float(np.percentile(np.abs(values), percentile))
+    if vmax <= 0.0:
+        vmax = default
+
+    return [-vmax, vmax]
+
+
+# %% [markdown]
+# ### Load Grid And Build Derived Fields
+
+# %%
+grid = load_grid_and_fields(
+    xdmf_path,
+    mesh_h5_path,
+    velocity_file=velocity_h5_path,
+    pressure_file=pressure_h5_path,
+)
+points_xy = np.asarray(grid.points[:, :2], dtype=np.float64)
+
+v_ana, p_ana, rho_ana = analytical_solution(points_xy, r_i, r_o, k)
+grid.point_data["V_ana"] = v_ana
+grid.point_data["P_ana"] = p_ana
+grid.point_data["Rho_ana"] = rho_ana
+
+v_u = np.asarray(grid.point_data["V_u"], dtype=np.float64)
+p_u = np.asarray(grid.point_data["P_u"], dtype=np.float64).reshape(-1)
+
+v_err = v_u - v_ana
+p_err = p_u - p_ana
+
+grid.point_data["V_err"] = v_err
+grid.point_data["P_err"] = p_err
+
+v_ana_mag = np.linalg.norm(v_ana[:, :2], axis=1)
+v_u_mag = np.linalg.norm(v_u[:, :2], axis=1)
+v_err_mag = np.linalg.norm(v_err[:, :2], axis=1)
+
+with np.errstate(divide="ignore", invalid="ignore"):
+    v_err_pct = np.where(v_ana_mag > 1.0e-14, (v_err_mag / v_ana_mag) * 100.0, 0.0)
+    p_err_pct = np.where(np.abs(p_ana) > 1.0e-14, (p_err / p_ana) * 100.0, 0.0)
+
+grid.point_data["V_err_pct"] = np.nan_to_num(v_err_pct)
+grid.point_data["P_err_pct"] = np.nan_to_num(p_err_pct)
+grid.point_data["Rho_ana_neg"] = -rho_ana
+
+velocity_clim = [0.0, 2.3]
+pressure_clim = [-8.5, 8.5]
+density_clim = [-67.5, 67.5]
+velocity_error_clim = positive_clim(v_err_mag, percentile=99.0, default=1.0e-12)
+velocity_pct_clim = positive_clim(v_err_pct, percentile=99.0, default=1.0)
+pressure_error_clim = symmetric_clim(p_err, percentile=99.0, default=1.0e-12)
+pressure_pct_clim = symmetric_clim(p_err_pct, percentile=99.0, default=100.0)
+
+
+# %% [markdown]
+# ### Plot Analytical Velocity
+
+# %%
+plot_vector_with_colorbar(
+    grid,
+    vector_name="V_ana",
+    png_name="vel_ana.png",
+    cmap=cmc.lapaz.resampled(11),
+    clim=velocity_clim,
+    cb_label="Velocity",
+    cb_name="v_ana",
+    vmag=1.0e-1,
+    show_arrows=False,
+    n_arrows=arrow_target,
+)
+
+
+# %% [markdown]
+# ### Plot Analytical Pressure
+
+# %%
+plot_scalar_with_colorbar(
+    grid,
+    scalar_name="P_ana",
+    png_name="p_ana.png",
+    cmap=cmc.vik.resampled(41),
+    clim=pressure_clim,
+    cb_label="Pressure",
+    cb_name="p_ana",
+)
+
+
+# %% [markdown]
+# ### Plot Analytical Density
+
+# %%
+plot_scalar_with_colorbar(
+    grid,
+    scalar_name="Rho_ana_neg",
+    png_name="rho_ana.png",
+    cmap=cmc.roma.resampled(31),
+    clim=density_clim,
+    cb_label="Rho",
+    cb_name="rho_ana",
+)
+
+
+# %% [markdown]
+# ### Plot Solution Velocity
+
+# %%
+plot_vector_with_colorbar(
+    grid,
+    vector_name="V_u",
+    png_name="vel_uw.png",
+    cmap=cmc.lapaz.resampled(11),
+    clim=velocity_clim,
+    cb_label="Velocity",
+    cb_name="v_uw",
+    vmag=1.0e-1,
+    show_arrows=True,
+    n_arrows=arrow_target,
+)
+
+
+# %% [markdown]
+# ### Plot Relative Velocity Error Vector
+
+# %%
+plot_vector_with_colorbar(
+    grid,
+    vector_name="V_err",
+    png_name="vel_r_err.png",
+    cmap=cmc.lapaz.resampled(11),
+    clim=velocity_error_clim,
+    cb_label="Velocity Error (relative)",
+    cb_name="v_err_rel",
+    vmag=10.0,
+    show_arrows=False,
+    n_arrows=max(80, arrow_target // 2),
+)
+
+
+# %% [markdown]
+# ### Plot Velocity Error (%)
+
+# %%
+plot_scalar_with_colorbar(
+    grid,
+    scalar_name="V_err_pct",
+    png_name="vel_p_err.png",
+    cmap=cmc.oslo_r.resampled(21),
+    clim=velocity_pct_clim,
+    cb_label="Velocity Error (%)",
+    cb_name="v_err_perc",
+)
+
+
+# %% [markdown]
+# ### Plot Solution Pressure
+
+# %%
+plot_scalar_with_colorbar(
+    grid,
+    scalar_name="P_u",
+    png_name="p_uw.png",
+    cmap=cmc.vik.resampled(41),
+    clim=pressure_clim,
+    cb_label="Pressure",
+    cb_name="p_uw",
+)
+
+
+# %% [markdown]
+# ### Plot Relative Pressure Error
+
+# %%
+plot_scalar_with_colorbar(
+    grid,
+    scalar_name="P_err",
+    png_name="p_r_err.png",
+    cmap=cmc.vik.resampled(41),
+    clim=pressure_error_clim,
+    cb_label="Pressure Error (relative)",
+    cb_name="p_err_rel",
+)
+
+
+# %% [markdown]
+# ### Plot Pressure Error (%)
+
+# %%
+plot_scalar_with_colorbar(
+    grid,
+    scalar_name="P_err_pct",
+    png_name="p_p_err.png",
+    cmap=cmc.vik.resampled(41),
+    clim=pressure_pct_clim,
+    cb_label="Pressure Error (%)",
+    cb_name="p_err_perc",
+)

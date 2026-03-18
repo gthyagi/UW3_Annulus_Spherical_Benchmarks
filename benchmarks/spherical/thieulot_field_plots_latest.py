@@ -7,12 +7,17 @@
 # %%
 import os
 import re
+import sys
 
 import cmcrameri.cm as cmc
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
+
+IS_INTERACTIVE = (
+    hasattr(sys, "ps1") or sys.flags.interactive or "ipykernel" in sys.modules
+)
 
 # %% [markdown]
 # ### Parameters And Paths
@@ -382,7 +387,7 @@ def save_field_plot(
     else:
         scalars = field_name
 
-    plotter = pv.Plotter(window_size=(750, 750), off_screen=True)
+    plotter = pv.Plotter(window_size=(750, 750), off_screen=not IS_INTERACTIVE)
     plotter.image_scale = 3.5
     plotter.set_background("white")
 
@@ -400,6 +405,10 @@ def save_field_plot(
     plotter.camera_position = cpos
     plotter.render()
     plotter.camera.zoom(1.4)
+
+    if IS_INTERACTIVE:
+        plotter.show(auto_close=False)
+
     plotter.screenshot(os.path.join(output_dir, png_name))
     plotter.close()
 
@@ -435,7 +444,7 @@ plt.close(fig)
 # ### Mesh Plot
 
 # %%
-mesh_plotter = pv.Plotter(window_size=(750, 750), off_screen=True)
+mesh_plotter = pv.Plotter(window_size=(750, 750), off_screen=not IS_INTERACTIVE)
 mesh_plotter.image_scale = 3.5
 mesh_plotter.set_background("white")
 
@@ -451,6 +460,10 @@ for clipped in clip_grid(grid, clip_angle, crinkle=True):
 mesh_plotter.camera_position = cpos
 mesh_plotter.render()
 mesh_plotter.camera.zoom(1.4)
+
+if IS_INTERACTIVE:
+    mesh_plotter.show(auto_close=False)
+
 mesh_plotter.screenshot(os.path.join(output_dir, "mesh.png"))
 mesh_plotter.close()
 
