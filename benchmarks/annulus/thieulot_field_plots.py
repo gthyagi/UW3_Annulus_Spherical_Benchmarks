@@ -38,7 +38,7 @@ if IS_INTERACTIVE:
 # ### Parameters And Paths
 
 # %%
-dirname = "model_inv_lc_64_k_2_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_8_bc_natural"
+dirname = "model_inv_lc_64_k_2_vdeg_1_pdeg_0_pcont_false_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_1_bc_essential"
 
 # %%
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -143,16 +143,26 @@ def normalize_name(text):
 
 
 # %%
-def find_field_path(h5f, field_names):
+def find_field_path(h5f, field_names, association_preference=None):
     """Find the best-matching dataset path for any logical field alias."""
 
     for field_name in field_names:
-        direct_candidates = (
-            f"vertex_fields/{field_name}_{field_name}",
-            f"vertex_fields/{field_name}",
-            f"fields/{field_name}",
-            field_name,
-        )
+        direct_candidates = []
+        if association_preference != "cell":
+            direct_candidates.extend(
+                (
+                    f"vertex_fields/{field_name}_{field_name}",
+                    f"vertex_fields/{field_name}",
+                )
+            )
+        if association_preference != "point":
+            direct_candidates.extend(
+                (
+                    f"cell_fields/{field_name}_{field_name}",
+                    f"cell_fields/{field_name}",
+                )
+            )
+        direct_candidates.extend((f"fields/{field_name}", field_name))
         for candidate in direct_candidates:
             if candidate in h5f:
                 return candidate
@@ -180,39 +190,76 @@ def find_field_path(h5f, field_names):
 
 
 # %%
-def read_field(h5f, field_names, n_points):
-    """Read a field array and align it to point-major storage."""
+def read_field(
+    h5f,
+    field_names,
+    n_points,
+    n_cells=None,
+    association_preference=None,
+):
+    """Read a field array and detect whether it is point- or cell-associated."""
 
-    path = find_field_path(h5f, field_names)
+    path = find_field_path(
+        h5f,
+        field_names,
+        association_preference=association_preference,
+    )
     array = np.asarray(h5f[path], dtype=np.float64)
+    valid_sizes = tuple(size for size in (n_points, n_cells) if size is not None)
 
-    if array.ndim == 2 and array.shape[0] != n_points and array.shape[1] == n_points:
+    if (
+        array.ndim == 2
+        and array.shape[0] not in valid_sizes
+        and array.shape[1] in valid_sizes
+    ):
         array = array.T
 
     if array.ndim == 2 and array.shape[1] == 1:
         array = array.reshape(-1)
 
-    if array.shape[0] != n_points:
-        raise ValueError(
-            f"Field {field_names} has shape {array.shape}, expected first dim {n_points}."
-        )
+    if array.shape[0] == n_points:
+        return array, "point"
+    if n_cells is not None and array.shape[0] == n_cells:
+        return array, "cell"
 
-    return array
+    raise ValueError(
+        f"Field {field_names} has shape {array.shape}, expected first dim in {valid_sizes}."
+    )
 
 
 # %%
-def read_field_from_files(mesh_h5_file, mesh_h5f, field_names, n_points, split_h5_file=None):
+def read_field_from_files(
+    mesh_h5_file,
+    mesh_h5f,
+    field_names,
+    n_points,
+    n_cells=None,
+    association_preference=None,
+    split_h5_file=None,
+):
     """Read a field from the mesh H5 first, then fallback to a split field file."""
 
     mesh_read_error = None
     try:
-        return read_field(mesh_h5f, field_names, n_points)
+        return read_field(
+            mesh_h5f,
+            field_names,
+            n_points,
+            n_cells=n_cells,
+            association_preference=association_preference,
+        )
     except Exception as exc:
         mesh_read_error = exc
 
     if split_h5_file and os.path.isfile(split_h5_file):
         with h5py.File(split_h5_file, "r") as field_h5f:
-            return read_field(field_h5f, field_names, n_points)
+            return read_field(
+                field_h5f,
+                field_names,
+                n_points,
+                n_cells=n_cells,
+                association_preference=association_preference,
+            )
 
     if split_h5_file is None:
         split_h5_candidates = [
@@ -223,14 +270,20 @@ def read_field_from_files(mesh_h5_file, mesh_h5f, field_names, n_points, split_h
         split_h5_candidates = [split_h5_file]
 
     raise ValueError(
-        f"Could not read point field {field_names} from {mesh_h5_file}. "
+        f"Could not read field {field_names} from {mesh_h5_file}. "
         "If this is a latest serial output_step checkpoint, rerun or post-process a split "
         "checkpoint directory with output.mesh.*.h5 files."
     ) from mesh_read_error
 
 
 # %%
-def load_grid_and_fields(xdmf_file, mesh_h5_file, velocity_file=None, pressure_file=None):
+def load_grid_and_fields(
+    xdmf_file,
+    mesh_h5_file,
+    velocity_file=None,
+    pressure_file=None,
+    pressure_degree=None,
+):
     """Load mesh plus velocity/pressure fields from latest checkpoint files."""
 
     grid = None
@@ -261,19 +314,27 @@ def load_grid_and_fields(xdmf_file, mesh_h5_file, velocity_file=None, pressure_f
             grid = pv.UnstructuredGrid(cells, celltypes, points3)
 
         n_points = grid.n_points
+        n_cells = grid.n_cells
+        pressure_preference = None
+        if pressure_degree is not None:
+            pressure_preference = "cell" if pressure_degree == 0 else "point"
 
-        velocity = read_field_from_files(
+        velocity, velocity_assoc = read_field_from_files(
             mesh_h5_file,
             mesh_h5f,
             ["Velocity", "V_u"],
             n_points,
+            n_cells=n_cells,
+            association_preference="point",
             split_h5_file=velocity_file,
         )
-        pressure = read_field_from_files(
+        pressure, pressure_assoc = read_field_from_files(
             mesh_h5_file,
             mesh_h5f,
             ["Pressure", "P_u"],
             n_points,
+            n_cells=n_cells,
+            association_preference=pressure_preference,
             split_h5_file=pressure_file,
         )
 
@@ -283,10 +344,61 @@ def load_grid_and_fields(xdmf_file, mesh_h5_file, velocity_file=None, pressure_f
     if velocity.shape[1] == 2:
         velocity = np.c_[velocity, np.zeros(velocity.shape[0], dtype=np.float64)]
 
+    if velocity_assoc != "point":
+        raise ValueError(
+            f"Velocity field is {velocity_assoc}-associated, expected point-associated data."
+        )
+
     grid.point_data["V_u"] = np.asarray(velocity, dtype=np.float64)
-    grid.point_data["P_u"] = np.asarray(pressure, dtype=np.float64).reshape(-1)
+
+    pressure_array = np.asarray(pressure, dtype=np.float64).reshape(-1)
+    if pressure_assoc == "point":
+        grid.point_data["P_u"] = pressure_array
+    else:
+        grid.cell_data["P_u"] = pressure_array
 
     return grid
+
+
+# %%
+def get_field_association(grid, field_name):
+    """Return whether a named field lives on points or cells."""
+
+    if field_name in grid.point_data:
+        return "point"
+    if field_name in grid.cell_data:
+        return "cell"
+
+    raise KeyError(f"Field {field_name} not found in point_data or cell_data.")
+
+
+# %%
+def get_field_array(grid, field_name):
+    """Return a field array plus its association."""
+
+    association = get_field_association(grid, field_name)
+    source = grid.point_data if association == "point" else grid.cell_data
+    return np.asarray(source[field_name], dtype=np.float64), association
+
+
+# %%
+def set_field_array(grid, field_name, values, association):
+    """Store a field array on either points or cells."""
+
+    target = grid.point_data if association == "point" else grid.cell_data
+    target[field_name] = np.asarray(values, dtype=np.float64)
+
+
+# %%
+def support_points_xy(grid, association):
+    """Return XY coordinates for point- or cell-associated data."""
+
+    if association == "point":
+        return np.asarray(grid.points[:, :2], dtype=np.float64)
+    if association == "cell":
+        return np.asarray(grid.cell_centers().points[:, :2], dtype=np.float64)
+
+    raise ValueError(f"Unsupported field association: {association}")
 
 
 # %%
@@ -409,6 +521,44 @@ def save_colorbar(
 
 
 # %%
+def save_vertical_colorbar(
+    colormap,
+    output_path,
+    fname,
+    cb_axis_label,
+    vmin,
+    vmax,
+    figsize_cb=(4, 2.25),
+    primary_fs=18,
+    cb_label_xpos=3.7,
+    cb_label_ypos=0.3,
+):
+    """Save a standalone vertical colorbar without displaying it."""
+
+    fig = plt.figure(figsize=figsize_cb)
+    plt.rc("font", size=primary_fs)
+    img = plt.imshow(np.array([[vmin, vmax]]), cmap=colormap)
+    plt.gca().set_visible(False)
+
+    cax = plt.axes([0.1, 0.2, 0.06, 1.15])
+    cb = plt.colorbar(img, orientation="vertical", cax=cax)
+    cb.ax.set_title(
+        cb_axis_label,
+        fontsize=primary_fs,
+        x=cb_label_xpos,
+        y=cb_label_ypos,
+        rotation=90,
+    )
+
+    fig.savefig(
+        os.path.join(output_path, f"{fname}_cbvert.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+# %%
 def plot_vector(
     grid,
     vector_name,
@@ -481,11 +631,13 @@ def plot_scalar(
 ):
     """Plot a scalar field."""
 
+    association = get_field_association(grid, scalar_name)
     plotter = pv.Plotter(window_size=window_size, off_screen=not IS_INTERACTIVE)
     plotter.image_scale = image_scale
     plotter.add_mesh(
         grid,
         scalars=scalar_name,
+        preference=association,
         cmap=cmap,
         clim=clim,
         edge_color="k",
@@ -620,6 +772,7 @@ grid = load_grid_and_fields(
     mesh_h5_path,
     velocity_file=velocity_h5_path,
     pressure_file=pressure_h5_path,
+    pressure_degree=pdegree,
 )
 points_xy = np.asarray(grid.points[:, :2], dtype=np.float64)
 
@@ -628,14 +781,20 @@ grid.point_data["V_ana"] = v_ana
 grid.point_data["P_ana"] = p_ana
 grid.point_data["Rho_ana"] = rho_ana
 
-v_u = np.asarray(grid.point_data["V_u"], dtype=np.float64)
-p_u = np.asarray(grid.point_data["P_u"], dtype=np.float64).reshape(-1)
+v_u, velocity_assoc = get_field_array(grid, "V_u")
+if velocity_assoc != "point":
+    raise ValueError(f"Velocity field is {velocity_assoc}-associated, expected point data.")
+
+p_u, pressure_assoc = get_field_array(grid, "P_u")
+p_u = p_u.reshape(-1)
+pressure_points_xy = support_points_xy(grid, pressure_assoc)
+_, p_ana_support, _ = analytical_solution(pressure_points_xy, r_i, r_o, k)
 
 v_err = v_u - v_ana
-p_err = p_u - p_ana
+p_err = p_u - p_ana_support
 
 grid.point_data["V_err"] = v_err
-grid.point_data["P_err"] = p_err
+set_field_array(grid, "P_err", p_err, pressure_assoc)
 
 v_ana_mag = np.linalg.norm(v_ana[:, :2], axis=1)
 v_u_mag = np.linalg.norm(v_u[:, :2], axis=1)
@@ -643,10 +802,14 @@ v_err_mag = np.linalg.norm(v_err[:, :2], axis=1)
 
 with np.errstate(divide="ignore", invalid="ignore"):
     v_err_pct = np.where(v_ana_mag > 1.0e-14, (v_err_mag / v_ana_mag) * 100.0, 0.0)
-    p_err_pct = np.where(np.abs(p_ana) > 1.0e-14, (p_err / p_ana) * 100.0, 0.0)
+    p_err_pct = np.where(
+        np.abs(p_ana_support) > 1.0e-14,
+        (p_err / p_ana_support) * 100.0,
+        0.0,
+    )
 
 grid.point_data["V_err_pct"] = np.nan_to_num(v_err_pct)
-grid.point_data["P_err_pct"] = np.nan_to_num(p_err_pct)
+set_field_array(grid, "P_err_pct", np.nan_to_num(p_err_pct), pressure_assoc)
 grid.point_data["Rho_ana_neg"] = -rho_ana
 
 velocity_clim = [0.0, 2.3]
@@ -656,6 +819,31 @@ velocity_error_clim = positive_clim(v_err_mag, percentile=99.0, default=1.0e-12)
 velocity_pct_clim = positive_clim(v_err_pct, percentile=99.0, default=1.0)
 pressure_error_clim = symmetric_clim(p_err, percentile=99.0, default=1.0e-12)
 pressure_pct_clim = symmetric_clim(p_err_pct, percentile=99.0, default=100.0)
+
+save_vertical_colorbar(
+    colormap=cmc.lapaz.resampled(11),
+    output_path=output_dir,
+    fname="v_ana",
+    cb_axis_label="Velocity",
+    vmin=velocity_clim[0],
+    vmax=velocity_clim[1],
+)
+save_vertical_colorbar(
+    colormap=cmc.vik.resampled(41),
+    output_path=output_dir,
+    fname="p_ana",
+    cb_axis_label="Pressure",
+    vmin=pressure_clim[0],
+    vmax=pressure_clim[1],
+)
+save_vertical_colorbar(
+    colormap=cmc.roma.resampled(31),
+    output_path=output_dir,
+    fname="rho_ana",
+    cb_axis_label="Rho",
+    vmin=density_clim[0],
+    vmax=density_clim[1],
+)
 
 
 # %% [markdown]
