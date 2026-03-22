@@ -68,7 +68,7 @@ params = uw.Params(
         description="Background mesh cell size",
     ),
     uw_cellsize_internal_boundary_factor=uw.Param(
-        2,
+        1,
         type=uw.ParamType.INTEGER,
         description="Internal-boundary cell-size refinement factor",
     ),
@@ -102,21 +102,19 @@ params = uw.Params(
         type=uw.ParamType.STRING,
         description="Boundary-condition mode: natural or essential",
     ),
-    uw_ana_normal=uw.Param(
-        False,
-        type=uw.ParamType.BOOLEAN,
-        description="Use analytical radial normal (legacy option)",
-    ),
-    uw_petsc_normal=uw.Param(
-        True,
-        type=uw.ParamType.BOOLEAN,
-        description="Use PETSc Gamma normal (legacy option)",
-    ),
 )
 
 if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
     print(params.cli_help())
     raise SystemExit(0)
+
+params.uw_cellsize = float(eval(str(params.uw_cellsize), {"__builtins__": {}}, {}))
+
+pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
+is_p1p0 = params.uw_vdegree == 1 and params.uw_pdegree == 0
+
+if uw.mpi.rank == 0 and params.uw_pdegree == 0 and params.uw_pcont:
+    print("Degree-0 pressure uses discontinuous storage; overriding uw_pcont to false.")
 
 # %% [markdown]
 # ### Convection Parameters
@@ -136,13 +134,6 @@ r_o = params.uw_radius_outer
 cellsize = params.uw_cellsize
 cellsize_int_bd_fac = params.uw_cellsize_internal_boundary_factor
 
-# %% [markdown]
-# ### Boundary Condition Parameters
-
-# %%
-# which normals to use
-ana_normal = params.uw_ana_normal  # mesh radial unit vectors
-petsc_normal = params.uw_petsc_normal  # PETSc Gamma
 
 # %% [markdown]
 # ### Case Mapping
@@ -230,7 +221,7 @@ def coefficients_cylinder_delta_fs(Rp, Rm, rp, n, g, nu, sign):
     )
     return A, B, C, D
 
-
+# %%
 def coefficients_cylinder_delta_ns(Rp, Rm, rp, n, g, nu, sign):
     alpha_p, alpha_m = [Rp / rp, Rm / rp]
     pm, mp = sign, -sign
@@ -274,7 +265,7 @@ def coefficients_cylinder_delta_ns(Rp, Rm, rp, n, g, nu, sign):
     )
     return A, B, C, D
 
-
+# %%
 def coefficients_cylinder_smooth_fs(Rp, Rm, k, n, g, nu):
     alpha = Rm / Rp
     A = -0.25 * (alpha**2 - alpha ** (k + n + 3)) * Rp ** (-n + 3) * g / (
@@ -292,7 +283,7 @@ def coefficients_cylinder_smooth_fs(Rp, Rm, k, n, g, nu):
     E = g * n / (((k + 3) ** 2 - n**2) * ((k + 1) ** 2 - n**2) * Rp**k * nu)
     return A, B, C, D, E
 
-
+# %%
 def coefficients_cylinder_smooth_ns(Rp, Rm, k, n, g, nu):
     alpha = Rm / Rp
     denom = ((alpha ** (n + 1) - alpha ** (n - 1)) ** 2 * n**2 - (alpha ** (2 * n) - 1) ** 2) * ((k + 3) ** 2 - n**2) * (
@@ -321,7 +312,7 @@ def coefficients_cylinder_smooth_ns(Rp, Rm, k, n, g, nu):
     E = g * n / (((k + 3) ** 2 - n**2) * ((k + 1) ** 2 - n**2) * Rp**k * nu)
     return A, B, C, D, E
 
-
+# %%
 def build_delta_solution(Rp, Rm, rp, n, g, nu, sign, no_slip):
     if no_slip:
         ABCD = coefficients_cylinder_delta_ns(Rp, Rm, rp, n, g, nu, sign)
@@ -337,7 +328,7 @@ def build_delta_solution(Rp, Rm, rp, n, g, nu, sign, no_slip):
         H=-4 * nu * D * (n - 1),
     )
 
-
+# %%
 def build_smooth_solution(Rp, Rm, k, n, g, nu, no_slip):
     if abs(k + 3) == n or abs(k + 1) == n:
         raise NotImplementedError(f"Smooth solution not implemented for k={k}, n={n}")
@@ -358,7 +349,7 @@ def build_smooth_solution(Rp, Rm, k, n, g, nu, no_slip):
         F=F,
     )
 
-
+# %%
 if freeslip and delta_fn:
     soln_above = build_delta_solution(r_o, r_i, r_int, n, -1.0, 1.0, +1, no_slip=False)
     soln_below = build_delta_solution(r_o, r_i, r_int, n, -1.0, 1.0, -1, no_slip=False)
@@ -372,7 +363,7 @@ elif noslip and smooth:
     soln_above = build_smooth_solution(r_o, r_i, k, n, 1.0, 1.0, no_slip=True)
     soln_below = build_smooth_solution(r_o, r_i, k, n, 1.0, 1.0, no_slip=True)
 
-
+# %%
 def analytical_velocity_cartesian_sympy(soln, r_sym, th_sym, rrotN):
     """Build a symbolic Cartesian velocity from analytical cylindrical coefficients."""
     n_sol = int(soln.n)
@@ -410,7 +401,7 @@ def analytical_velocity_cartesian_sympy(soln, r_sym, th_sym, rrotN):
     u_theta = sp.sin(n_sol * th_sym) * dpsi_rdr
     return rrotN.T * sp.Matrix([u_r, u_theta])
 
-
+# %%
 def analytical_pressure_sympy(soln, r_sym, th_sym):
     """Build a symbolic pressure expression from analytical cylindrical coefficients."""
     n_sol = int(soln.n)
@@ -584,11 +575,6 @@ rho_ana.data[:] = np.asarray(uw.function.evaluate(rho, rho_ana.coords)).reshape(
 
 # %%
 if freeslip:
-    if ana_normal:
-        Gamma = mesh.CoordinateSystem.unit_e_0
-    elif petsc_normal:
-        Gamma = mesh.Gamma
-
     if params.uw_bc_type == "natural":
         v_diff = v_uw.sym - v_ana.sym
         stokes.add_natural_bc(params.uw_vel_penalty * v_diff, mesh.boundaries.Upper.name)
@@ -606,6 +592,44 @@ elif noslip:
         stokes.add_essential_bc(sp.Matrix([0.0, 0.0]), mesh.boundaries.Lower.name)
 
 # %% [markdown]
+# #### Solver Notes
+#
+# This benchmark is linear: the viscosity is prescribed, and both the
+# `essential` and `natural` boundary conditions are linear in the unknown
+# velocity and pressure fields. For a linear problem we use
+# `snes_type = "ksponly"`, which bypasses Newton iterations and calls the
+# PETSc linear solver (`KSP`) directly.
+#
+# If we instead use `snes_type = "newtonls"`, PETSc wraps the same linear
+# system inside a nonlinear Newton solve. That is useful for genuinely
+# nonlinear problems, but here it makes the reported `SNES` iteration count
+# harder to interpret because the benchmark itself is still linear.
+#
+# `stokes.tolerance` is the UW-level solver tolerance. In this branch it sets
+# the `SNES` relative tolerance and related defaults, but it does not set
+# `ksp_rtol`. Because we use `ksponly`, the important stopping criterion is
+# `ksp_rtol`, which controls the required relative reduction in the linear
+# residual. `ksp_atol` is the absolute residual tolerance; we set it to `0.0`
+# so convergence is controlled by the relative tolerance rather than by an
+# absolute threshold.
+#
+# In short:
+# - `newtonls`: nonlinear Newton solve
+# - `ksponly`: direct linear solve through `KSP`
+# - `ksp_rtol`: relative linear residual tolerance
+# - `ksp_atol`: absolute linear residual tolerance
+# - `stokes.tolerance`: UW convenience tolerance kept consistent with `ksp_rtol`
+#
+# `P1/P0` is treated separately. In serial we use a direct LU solve as the
+# reference result. Under MPI we use an `asm_lu` branch (`PCASM` with local LU
+# subsolves) because the multigrid fieldsplit settings used for `P2/P1` and
+# `P3/P2` are not robust for `P1/P0` here. This MPI `P1/P0` path is not a
+# global exact solve, so the result depends on `-np`: changing the number of
+# ranks changes the subdomain partition and therefore changes the preconditioner
+# and the final iterative answer. For benchmark-quality MPI comparisons, prefer
+# `P2/P1` and `P3/P2`.
+#
+# %% [markdown]
 # #### Solver Settings
 
 # %%
@@ -613,22 +637,46 @@ stokes.tolerance = params.uw_stokes_tol
 
 stokes.petsc_options["ksp_monitor"] = None
 stokes.petsc_options["ksp_monitor_true_residual"] = None
-stokes.petsc_options["ksp_type"] = "fgmres"
+stokes.petsc_options["ksp_converged_reason"] = None
 
-stokes.petsc_options["snes_monitor"] = None
-stokes.petsc_options["snes_type"] = "newtonls"
+# stokes.petsc_options["snes_monitor"] = None
+# stokes.petsc_options["snes_type"] = "newtonls"
+stokes.petsc_options["snes_type"] = "ksponly"
+stokes.petsc_options["ksp_rtol"] = params.uw_stokes_tol
+stokes.petsc_options["ksp_atol"] = 0.0
 
-stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_type", "kaskade")
-stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_cycle_type", "w")
-stokes.petsc_options["fieldsplit_velocity_mg_coarse_pc_type"] = "svd"
-stokes.petsc_options["fieldsplit_velocity_ksp_type"] = "fcg"
-stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_type"] = "chebyshev"
-stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_max_it"] = 5
-stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_converged_maxits"] = None
+if is_p1p0:
+    if uw.mpi.size == 1:
+        stokes.petsc_options["ksp_type"] = "preonly"
+        stokes.petsc_options["pc_type"] = "lu"
+    else:
+        if uw.mpi.rank == 0:
+            print(
+                "P1/P0 under MPI uses asm_lu (ASM with local LU subsolves). "
+                "Results are -np dependent because ASM changes with the domain partition."
+            )
 
-stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", "mg")
-stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative")
-stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
+        stokes.petsc_options["ksp_type"] = "gmres"
+        stokes.petsc_options["ksp_max_it"] = 500
+        stokes.petsc_options["ksp_pc_side"] = "right"
+        stokes.petsc_options["pc_type"] = "asm"
+        stokes.petsc_options["pc_asm_type"] = "basic"
+        stokes.petsc_options["sub_ksp_type"] = "preonly"
+        stokes.petsc_options["sub_pc_type"] = "lu"
+else:
+    stokes.petsc_options["ksp_type"] = "fgmres"
+
+    stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_type", "kaskade")
+    stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_cycle_type", "w")
+    stokes.petsc_options["fieldsplit_velocity_mg_coarse_pc_type"] = "svd"
+    stokes.petsc_options["fieldsplit_velocity_ksp_type"] = "fcg"
+    stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_type"] = "chebyshev"
+    stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_max_it"] = 5
+    stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_converged_maxits"] = None
+
+    stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", "mg")
+    stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative")
+    stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
 
 # %% [markdown]
 # #### Solve Stokes

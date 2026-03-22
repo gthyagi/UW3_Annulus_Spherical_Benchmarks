@@ -42,6 +42,7 @@
 
 # %%
 import os
+import sys
 import h5py
 import numpy as np
 import sympy as sp
@@ -109,6 +110,10 @@ params = uw.Params(
         description="Boundary-condition mode: natural or essential",
     ),
 )
+
+if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
+    print(params.cli_help())
+    raise SystemExit(0)
 
 params.uw_cellsize = float(eval(str(params.uw_cellsize), {"__builtins__": {}}, {}))
 
