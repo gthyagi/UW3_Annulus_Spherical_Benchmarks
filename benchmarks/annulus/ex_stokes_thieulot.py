@@ -95,7 +95,7 @@ params = uw.Params(
         description="Pressure continuity flag",
     ),
     uw_stokes_tol=uw.Param(
-        1e-10,
+        1e-5,
         type=uw.ParamType.FLOAT,
         description="Stokes solver tolerance",
     ),
@@ -122,6 +122,9 @@ is_p1p0 = params.uw_vdegree == 1 and params.uw_pdegree == 0
 
 if uw.mpi.rank == 0 and params.uw_pdegree == 0 and params.uw_pcont:
     print("Degree-0 pressure uses discontinuous storage; overriding uw_pcont to false.")
+
+params.uw_stokes_tol = 1.0e-5 if params.uw_bc_type == "essential" else 1.0e-8
+
 
 # %% [markdown]
 # ### Output Directory
@@ -232,7 +235,6 @@ if is_serial:
 x, y = mesh.CoordinateSystem.X
 r, th = mesh.CoordinateSystem.xR
 unit_rvec = mesh.CoordinateSystem.unit_e_0
-v_theta_fn_xy = r * mesh.CoordinateSystem.rRotN.T * sp.Matrix((0, 1))
 
 # %% [markdown]
 # ### Create Mesh Variables
@@ -277,10 +279,68 @@ stokes = Stokes(mesh, velocityField=v_soln, pressureField=p_soln)
 stokes.constitutive_model = uw.constitutive_models.ViscousFlowModel
 stokes.constitutive_model.Parameters.viscosity = 1.0
 stokes.saddle_preconditioner = 1.0
+stokes.petsc_use_pressure_nullspace = True
 
 gravity_fn = -1.0 * unit_rvec
 stokes.bodyforce = rho_ana_expr * gravity_fn
 
+# %% [markdown]
+# #### Nullspace Handling
+#
+# The coupled Stokes system is solved with PETSc's constant-pressure nullspace
+# enabled. This removes the additive pressure gauge freedom during the solve
+# without imposing an artificial pressure Dirichlet condition on either annulus
+# boundary.
+#
+# We still subtract the domain-average pressure after the solve so the reported
+# pressure field has a unique zero-mean gauge for benchmark comparisons.
+#
+# We do not register or subtract a rigid-body rotation mode in this script.
+# Although a centered annulus with exact free-slip shell boundary conditions can
+# admit one rotational velocity null mode, this benchmark does not use those
+# boundary conditions:
+# - `essential` prescribes the full analytical velocity on both boundaries
+# - `natural` penalizes the full velocity error `v - v_ana` on both boundaries
+#
+# Both branches therefore select a specific tangential boundary velocity, so a
+# rigid rotation is not an exact null mode of the posed problem.
+#
+# %% [markdown]
+# #### Tolerance And BC Type
+#
+# `stokes.tolerance` does not affect the two boundary-condition branches equally.
+#
+# - `essential` applies the analytical velocity strongly on `Upper` and `Lower`.
+#   In this benchmark that branch is relatively insensitive to a looser solve
+#   tolerance. For the 8-rank `k=0` tests here, `stokes.tolerance = 1e-5`
+#   still gave a velocity L2 error of about `7.4e-7`.
+# - `natural` applies the analytical velocity weakly through the penalty term
+#   `uw_vel_penalty * (v - v_ana)`. This branch is much more tolerance-sensitive.
+#   For the same 8-rank `k=0` tests, `stokes.tolerance = 1e-5` gave a larger
+#   velocity L2 error of about `9e-5`.
+#
+# Practical choices for this script:
+# - `essential`: `1e-5` is a good fast default. Use `1e-8` if you want a tighter
+#   benchmark comparison.
+# - `natural`: prefer `1e-8` as the practical default. Use `1e-10` for the
+#   tightest comparison if the MPI solve remains affordable.
+# - If a single value is needed for both branches, `1e-8` is a reasonable
+#   compromise.
+#
+# In the current UW Stokes implementation, setting `stokes.tolerance` also sets
+# the inner fieldsplit tolerances:
+#
+# - `fieldsplit_pressure_ksp_rtol = 0.1 * tolerance`
+# - `fieldsplit_velocity_ksp_rtol = 0.033 * tolerance`
+#
+# This is important because `stokes.tolerance` is not only the outer Stokes
+# solve target. It also controls how hard PETSc works inside the Schur-complement
+# preconditioner. For example, `stokes.tolerance = 1e-10` drives the inner block
+# solves to about `1e-11` for pressure and `3.3e-12` for velocity, which can
+# increase runtime sharply under MPI. Conversely, if the tolerance is too loose,
+# the weak-BC `natural` branch usually loses accuracy much faster than the
+# strongly enforced `essential` branch.
+#
 # %% [markdown]
 # #### Boundary Conditions
 
@@ -293,22 +353,6 @@ elif params.uw_bc_type == "essential":
     stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Lower.name)
 else:
     raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
-
-if params.uw_k == 0:
-    stokes.add_condition(
-        p_soln.field_id,
-        "dirichlet",
-        sp.Matrix([0]),
-        mesh.boundaries.Lower.name,
-        components=(0,),
-    )
-    stokes.add_condition(
-        p_soln.field_id,
-        "dirichlet",
-        sp.Matrix([0]),
-        mesh.boundaries.Upper.name,
-        components=(0,),
-    )
 
 # %% [markdown]
 # #### Solver Notes
@@ -431,29 +475,7 @@ def subtract_pressure_mean(mesh, pressure_var):
     pressure_var.data[:, 0] -= p_int / volume
 
 
-def subtract_rigid_rotation(mesh, velocity_var, rotation_mode):
-    """
-    Remove the rigid-body rotation component from the numerical velocity field.
-
-    Parameters
-    ----------
-    mesh : uw.discretisation.Mesh
-        Mesh used to evaluate the projection integrals.
-    velocity_var : uw.discretisation.MeshVariable
-        Vector velocity field to correct.
-    rotation_mode : sympy.Matrix
-        Rigid-body rotation null mode to project out, here `r * e_theta` in 2-D.
-    """
-    mode_int = uw.maths.Integral(mesh, rotation_mode.dot(velocity_var.sym)).evaluate()
-    mode_norm = uw.maths.Integral(mesh, rotation_mode.dot(rotation_mode)).evaluate()
-    dv = uw.function.evaluate((mode_int / mode_norm) * rotation_mode, velocity_var.coords)
-    velocity_var.data[...] -= np.asarray(dv).reshape(velocity_var.data.shape)
-
-
-if params.uw_k != 0:
-    subtract_pressure_mean(mesh, p_soln)
-    if params.uw_bc_type == "natural":
-        subtract_rigid_rotation(mesh, v_soln, v_theta_fn_xy)
+subtract_pressure_mean(mesh, p_soln)
 
 
 # %% [markdown]

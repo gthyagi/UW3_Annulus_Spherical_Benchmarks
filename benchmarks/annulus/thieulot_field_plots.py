@@ -38,7 +38,7 @@ if IS_INTERACTIVE:
 # ### Parameters And Paths
 
 # %%
-dirname = "model_inv_lc_64_k_2_vdeg_1_pdeg_0_pcont_false_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_1_bc_essential"
+dirname = "model_inv_lc_64_k_2_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-05_ncpus_8_bc_natural"
 
 # %%
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))

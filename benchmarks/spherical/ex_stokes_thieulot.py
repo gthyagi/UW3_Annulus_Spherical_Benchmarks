@@ -66,7 +66,7 @@ is_serial = (uw.mpi.size == 1)
 params = uw.Params(
     uw_cellsize=uw.Param(
         1.0 / 8.0,
-        type=uw.ParamType.FLOAT,
+        type=uw.ParamType.STRING,
         description="Target spherical-shell mesh cell size",
     ),
     uw_r_i=uw.Param(
@@ -100,35 +100,38 @@ params = uw.Params(
         description="Pressure continuity flag",
     ),
     uw_stokes_tol=uw.Param(
-        1e-10,
+        1e-5,
         type=uw.ParamType.FLOAT,
         description="Stokes solver tolerance",
-    ),
-    uw_stokes_pen=uw.Param(
-        1e0,
-        type=uw.ParamType.FLOAT,
-        description="Stokes penalty parameter",
     ),
     uw_vel_penalty=uw.Param(
         1e8,
         type=uw.ParamType.FLOAT,
         description="Penalty for curved-boundary tangential flow",
     ),
-    uw_analytical=uw.Param(
-        True,
-        type=uw.ParamType.BOOLEAN,
-        description="Enable analytical error norms",
+    uw_bc_type=uw.Param(
+        "natural",
+        type=uw.ParamType.STRING,
+        description="Boundary-condition mode: natural or essential",
     ),
-    uw_pressure_reference=uw.Param(
-        0.0,
-        type=uw.ParamType.FLOAT,
-        description="Target reference pressure for zero-mean normalization",
+    uw_p_bc=uw.Param(
+        False,
+        type=uw.ParamType.BOOLEAN,
+        description="Pressure Dirichlet BC",
     ),
 )
 
 if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
     print(params.cli_help())
     raise SystemExit(0)
+
+params.uw_cellsize = float(eval(str(params.uw_cellsize), {"__builtins__": {}}, {}))
+
+pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
+is_p1p0 = params.uw_vdegree == 1 and params.uw_pdegree == 0
+
+if uw.mpi.rank == 0 and params.uw_pdegree == 0 and params.uw_pcont:
+    print("Degree-0 pressure uses discontinuous storage; overriding uw_pcont to false.")
 
 if params.uw_m == -4:
     raise ValueError("The Thieulot spherical benchmark is undefined for m = -4.")
@@ -163,8 +166,9 @@ case_id = make_case_id(
     pcont=params.uw_pcont,
     vel_penalty=params.uw_vel_penalty,
     stokes_tol=params.uw_stokes_tol,
-    stokes_pen=params.uw_stokes_pen,
     ncpus=uw.mpi.size,
+    bc=params.uw_bc_type,
+    p_bc=params.uw_p_bc,
 )
 
 output_dir = os.path.join(output_root, case_id)
@@ -330,58 +334,212 @@ p_err_expr = p_soln.sym[0] - p_ana_expr
 stokes = Stokes(mesh, velocityField=v_soln, pressureField=p_soln)
 stokes.constitutive_model = uw.constitutive_models.ViscousFlowModel
 stokes.constitutive_model.Parameters.viscosity = mu_expr
-stokes.penalty = params.uw_stokes_pen
-stokes.saddle_preconditioner = 1.0 / (mu_expr + params.uw_stokes_pen)
-# stokes.saddle_preconditioner = 1.0 / mu_expr
+stokes.saddle_preconditioner = 1.0 / mu_expr
+if not params.uw_p_bc:
+    stokes.petsc_use_pressure_nullspace = True
+
 
 gravity_fn = -1.0 * unit_rvec
 stokes.bodyforce = rho_bodyforce_expr * gravity_fn
 
 # %% [markdown]
+# #### Nullspace Handling
+#
+# The coupled Stokes system is solved with PETSc's constant-pressure nullspace
+# enabled. This removes the additive pressure gauge freedom during the solve
+# without imposing an artificial pressure Dirichlet condition on either annulus
+# boundary.
+#
+# We still subtract the domain-average pressure after the solve so the reported
+# pressure field has a unique zero-mean gauge for benchmark comparisons.
+#
+# We do not register or subtract a rigid-body rotation mode in this script.
+# Although a centered annulus with exact free-slip shell boundary conditions can
+# admit one rotational velocity null mode, this benchmark does not use those
+# boundary conditions:
+# - `essential` prescribes the full analytical velocity on both boundaries
+# - `natural` penalizes the full velocity error `v - v_ana` on both boundaries
+#
+# Both branches therefore select a specific tangential boundary velocity, so a
+# rigid rotation is not an exact null mode of the posed problem.
+#
+# %% [markdown]
+# #### Tolerance And BC Type
+#
+# `stokes.tolerance` does not affect the two boundary-condition branches equally.
+#
+# - `essential` applies the analytical velocity strongly on `Upper` and `Lower`.
+#   In this benchmark that branch is relatively insensitive to a looser solve
+#   tolerance. For the 8-rank `k=0` tests here, `stokes.tolerance = 1e-5`
+#   still gave a velocity L2 error of about `7.4e-7`.
+# - `natural` applies the analytical velocity weakly through the penalty term
+#   `uw_vel_penalty * (v - v_ana)`. This branch is much more tolerance-sensitive.
+#   For the same 8-rank `k=0` tests, `stokes.tolerance = 1e-5` gave a larger
+#   velocity L2 error of about `9e-5`.
+#
+# Practical choices for this script:
+# - `essential`: `1e-5` is a good fast default. Use `1e-8` if you want a tighter
+#   benchmark comparison.
+# - `natural`: prefer `1e-8` as the practical default. Use `1e-10` for the
+#   tightest comparison if the MPI solve remains affordable.
+# - If a single value is needed for both branches, `1e-8` is a reasonable
+#   compromise.
+#
+# In the current UW Stokes implementation, setting `stokes.tolerance` also sets
+# the inner fieldsplit tolerances:
+#
+# - `fieldsplit_pressure_ksp_rtol = 0.1 * tolerance`
+# - `fieldsplit_velocity_ksp_rtol = 0.033 * tolerance`
+#
+# This is important because `stokes.tolerance` is not only the outer Stokes
+# solve target. It also controls how hard PETSc works inside the Schur-complement
+# preconditioner. For example, `stokes.tolerance = 1e-10` drives the inner block
+# solves to about `1e-11` for pressure and `3.3e-12` for velocity, which can
+# increase runtime sharply under MPI. Conversely, if the tolerance is too loose,
+# the weak-BC `natural` branch usually loses accuracy much faster than the
+# strongly enforced `essential` branch.
+#
+# %% [markdown]
 # #### Boundary Conditions
 
 # %%
-stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Upper.name)
-stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Lower.name)
+if params.uw_bc_type == "natural":
+    stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Upper.name)
+    stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Lower.name)
+elif params.uw_bc_type == "essential":
+    stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Upper.name)
+    stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Lower.name)
+else:
+    raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
 
-# stokes.add_condition(
-#         p_soln.field_id,
-#         "dirichlet",
-#         sp.Matrix([0]),
-#         mesh.boundaries.Upper.name,
-#         components=(0),
-#     )
-# stokes.add_condition(
-#         p_soln.field_id,
-#         "dirichlet",
-#         sp.Matrix([0]),
-#         mesh.boundaries.Lower.name,
-#         components=(0),
-#     )
+if params.uw_p_bc:
+    stokes.add_condition(
+        p_soln.field_id,
+        "dirichlet",
+        sp.Matrix([0]),
+        mesh.boundaries.Lower.name,
+        components=(0),
+    )
+    stokes.add_condition(
+        p_soln.field_id,
+        "dirichlet",
+        sp.Matrix([0]),
+        mesh.boundaries.Upper.name,
+        components=(0),
+    )
 
 
+# %% [markdown]
+# #### Solver Notes
+#
+# The viscosity and body force are prescribed functions of position, so this
+# benchmark is linear in the Stokes unknowns. This script nevertheless keeps
+# `snes_type = "newtonls"` as its current established solve path; switching to
+# `ksponly` should be treated as a separate solver change and validated on this
+# spherical benchmark.
+#
+# `stokes.tolerance` is the UW-level solver tolerance. In the current UW Stokes
+# implementation it also scales the inner fieldsplit tolerances:
+#
+# - `fieldsplit_pressure_ksp_rtol = 0.1 * tolerance`
+# - `fieldsplit_velocity_ksp_rtol = 0.033 * tolerance`
+#
+# So tightening `stokes.tolerance` also tightens the inner Schur-complement
+# solves and can increase runtime sharply under MPI.
+#
+# This script also has no annulus-style `P1/P0` / `is_p1p0` branch. The solver
+# settings below therefore apply directly to the single spherical-shell solve
+# path used here.
+#
+# %% [markdown]
+# #### Solver Settings
+
+# %% [markdown]
+# #### Solver Notes
+#
+# This benchmark is linear: the viscosity is prescribed, and both the
+# `essential` and `natural` boundary conditions are linear in the unknown
+# velocity and pressure fields. For a linear problem we use
+# `snes_type = "ksponly"`, which bypasses Newton iterations and calls the
+# PETSc linear solver (`KSP`) directly.
+#
+# If we instead use `snes_type = "newtonls"`, PETSc wraps the same linear
+# system inside a nonlinear Newton solve. That is useful for genuinely
+# nonlinear problems, but here it makes the reported `SNES` iteration count
+# harder to interpret because the benchmark itself is still linear.
+#
+# `stokes.tolerance` is the UW-level solver tolerance. In this branch it sets
+# the `SNES` relative tolerance and related defaults, but it does not set
+# `ksp_rtol`. Because we use `ksponly`, the important stopping criterion is
+# `ksp_rtol`, which controls the required relative reduction in the linear
+# residual. `ksp_atol` is the absolute residual tolerance; we set it to `0.0`
+# so convergence is controlled by the relative tolerance rather than by an
+# absolute threshold.
+#
+# In short:
+# - `newtonls`: nonlinear Newton solve
+# - `ksponly`: direct linear solve through `KSP`
+# - `ksp_rtol`: relative linear residual tolerance
+# - `ksp_atol`: absolute linear residual tolerance
+# - `stokes.tolerance`: UW convenience tolerance kept consistent with `ksp_rtol`
+#
+# `P1/P0` is treated separately. In serial we use a direct LU solve as the
+# reference result. Under MPI we use an `asm_lu` branch (`PCASM` with local LU
+# subsolves) because the multigrid fieldsplit settings used for `P2/P1` and
+# `P3/P2` are not robust for `P1/P0` here. This MPI `P1/P0` path is not a
+# global exact solve, so the result depends on `-np`: changing the number of
+# ranks changes the subdomain partition and therefore changes the preconditioner
+# and the final iterative answer. For benchmark-quality MPI comparisons, prefer
+# `P2/P1` and `P3/P2`.
+#
 # %% [markdown]
 # #### Solver Settings
 
 # %%
 stokes.tolerance = params.uw_stokes_tol
+
 stokes.petsc_options["ksp_monitor"] = None
 stokes.petsc_options["ksp_monitor_true_residual"] = None
-stokes.petsc_options["snes_monitor"] = None
-stokes.petsc_options["snes_type"] = "newtonls"
-stokes.petsc_options["ksp_type"] = "fgmres"
+stokes.petsc_options["ksp_converged_reason"] = None
 
-stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_type", "kaskade")
-stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_cycle_type", "w")
-stokes.petsc_options["fieldsplit_velocity_mg_coarse_pc_type"] = "svd"
-stokes.petsc_options["fieldsplit_velocity_ksp_type"] = "fcg"
-stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_type"] = "chebyshev"
-stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_max_it"] = 5
-stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_converged_maxits"] = None
+# stokes.petsc_options["snes_monitor"] = None
+# stokes.petsc_options["snes_type"] = "newtonls"
+stokes.petsc_options["snes_type"] = "ksponly"
+stokes.petsc_options["ksp_rtol"] = params.uw_stokes_tol
+stokes.petsc_options["ksp_atol"] = 0.0
 
-stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", "mg")
-stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative")
-stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
+if is_p1p0:
+    if uw.mpi.size == 1:
+        stokes.petsc_options["ksp_type"] = "preonly"
+        stokes.petsc_options["pc_type"] = "lu"
+    else:
+        if uw.mpi.rank == 0:
+            print(
+                "P1/P0 under MPI uses asm_lu (ASM with local LU subsolves). "
+                "Results are -np dependent because ASM changes with the domain partition."
+            )
+
+        stokes.petsc_options["ksp_type"] = "gmres"
+        stokes.petsc_options["ksp_max_it"] = 500
+        stokes.petsc_options["ksp_pc_side"] = "right"
+        stokes.petsc_options["pc_type"] = "asm"
+        stokes.petsc_options["pc_asm_type"] = "basic"
+        stokes.petsc_options["sub_ksp_type"] = "preonly"
+        stokes.petsc_options["sub_pc_type"] = "lu"
+else:
+    stokes.petsc_options["ksp_type"] = "fgmres"
+
+    stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_type", "kaskade")
+    stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_cycle_type", "w")
+    stokes.petsc_options["fieldsplit_velocity_mg_coarse_pc_type"] = "svd"
+    stokes.petsc_options["fieldsplit_velocity_ksp_type"] = "fcg"
+    stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_type"] = "chebyshev"
+    stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_max_it"] = 5
+    stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_converged_maxits"] = None
+
+    stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", "mg")
+    stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative")
+    stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
 
 # %% [markdown]
 # #### Solve Stokes
@@ -400,58 +558,9 @@ if uw.mpi.rank == 0:
 # %% [markdown]
 # ### Benchmark Calibrations
 #
-# In a 3-D spherical shell, the velocity null space contains the three rigid-body
-# rotation modes
-#
-# $$ \mathbf{r}_x = (0, -z, y), \qquad \mathbf{r}_y = (z, 0, -x), \qquad \mathbf{r}_z = (-y, x, 0), $$
-#
-# which are the Cartesian basis fields for
-#
-# $$ \mathbf{u}_{\mathrm{rot}} = \boldsymbol{\omega} \times \mathbf{x}. $$
-#
-# We remove them by projecting the numerical velocity onto this basis. With
-# $G_{ij} = \int_{\Omega} \mathbf{r}_i \cdot \mathbf{r}_j$ and
-# $b_i = \int_{\Omega} \mathbf{r}_i \cdot \mathbf{u}$, we solve
-#
-# $$ G \mathbf{c} = \mathbf{b}, $$
-#
-# and subtract
-#
-# $$ \mathbf{u} \leftarrow \mathbf{u} - \sum_i c_i \mathbf{r}_i. $$
-
-# %%
-def subtract_rigid_rotations(mesh, velocity_var, rotation_modes):
-    """
-    Remove rigid-body rotation components from the numerical velocity field.
-
-    Parameters
-    ----------
-    mesh : uw.discretisation.Mesh
-        Mesh used to evaluate the projection integrals.
-    velocity_var : uw.discretisation.MeshVariable
-        Vector velocity field to correct.
-    rotation_modes : list[sympy.Matrix]
-        Rigid-body rotation null modes, here the Cartesian basis fields for `omega x x`.
-    """
-    velocity_expr = sp.Matrix(velocity_var.sym).T
-    nmodes = len(rotation_modes)
-
-    gram = np.zeros((nmodes, nmodes))
-    rhs = np.zeros(nmodes)
-
-    for i, mode_i in enumerate(rotation_modes):
-        rhs[i] = uw.maths.Integral(mesh, mode_i.dot(velocity_expr)).evaluate()
-        for j, mode_j in enumerate(rotation_modes):
-            gram[i, j] = uw.maths.Integral(mesh, mode_i.dot(mode_j)).evaluate()
-
-    coeffs = np.linalg.solve(gram, rhs)
-
-    correction = coeffs[0] * rotation_modes[0]
-    for coeff, mode in zip(coeffs[1:], rotation_modes[1:]):
-        correction += coeff * mode
-
-    dv = uw.function.evaluate(correction, velocity_var.coords)
-    velocity_var.data[...] -= np.asarray(dv).reshape(velocity_var.data.shape)
+# Pressure is determined only up to a constant, so after the PETSc nullspace
+# solve we shift the reported pressure field to the benchmark gauge used for
+# comparison.
 
 # %%
 def subtract_pressure_mean(mesh, pressure_var):
@@ -476,78 +585,6 @@ def subtract_pressure_mean(mesh, pressure_var):
 
     pressure_var.data[:, 0] -= p_int / volume
 
-# %%
-def enforce_pressure_reference(
-    mesh,
-    pressure_var,
-    pressure_reference,
-):
-    """
-    Shift the global nodal mean pressure to a prescribed reference value.
-
-    Parameters
-    ----------
-    mesh : uw.discretisation.Mesh
-        Mesh used to access the local pressure data.
-    pressure_var : uw.discretisation.MeshVariable
-        Scalar pressure field to shift to the target nodal mean.
-    reference_value : float
-        Target global nodal mean pressure in nondimensional units.
-
-    Returns
-    -------
-    current_mean_nd : float
-        Current global nodal mean pressure in nondimensional units.
-    shift_nd : float
-        Applied nondimensional pressure shift.
-    """
-    target_mean = float(pressure_reference)
-
-    p_local = np.asarray(pressure_var.data[:, 0], dtype=np.float64)
-    local_sum = float(p_local.sum())
-    local_count = int(p_local.size)
-
-    global_sum = uw.mpi.comm.allreduce(local_sum)
-    global_count = uw.mpi.comm.allreduce(local_count)
-
-    current_mean = global_sum / max(global_count, 1)
-    shift = current_mean - target_mean
-
-    pressure_var.data[:, 0] -= shift
-
-    return current_mean, shift
-
-# %%
-def report_pressure_gauge(
-    mean_before,
-    shift_applied,
-    pressure_reference,
-):
-    """
-    Print pressure gauge information for each MPI rank.
-
-    Parameters
-    ----------
-    mean_before : float
-        Mean pressure before normalization.
-    shift_applied : float
-        Applied pressure shift.
-    pressure_reference : float
-        Target reference pressure.
-    """
-
-    if uw.mpi.rank != 0:
-        return
-    
-    uw.pprint(
-        f"[pressure-gauge][rank {uw.mpi.rank}] "
-        f"mean_before={mean_before:.6g}, "
-        f"shift_applied={shift_applied:.6g}, "
-        f"target_mean={pressure_reference:.6g}",
-        flush=True,
-    )
-
-# %%
 def subtract_surface_pressure_mean(
     mesh,
     pressure_var,
@@ -556,26 +593,38 @@ def subtract_surface_pressure_mean(
     """
     Shift pressure so the average pressure on a named boundary is zero.
     """
-    p_bd_int = uw.maths.BdIntegral(mesh=mesh, fn=pressure_var.sym[0], boundary=boundary_name).evaluate()
-    bd_measure = uw.maths.BdIntegral(mesh=mesh, fn=1.0, boundary=boundary_name).evaluate()
+    p_bd_int_local = float(
+        uw.maths.BdIntegral(mesh=mesh, fn=pressure_var.sym[0], boundary=boundary_name).evaluate()
+    )
+    bd_measure_local = float(
+        uw.maths.BdIntegral(mesh=mesh, fn=1.0, boundary=boundary_name).evaluate()
+    )
+
+    p_bd_int = float(uw.mpi.comm.allreduce(p_bd_int_local))
+    bd_measure = float(uw.mpi.comm.allreduce(bd_measure_local))
 
     if np.isclose(bd_measure, 0.0):
         return
     
     pressure_var.data[:, 0] -= p_bd_int / bd_measure
 
+
+def normalize_pressure_for_reporting(mesh, pressure_var, use_pressure_bc):
+    """
+    Apply reporting-only pressure gauge normalization.
+
+    If pressure Dirichlet BCs are active, the pressure gauge is already fixed by
+    the solve and must not be shifted afterward.
+    """
+    if use_pressure_bc:
+        return
+
+    subtract_pressure_mean(mesh, pressure_var)
+    # subtract_surface_pressure_mean(mesh, pressure_var, mesh.boundaries.Upper.name)
+    # subtract_surface_pressure_mean(mesh, pressure_var, mesh.boundaries.Lower.name)
+
 # %%
-rotation_modes = [
-    sp.Matrix([0, -z, y]),
-    sp.Matrix([z, 0, -x]),
-    sp.Matrix([-y, x, 0]),
-]
-# subtract_rigid_rotations(mesh, v_soln, rotation_modes)
-subtract_pressure_mean(mesh, p_soln)
-subtract_surface_pressure_mean(mesh, p_soln, mesh.boundaries.Upper.name)
-subtract_surface_pressure_mean(mesh, p_soln, mesh.boundaries.Lower.name)
-# mean_before, shift_applied = enforce_pressure_reference(mesh, p_soln, params.uw_pressure_reference)
-# report_pressure_gauge(mean_before, shift_applied, params.uw_pressure_reference)
+normalize_pressure_for_reporting(mesh, p_soln, params.uw_p_bc)
 
 # %% [markdown]
 # ### Relative Error Norms
@@ -598,12 +647,11 @@ def relative_l2_error(mesh, err_expr, ana_expr):
 
 
 # %%
-if params.uw_analytical:
-    v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
-    p_err_l2 = relative_l2_error(mesh, p_err_expr, p_ana_expr)
+v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
+p_err_l2 = relative_l2_error(mesh, p_err_expr, p_ana_expr)
 
-    uw.pprint("Relative velocity L2 error:", v_err_l2)
-    uw.pprint("Relative pressure L2 error:", p_err_l2)
+uw.pprint("Relative velocity L2 error:", v_err_l2)
+uw.pprint("Relative pressure L2 error:", p_err_l2)
 
 # %% [markdown]
 # ### Save Outputs

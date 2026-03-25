@@ -21,7 +21,7 @@ import pyvista as pv
 # ### Parameters And Paths
 
 # %%
-dirname = f'case4_inv_lc_32_n_2_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-10_ncpus_8_bc_natural'
+dirname = f'case4_inv_lc_32_n_2_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-05_ncpus_8_bc_paper'
 
 # %%
 output_dir = os.path.join("../../output/annulus/kramer/latest/", f'{dirname}/')

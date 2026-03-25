@@ -108,6 +108,14 @@ if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
     print(params.cli_help())
     raise SystemExit(0)
 
+params.uw_cellsize = float(eval(str(params.uw_cellsize), {"__builtins__": {}}, {}))
+
+pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
+is_p1p0 = params.uw_vdegree == 1 and params.uw_pdegree == 0
+
+if uw.mpi.rank == 0 and params.uw_pdegree == 0 and params.uw_pcont:
+    print("Degree-0 pressure uses discontinuous storage; overriding uw_pcont to false.")
+
 # %% [markdown]
 # ### Case Mapping
 
@@ -560,27 +568,91 @@ elif noslip:
         raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
 
 # %% [markdown]
+# #### Solver Notes
+#
+# This benchmark is linear: the viscosity is prescribed, and both the
+# `essential` and `natural` boundary conditions are linear in the unknown
+# velocity and pressure fields. For a linear problem we use
+# `snes_type = "ksponly"`, which bypasses Newton iterations and calls the
+# PETSc linear solver (`KSP`) directly.
+#
+# If we instead use `snes_type = "newtonls"`, PETSc wraps the same linear
+# system inside a nonlinear Newton solve. That is useful for genuinely
+# nonlinear problems, but here it makes the reported `SNES` iteration count
+# harder to interpret because the benchmark itself is still linear.
+#
+# `stokes.tolerance` is the UW-level solver tolerance. In this branch it sets
+# the `SNES` relative tolerance and related defaults, but it does not set
+# `ksp_rtol`. Because we use `ksponly`, the important stopping criterion is
+# `ksp_rtol`, which controls the required relative reduction in the linear
+# residual. `ksp_atol` is the absolute residual tolerance; we set it to `0.0`
+# so convergence is controlled by the relative tolerance rather than by an
+# absolute threshold.
+#
+# In short:
+# - `newtonls`: nonlinear Newton solve
+# - `ksponly`: direct linear solve through `KSP`
+# - `ksp_rtol`: relative linear residual tolerance
+# - `ksp_atol`: absolute linear residual tolerance
+# - `stokes.tolerance`: UW convenience tolerance kept consistent with `ksp_rtol`
+#
+# `P1/P0` is treated separately. In serial we use a direct LU solve as the
+# reference result. Under MPI we use an `asm_lu` branch (`PCASM` with local LU
+# subsolves) because the multigrid fieldsplit settings used for `P2/P1` and
+# `P3/P2` are not robust for `P1/P0` here. This MPI `P1/P0` path is not a
+# global exact solve, so the result depends on `-np`: changing the number of
+# ranks changes the subdomain partition and therefore changes the preconditioner
+# and the final iterative answer. For benchmark-quality MPI comparisons, prefer
+# `P2/P1` and `P3/P2`.
+#
+# %% [markdown]
 # #### Solver Settings
 
 # %%
 stokes.tolerance = params.uw_stokes_tol
+
 stokes.petsc_options["ksp_monitor"] = None
 stokes.petsc_options["ksp_monitor_true_residual"] = None
-stokes.petsc_options["snes_monitor"] = None
-stokes.petsc_options["snes_type"] = "newtonls"
-stokes.petsc_options["ksp_type"] = "fgmres"
+stokes.petsc_options["ksp_converged_reason"] = None
 
-stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_type", "kaskade")
-stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_cycle_type", "w")
-stokes.petsc_options["fieldsplit_velocity_mg_coarse_pc_type"] = "svd"
-stokes.petsc_options["fieldsplit_velocity_ksp_type"] = "fcg"
-stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_type"] = "chebyshev"
-stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_max_it"] = 5
-stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_converged_maxits"] = None
+# stokes.petsc_options["snes_monitor"] = None
+# stokes.petsc_options["snes_type"] = "newtonls"
+stokes.petsc_options["snes_type"] = "ksponly"
+stokes.petsc_options["ksp_rtol"] = params.uw_stokes_tol
+stokes.petsc_options["ksp_atol"] = 0.0
 
-stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", "mg")
-stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative")
-stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
+if is_p1p0:
+    if uw.mpi.size == 1:
+        stokes.petsc_options["ksp_type"] = "preonly"
+        stokes.petsc_options["pc_type"] = "lu"
+    else:
+        if uw.mpi.rank == 0:
+            print(
+                "P1/P0 under MPI uses asm_lu (ASM with local LU subsolves). "
+                "Results are -np dependent because ASM changes with the domain partition."
+            )
+
+        stokes.petsc_options["ksp_type"] = "gmres"
+        stokes.petsc_options["ksp_max_it"] = 500
+        stokes.petsc_options["ksp_pc_side"] = "right"
+        stokes.petsc_options["pc_type"] = "asm"
+        stokes.petsc_options["pc_asm_type"] = "basic"
+        stokes.petsc_options["sub_ksp_type"] = "preonly"
+        stokes.petsc_options["sub_pc_type"] = "lu"
+else:
+    stokes.petsc_options["ksp_type"] = "fgmres"
+
+    stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_type", "kaskade")
+    stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_cycle_type", "w")
+    stokes.petsc_options["fieldsplit_velocity_mg_coarse_pc_type"] = "svd"
+    stokes.petsc_options["fieldsplit_velocity_ksp_type"] = "fcg"
+    stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_type"] = "chebyshev"
+    stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_max_it"] = 5
+    stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_converged_maxits"] = None
+
+    stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", "mg")
+    stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative")
+    stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
 
 # %% [markdown]
 # #### Solve Stokes

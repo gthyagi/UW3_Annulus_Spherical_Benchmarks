@@ -5,6 +5,12 @@
 # latest split checkpoint files.
 
 # %%
+# to fix trame issue
+import nest_asyncio
+
+nest_asyncio.apply()
+
+# %%
 import os
 import re
 import sys
@@ -15,15 +21,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
 
+try:
+    from IPython.display import display
+except ImportError:
+    display = None
+
 IS_INTERACTIVE = (
     hasattr(sys, "ps1") or sys.flags.interactive or "ipykernel" in sys.modules
 )
+JUPYTER_BACKEND = "html"
+
+if IS_INTERACTIVE:
+    pv.global_theme.jupyter_backend = JUPYTER_BACKEND
 
 # %% [markdown]
 # ### Parameters And Paths
 
 # %%
-dirname = "case_inv_lc_8_m_-1_vdeg_2_pdeg_1_pcont_true_vel_penalty_1e+08_stokes_tol_1e-10_stokes_pen_1_ncpus_8"
+dirname = "case_inv_lc_8_m_-1_vdeg_2_pdeg_1_pcont_true_vel_penalty_1e+08_stokes_tol_1e-05_ncpus_8_bc_essential_p_bc_false"
 
 # %%
 output_dir = os.path.join("../../output/spherical/thieulot/latest/", f"{dirname}/")
@@ -363,6 +378,8 @@ def save_colorbar(colormap, clim, label, fname, label_y):
         dpi=150,
         bbox_inches="tight",
     )
+    if IS_INTERACTIVE and display is not None:
+        display(fig)
     plt.close(fig)
 
 
@@ -476,9 +493,9 @@ save_field_plot("P_a", "p_ana.png", cmc.vik.resampled(41), limits["pressure"], "
 save_field_plot("RHO_a", "rho_ana.png", cmc.roma_r.resampled(31), limits["rho"], "Rho", "rho_ana", -2.0)
 
 save_field_plot("Velocity", "vel_uw.png", cmc.lapaz.resampled(21), limits["velocity"], "Velocity", "v_uw", -2.05, vector=True)
-save_field_plot("V_e", "vel_r_err.png", cmc.lapaz.resampled(11), limits["velocity_error"], "Velocity", "v_err_rel", -2.05, vector=True)
+save_field_plot("V_e", "vel_r_err.png", cmc.lapaz.resampled(11), limits["velocity_error"], "Velocity Error (relative)", "v_err_rel", -2.05, vector=True)
 save_field_plot("V_err_pct", "vel_p_err.png", cmc.oslo_r.resampled(21), limits["velocity_pct"], "Velocity Error (%)", "v_err_perc", -2.05)
 
 save_field_plot("Pressure", "p_uw.png", cmc.vik.resampled(41), limits["pressure"], "Pressure", "p_uw", -2.0)
-save_field_plot("P_e", "p_r_err.png", cmc.vik.resampled(41), limits["pressure_error"], "Pressure", "p_err_rel", -2.0)
-save_field_plot("P_err_pct", "p_p_err.png", cmc.vik.resampled(41), limits["pressure_pct"], "Pressure", "p_err_perc", -2.0)
+save_field_plot("P_e", "p_r_err.png", cmc.vik.resampled(41), limits["pressure_error"], "Pressure Error (relative)", "p_err_rel", -2.0)
+save_field_plot("P_err_pct", "p_p_err.png", cmc.vik.resampled(41), limits["pressure_pct"], "Pressure Error (%)", "p_err_perc", -2.0)
