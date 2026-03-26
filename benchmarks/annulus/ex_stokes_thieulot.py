@@ -125,7 +125,6 @@ if uw.mpi.rank == 0 and params.uw_pdegree == 0 and params.uw_pcont:
 
 params.uw_stokes_tol = 1.0e-5 if params.uw_bc_type == "essential" else 1.0e-8
 
-
 # %% [markdown]
 # ### Output Directory
 
