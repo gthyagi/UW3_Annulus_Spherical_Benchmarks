@@ -626,6 +626,7 @@ def normalize_pressure_for_reporting(mesh, pressure_var, use_pressure_bc):
 # %%
 normalize_pressure_for_reporting(mesh, p_soln, params.uw_p_bc)
 
+
 # %% [markdown]
 # ### Relative Error Norms
 

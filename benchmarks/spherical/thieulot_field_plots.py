@@ -38,7 +38,7 @@ if IS_INTERACTIVE:
 # ### Parameters And Paths
 
 # %%
-dirname = "case_inv_lc_8_m_-1_vdeg_2_pdeg_1_pcont_true_vel_penalty_1e+08_stokes_tol_1e-05_ncpus_8_bc_essential_p_bc_false"
+dirname = "case_inv_lc_16_m_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_1e+08_stokes_tol_1e-05_ncpus_8_bc_essential_p_bc_true"
 
 # %%
 output_dir = os.path.join("../../output/spherical/thieulot/latest/", f"{dirname}/")
@@ -81,6 +81,7 @@ r_i = 0.5
 r_o = 1.0
 clip_angle = 135.0
 cpos = "yz"
+SCREENSHOT_WINDOW_SIZE = (750, 750)
 
 # %%
 mesh_h5_path = os.path.join(output_dir, "output.mesh.00000.h5")
@@ -383,6 +384,55 @@ def save_colorbar(colormap, clim, label, fname, label_y):
     plt.close(fig)
 
 
+def make_plotter(off_screen, window_size=None):
+    """Create a white-background plotter for display or screenshots."""
+
+    kwargs = {"off_screen": off_screen}
+    if window_size is not None:
+        kwargs["window_size"] = window_size
+
+    plotter = pv.Plotter(**kwargs)
+    plotter.image_scale = 3.5
+    plotter.set_background("white")
+    return plotter
+
+
+def configure_camera(plotter):
+    """Apply the common camera settings used by all plots."""
+
+    plotter.camera_position = cpos
+    plotter.render()
+    plotter.camera.zoom(1.4)
+
+
+def add_field_meshes(plotter, work, scalars, colormap, clim):
+    """Add the clipped field scene to a plotter."""
+
+    for clipped in clip_grid(work, clip_angle):
+        plotter.add_mesh(
+            clipped,
+            scalars=scalars,
+            cmap=colormap,
+            clim=clim,
+            edge_color="k",
+            show_edges=False,
+            show_scalar_bar=False,
+        )
+
+
+def add_mesh_scene(plotter):
+    """Add the clipped mesh-only scene to a plotter."""
+
+    for clipped in clip_grid(grid, clip_angle, crinkle=True):
+        plotter.add_mesh(
+            clipped,
+            color="white",
+            edge_color="black",
+            show_edges=True,
+            show_scalar_bar=False,
+        )
+
+
 def save_field_plot(
     field_name,
     png_name,
@@ -404,30 +454,20 @@ def save_field_plot(
     else:
         scalars = field_name
 
-    plotter = pv.Plotter(window_size=(750, 750), off_screen=not IS_INTERACTIVE)
-    plotter.image_scale = 3.5
-    plotter.set_background("white")
-
-    for clipped in clip_grid(work, clip_angle):
-        plotter.add_mesh(
-            clipped,
-            scalars=scalars,
-            cmap=colormap,
-            clim=clim,
-            edge_color="k",
-            show_edges=False,
-            show_scalar_bar=False,
-        )
-
-    plotter.camera_position = cpos
-    plotter.render()
-    plotter.camera.zoom(1.4)
-
     if IS_INTERACTIVE:
-        plotter.show(auto_close=False)
+        display_plotter = make_plotter(off_screen=False)
+        add_field_meshes(display_plotter, work, scalars, colormap, clim)
+        configure_camera(display_plotter)
+        display_plotter.show(auto_close=False)
 
-    plotter.screenshot(os.path.join(output_dir, png_name))
-    plotter.close()
+    save_plotter = make_plotter(
+        off_screen=True,
+        window_size=SCREENSHOT_WINDOW_SIZE,
+    )
+    add_field_meshes(save_plotter, work, scalars, colormap, clim)
+    configure_camera(save_plotter)
+    save_plotter.screenshot(os.path.join(output_dir, png_name))
+    save_plotter.close()
 
     save_colorbar(colormap, clim, cb_label, cb_name, label_y)
 
@@ -461,28 +501,20 @@ plt.close(fig)
 # ### Mesh Plot
 
 # %%
-mesh_plotter = pv.Plotter(window_size=(750, 750), off_screen=not IS_INTERACTIVE)
-mesh_plotter.image_scale = 3.5
-mesh_plotter.set_background("white")
-
-for clipped in clip_grid(grid, clip_angle, crinkle=True):
-    mesh_plotter.add_mesh(
-        clipped,
-        color="white",
-        edge_color="black",
-        show_edges=True,
-        show_scalar_bar=False,
-    )
-
-mesh_plotter.camera_position = cpos
-mesh_plotter.render()
-mesh_plotter.camera.zoom(1.4)
-
 if IS_INTERACTIVE:
-    mesh_plotter.show(auto_close=False)
+    mesh_display_plotter = make_plotter(off_screen=False)
+    add_mesh_scene(mesh_display_plotter)
+    configure_camera(mesh_display_plotter)
+    mesh_display_plotter.show(auto_close=False)
 
-mesh_plotter.screenshot(os.path.join(output_dir, "mesh.png"))
-mesh_plotter.close()
+mesh_save_plotter = make_plotter(
+    off_screen=True,
+    window_size=SCREENSHOT_WINDOW_SIZE,
+)
+add_mesh_scene(mesh_save_plotter)
+configure_camera(mesh_save_plotter)
+mesh_save_plotter.screenshot(os.path.join(output_dir, "mesh.png"))
+mesh_save_plotter.close()
 
 # %% [markdown]
 # ### Field Plots
