@@ -370,12 +370,9 @@ stokes.bodyforce = rho_bodyforce_expr * gravity_fn
 #
 # - `essential` applies the analytical velocity strongly on `Upper` and `Lower`.
 #   In this benchmark that branch is relatively insensitive to a looser solve
-#   tolerance. For the 8-rank `k=0` tests here, `stokes.tolerance = 1e-5`
-#   still gave a velocity L2 error of about `7.4e-7`.
+#   tolerance. 
 # - `natural` applies the analytical velocity weakly through the penalty term
 #   `uw_vel_penalty * (v - v_ana)`. This branch is much more tolerance-sensitive.
-#   For the same 8-rank `k=0` tests, `stokes.tolerance = 1e-5` gave a larger
-#   velocity L2 error of about `9e-5`.
 #
 # Practical choices for this script:
 # - `essential`: `1e-5` is a good fast default. Use `1e-8` if you want a tighter
