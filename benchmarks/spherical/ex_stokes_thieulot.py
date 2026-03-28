@@ -247,8 +247,8 @@ def analytic_solution(
             - (m + 1) * sp.diff(g, r)
             - r * sp.diff(g, r, 2)
         )
-        rho_expr = sp.simplify((r**m) * force_term * sp.cos(theta))
-        rho_bodyforce_expr = rho_expr
+        rho_expr = sp.simplify(force_term * sp.cos(theta))
+        rho_bodyforce_expr = -rho_expr
 
     p_expr = h * sp.cos(theta)
 
