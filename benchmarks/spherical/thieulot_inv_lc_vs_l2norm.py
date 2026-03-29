@@ -52,6 +52,7 @@ run_pattern = re.compile(
     r"vdeg_(?P<vdeg>\d+)_"
     r"pdeg_(?P<pdeg>\d+)_"
     r"pcont_(?P<pcont>true|false)_"
+    r"(?:qdeg_(?P<qdeg>\d+)_)?"
     r"vel_penalty_(?P<vel_penalty>[0-9.eE+\-]+)_"
     r"stokes_tol_(?P<stokes_tol>[0-9.eE+\-]+)_"
     r"(?:stokes_pen_(?P<stokes_pen>[0-9.eE+\-]+)_)?"
@@ -70,6 +71,7 @@ for run_name in run_dir_names:
     params["vdeg"] = int(params["vdeg"])
     params["pdeg"] = int(params["pdeg"])
     params["ncpus"] = int(params["ncpus"])
+    params["qdeg"] = None if params["qdeg"] is None else int(params["qdeg"])
     params["pcont"] = params["pcont"] == "true"
     params["vel_penalty"] = float(params["vel_penalty"])
     params["stokes_tol"] = float(params["stokes_tol"])
@@ -84,6 +86,7 @@ candidate_keys = [
     "vdeg",
     "pdeg",
     "pcont",
+    "qdeg",
     "vel_penalty",
     "stokes_tol",
     "stokes_pen",

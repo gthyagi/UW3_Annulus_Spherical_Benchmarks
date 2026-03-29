@@ -99,6 +99,11 @@ params = uw.Params(
         type=uw.ParamType.BOOLEAN,
         description="Pressure continuity flag",
     ),
+    uw_qdegree=uw.Param(
+        0,
+        type=uw.ParamType.INTEGER,
+        description="Quadrature degree override; <= 0 uses max(vdegree, pdegree)",
+    ),
     uw_stokes_tol=uw.Param(
         1e-5,
         type=uw.ParamType.FLOAT,
@@ -129,6 +134,11 @@ params.uw_cellsize = float(eval(str(params.uw_cellsize), {"__builtins__": {}}, {
 
 pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
 is_p1p0 = params.uw_vdegree == 1 and params.uw_pdegree == 0
+mesh_qdegree = (
+    params.uw_qdegree
+    if params.uw_qdegree > 0
+    else max(params.uw_pdegree, params.uw_vdegree)
+)
 
 if uw.mpi.rank == 0 and params.uw_pdegree == 0 and params.uw_pcont:
     print("Degree-0 pressure uses discontinuous storage; overriding uw_pcont to false.")
@@ -164,6 +174,7 @@ case_id = make_case_id(
     vdeg=params.uw_vdegree,
     pdeg=params.uw_pdegree,
     pcont=params.uw_pcont,
+    qdeg=params.uw_qdegree if params.uw_qdegree > 0 else None,
     vel_penalty=params.uw_vel_penalty,
     stokes_tol=params.uw_stokes_tol,
     ncpus=uw.mpi.size,
@@ -239,15 +250,17 @@ def analytic_solution(
         )
         h = ((m + 3) / r) * mu_expr * g
 
-        force_term = (
-            (-r**2) * sp.diff(f, r, 3)
-            - ((2 * m) + 5) * r * sp.diff(f, r, 2)
-            - (m * (m + 3)) * sp.diff(f, r)
-            + (m * (m + 3) + 4) * ((f + g) / r)
-            - (m + 1) * sp.diff(g, r)
-            - r * sp.diff(g, r, 2)
+        # The implemented 3D Cartesian field requires an additional r**m factor
+        # in the radial body-force coefficient for m != -1.
+        rho_expr = sp.simplify(
+            (r**m)
+            * (
+                2.0 * alpha * r ** (-(m + 4)) * ((m + 3) / (m + 1)) * (m - 1)
+                - (2.0 * beta / 3.0) * (m - 1) * (m + 3)
+                - m * (m + 5) * (2.0 * gamma / r**3)
+            )
+            * sp.cos(theta)
         )
-        rho_expr = sp.simplify(force_term * sp.cos(theta))
         rho_bodyforce_expr = -rho_expr
 
     p_expr = h * sp.cos(theta)
@@ -281,7 +294,7 @@ mesh = uw.meshing.SphericalShell(
     radiusInner=params.uw_r_i,
     radiusOuter=params.uw_r_o,
     cellSize=params.uw_cellsize,
-    qdegree=max(params.uw_pdegree, params.uw_vdegree),
+    qdegree=mesh_qdegree,
     degree=1,
     filename=os.path.join(output_dir, "mesh.msh"),
 )
