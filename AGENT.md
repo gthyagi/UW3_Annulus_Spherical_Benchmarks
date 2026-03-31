@@ -87,6 +87,9 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
 - Add latest-Underworld-compatible updates as separate scripts or minimal, well-documented edits.
 - Preserve benchmark output folder conventions used by existing scripts.
 - During rebuild, prioritize adding clean canonical scripts before restoring experimental copies.
+- Branch naming rule:
+  - never create git branches with the `codex/...` prefix
+  - use `feature/...` or `bugfix/...` instead
 
 ## Benchmark Priorities
 
