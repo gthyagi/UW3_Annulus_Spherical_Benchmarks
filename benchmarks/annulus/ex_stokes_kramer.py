@@ -63,8 +63,8 @@ params = uw.Params(
         description="Outer radius",
     ),
     uw_cellsize=uw.Param(
-        1.0 / 32.0,
-        type=uw.ParamType.FLOAT,
+        "1/32",
+        type=uw.ParamType.STRING,
         description="Background mesh cell size",
     ),
     uw_cellsize_internal_boundary_factor=uw.Param(
@@ -565,7 +565,10 @@ stokes.constitutive_model.Parameters.viscosity = 1.0
 stokes.saddle_preconditioner = 1.0
 stokes.petsc_use_pressure_nullspace = True
 if freeslip:
-    stokes.petsc_velocity_nullspace_basis = [v_theta_fn_xy]
+    if hasattr(type(stokes), "petsc_use_nullspace"):
+        stokes.petsc_use_nullspace = True
+    else:
+        stokes.petsc_velocity_nullspace_basis = [v_theta_fn_xy]
 
 # %%
 if delta_fn:
@@ -592,10 +595,10 @@ rho_ana.data[:] = np.asarray(uw.function.evaluate(rho, rho_ana.coords)).reshape(
 # We still subtract the domain-average pressure after the solve so the reported
 # pressure field has a unique zero-mean gauge for benchmark comparisons.
 #
-# For the free-slip cases, the author-matching boundary conditions admit one
-# rigid-body rotation mode in 2-D. We therefore register the annulus rotation
-# mode with PETSc during the solve and still subtract the projected residual
-# rotation after the solve to mirror the benchmark paper's postprocessing.
+# For the free-slip annulus cases, the rigid-body rotation is an exact null
+# mode. We enable the PETSc velocity nullspace automatically in those cases.
+# On newer UW branches this goes through `stokes.petsc_use_nullspace`; on older
+# branches we fall back to the explicit annulus rotation basis.
 #
 # %% [markdown]
 # #### Tolerance And BC Type
@@ -754,7 +757,7 @@ else:
 # %%
 uw.timing.reset()
 uw.timing.start()
-stokes.solve(verbose=False, debug=False)
+stokes.solve(verbose=False)
 uw.timing.stop()
 uw.timing.print_table(filename=f"{output_dir}/stokes_timing.txt")
 

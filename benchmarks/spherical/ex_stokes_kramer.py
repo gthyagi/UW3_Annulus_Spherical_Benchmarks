@@ -68,8 +68,8 @@ params = uw.Params(
         description="Outer radius",
     ),
     uw_cellsize=uw.Param(
-        1.0 / 8.0,
-        type=uw.ParamType.FLOAT,
+        "1/8",
+        type=uw.ParamType.STRING,
         description="Background mesh cell size",
     ),
     uw_vdegree=uw.Param(
@@ -108,6 +108,13 @@ if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
     print(params.cli_help())
     raise SystemExit(0)
 
+
+def _cli_flag_provided(name: str) -> bool:
+    return any(
+        arg == name or arg.startswith(f"{name}=")
+        for arg in sys.argv[1:]
+    )
+
 params.uw_cellsize = float(eval(str(params.uw_cellsize), {"__builtins__": {}}, {}))
 
 pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
@@ -139,6 +146,9 @@ elif params.uw_case in ("case4",):
     smooth = True
 else:
     raise ValueError(f"Unknown case: {params.uw_case}")
+
+if not _cli_flag_provided("-uw_stokes_tol"):
+    params.uw_stokes_tol = 1.0e-8 if freeslip else 1.0e-5
 
 # %% [markdown]
 # ### Output Directory
@@ -203,7 +213,7 @@ def coefficients_sphere_delta_fs(Rp, Rm, rp, l, g, nu, sign):
     )
     return A, B, C, D
 
-
+# %%
 def coefficients_sphere_delta_ns(Rp, Rm, rp, l, g, nu, sign):
     alpha_p, alpha_m = [Rp / rp, Rm / rp]
     alpha_pm, alpha_mp = [Rp / rp, Rm / rp][:: int(sign)]
@@ -254,7 +264,7 @@ def coefficients_sphere_delta_ns(Rp, Rm, rp, l, g, nu, sign):
     ) * g * rp ** (l + 1) / denom
     return A, B, C, D
 
-
+# %%
 def coefficients_sphere_smooth_fs(Rp, Rm, k, l, g, nu):
     alpha = Rm / Rp
     A = 0.5 * Rp ** (-l + 3) * (alpha ** (k + 3) - alpha ** (-l + 1)) * g / (
@@ -272,7 +282,7 @@ def coefficients_sphere_smooth_fs(Rp, Rm, k, l, g, nu):
     E = g / (Rp**k * (k + l + 4) * (k + l + 2) * (k - l + 3) * (k - l + 1) * nu)
     return A, B, C, D, E
 
-
+# %%
 def coefficients_sphere_smooth_ns(Rp, Rm, k, l, g, nu):
     alpha = Rm / Rp
     gamma = (
@@ -305,7 +315,7 @@ def coefficients_sphere_smooth_ns(Rp, Rm, k, l, g, nu):
     E = g / (Rp**k * (k + l + 4) * (k + l + 2) * (k - l + 3) * (k - l + 1) * nu)
     return A, B, C, D, E
 
-
+# %%
 def build_delta_solution(Rp, Rm, rp, l, m, g, nu, sign, no_slip):
     coeffs = coefficients_sphere_delta_ns(Rp, Rm, rp, l, g, nu, sign) if no_slip else coefficients_sphere_delta_fs(Rp, Rm, rp, l, g, nu, sign)
     _, _, C, D = coeffs
@@ -319,7 +329,7 @@ def build_delta_solution(Rp, Rm, rp, l, m, g, nu, sign, no_slip):
         H=-2 * nu * l * (2 * l - 1) * D,
     )
 
-
+# %%
 def build_smooth_solution(Rp, Rm, k, l, m, g, nu, no_slip):
     if (k + 1) * (k + 2) == l * (l + 1) or (k + 3) * (k + 4) == l * (l + 1):
         raise NotImplementedError(f"Smooth solution not implemented for k={k}, l={l}")
@@ -337,7 +347,7 @@ def build_smooth_solution(Rp, Rm, k, l, m, g, nu, no_slip):
         K=-g * (k + 2) / ((k + 1) * (k + 2) - l * (l + 1)) / Rp**k,
     )
 
-
+# %%
 if freeslip and delta_fn:
     soln_above = build_delta_solution(params.uw_radius_outer, params.uw_radius_inner, params.uw_radius_internal, params.uw_l, params.uw_m, -1.0, 1.0, +1, no_slip=False)
     soln_below = build_delta_solution(params.uw_radius_outer, params.uw_radius_inner, params.uw_radius_internal, params.uw_l, params.uw_m, -1.0, 1.0, -1, no_slip=False)
@@ -382,6 +392,7 @@ if is_serial:
 
 # %%
 unit_rvec = mesh.CoordinateSystem.unit_e_0
+x_uw, y_uw, z_uw = mesh.X
 r_uw = mesh.CoordinateSystem.xR[0]
 th_uw = mesh.CoordinateSystem.xR[1]
 phi_raw = mesh.CoordinateSystem.xR[2]
@@ -389,7 +400,13 @@ phi_uw = sp.Piecewise(
     (2 * sp.pi + phi_raw, phi_raw < 0),
     (phi_raw, True),
 )
-null_mode_expr = sp.Matrix(((0, 1, 1), (-1, 0, 1), (-1, -1, 0))) * mesh.CoordinateSystem.N.T
+velocity_nullspace_basis = [
+    sp.Matrix([0, -z_uw, y_uw]),
+    sp.Matrix([z_uw, 0, -x_uw]),
+    sp.Matrix([-y_uw, x_uw, 0]),
+]
+# Match the legacy Kramer postprocessing mode for free-slip shells.
+v_theta_phi_fn_xyz = sp.Matrix(((0, 1, 1), (-1, 0, 1), (-1, -1, 0))) * mesh.CoordinateSystem.N.T
 y_lm_sym = (
     sp.sqrt(
         (2 * params.uw_l + 1)
@@ -401,7 +418,7 @@ y_lm_sym = (
     * sp.assoc_legendre(params.uw_l, params.uw_m, sp.cos(th_uw))
 )
 
-
+# %%
 def analytical_velocity_cartesian_sympy(soln, r_sym, y_sym):
     if hasattr(soln, "ABCD"):
         A, B, C, D = soln.ABCD
@@ -419,14 +436,14 @@ def analytical_velocity_cartesian_sympy(soln, r_sym, y_sym):
     u_phi = prefactor * sp.diff(y_sym, phi_raw) / sp.sin(th_uw)
     return mesh.CoordinateSystem.rRotN.T * sp.Matrix([u_r, u_theta, u_phi])
 
-
+# %%
 def analytical_pressure_sympy(soln, r_sym, y_sym):
     p_sym = (soln.G * r_sym**soln.l + soln.H * r_sym ** (-soln.l - 1)) * y_sym
     if hasattr(soln, "K"):
         p_sym += soln.K * r_sym ** (soln.k + 1) * y_sym
     return p_sym
 
-
+# %%
 v_ana_above_sym = analytical_velocity_cartesian_sympy(soln_above, r_uw, y_lm_sym)
 v_ana_below_sym = analytical_velocity_cartesian_sympy(soln_below, r_uw, y_lm_sym)
 p_ana_above_sym = analytical_pressure_sympy(soln_above, r_uw, y_lm_sym)
@@ -529,8 +546,8 @@ stokes = Stokes(mesh, velocityField=v_uw, pressureField=p_uw)
 stokes.constitutive_model = uw.constitutive_models.ViscousFlowModel
 stokes.constitutive_model.Parameters.viscosity = 1.0
 stokes.saddle_preconditioner = 1.0
+stokes.petsc_use_pressure_nullspace = True
 
-gravity_fn = -1.0 * unit_rvec
 
 if delta_fn:
     rho = sp.exp(-1e5 * ((r_uw - params.uw_radius_internal) ** 2)) * y_lm_sym
@@ -538,9 +555,51 @@ if delta_fn:
     stokes.bodyforce = sp.Matrix([0.0, 0.0, 0.0])
 else:
     rho = ((r_uw / params.uw_radius_outer) ** params.uw_k) * y_lm_sym
+    gravity_fn = -1.0 * unit_rvec
     stokes.bodyforce = rho * gravity_fn
 
 rho_ana.data[:] = np.asarray(uw.function.evaluate(rho, rho_ana.coords)).reshape(-1, 1)
+
+# %% [markdown]
+# #### Nullspace Handling
+#
+# The coupled Stokes system is solved with PETSc's constant-pressure nullspace
+# enabled. This removes the additive pressure gauge freedom during the solve
+# without imposing an artificial pressure Dirichlet condition on the spherical
+# boundaries.
+#
+# We still subtract the domain-average pressure after the solve so the reported
+# pressure field has a unique zero-mean gauge for benchmark comparisons.
+#
+# This benchmark driver follows the legacy UW / current UW-example treatment:
+# solve with the usual pressure nullspace, then subtract the benchmark's rigid
+# rotation mode from the reported free-slip velocity field after the solve.
+#
+# %% [markdown]
+# #### Tolerance And BC Type
+#
+# `stokes.tolerance` does not affect the two Kramer case families equally.
+#
+# - free-slip cases use weak analytical-velocity matching on the shell
+#   boundaries and are more tolerance-sensitive.
+# - no-slip cases can use strong zero-velocity Dirichlet conditions and are less
+#   sensitive to a looser tolerance.
+#
+# Practical choices for this script:
+# - free-slip: `1e-8`
+# - no-slip: `1e-5`
+#
+# In the current UW Stokes implementation, setting `stokes.tolerance` also sets
+# the inner fieldsplit tolerances:
+#
+# - `fieldsplit_pressure_ksp_rtol = 0.1 * tolerance`
+# - `fieldsplit_velocity_ksp_rtol = 0.033 * tolerance`
+#
+# This is important because `stokes.tolerance` is not only the outer Stokes
+# solve target. It also controls how hard PETSc works inside the Schur-complement
+# preconditioner. Very small tolerances can therefore increase runtime sharply,
+# while too-loose tolerances usually degrade the weak-BC `natural` branch faster
+# than the strongly enforced `essential` branch.
 
 # %% [markdown]
 # #### Boundary Conditions
@@ -566,6 +625,8 @@ elif noslip:
         stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), mesh.boundaries.Lower.name)
     else:
         raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
+else:
+    raise ValueError(f"Unsupported case flags: freeslip={freeslip}, noslip={noslip}")
 
 # %% [markdown]
 # #### Solver Notes
@@ -660,7 +721,7 @@ else:
 # %%
 uw.timing.reset()
 uw.timing.start()
-stokes.solve(verbose=False, debug=False)
+stokes.solve(verbose=False)
 uw.timing.stop()
 uw.timing.print_table(filename=f"{output_dir}/stokes_timing.txt")
 
@@ -669,29 +730,69 @@ if uw.mpi.rank == 0:
     print(stokes.snes.ksp.getConvergedReason())
 
 # %% [markdown]
-# ### Remove Null Mode
+# ### Benchmark Calibrations
 
 # %%
-I0 = uw.maths.Integral(mesh, null_mode_expr.dot(v_uw.sym))
-norm = I0.evaluate()
-I0.fn = null_mode_expr.dot(null_mode_expr)
-vnorm = I0.evaluate()
+def subtract_pressure_mean(mesh, pressure_var):
+    """
+    Subtract the domain-average pressure from the numerical pressure field.
 
-dv = uw.function.evaluate(norm * null_mode_expr, v_uw.coords) / vnorm
-v_uw.data[...] -= np.asarray(dv).reshape(v_uw.data.shape)
+    Parameters
+    ----------
+    mesh : uw.discretisation.Mesh
+        Mesh used to evaluate the pressure and volume integrals.
+    pressure_var : uw.discretisation.MeshVariable
+        Scalar pressure field to shift to zero mean.
+    """
+    p_int = uw.maths.Integral(mesh, pressure_var.sym[0]).evaluate()
+    volume = uw.maths.Integral(mesh, 1.0).evaluate()
+    p_mean = p_int / volume
 
+    pressure_var.data[:, 0] -= p_mean
+
+
+def subtract_rigid_rotation(mesh, velocity_var, rotation_mode):
+    """
+    Remove the rigid-body rotation component from the numerical velocity field.
+
+    This matches the benchmark-paper postprocessing used for free-slip cases.
+    """
+    mode_I = uw.maths.Integral(mesh, rotation_mode.dot(velocity_var.sym))
+    mode_int = mode_I.evaluate()
+    mode_I.fn = rotation_mode.dot(rotation_mode)
+    mode_norm = mode_I.evaluate()
+
+    with mesh.access(velocity_var):
+        dv = uw.function.evaluate(mode_int * rotation_mode, velocity_var.coords) / mode_norm
+        velocity_var.data[...] -= dv.reshape(velocity_var.data.shape)
+
+
+subtract_pressure_mean(mesh, p_uw)
+
+if freeslip:
+    subtract_rigid_rotation(mesh, v_uw, v_theta_phi_fn_xyz)
 
 # %% [markdown]
-# ### Errors And L2 Norm
+# ### Errors and L2 Norm
 
 # %%
+def compute_error(mesh_var, var_num, fn_above, fn_below):
+    ana_values = analytical_values(mesh_var, fn_above, fn_below)
+    return np.asarray(var_num.data) - ana_values
+
+v_err_values = compute_error(v_err, v_uw, v_ana_above_sym, v_ana_below_sym)
+p_err_values = compute_error(p_err, p_uw, p_ana_above_sym, p_ana_below_sym)
+
 with uw.synchronised_array_update():
-    v_err.data[...] = v_uw.data - v_ana.data
-    p_err.data[...] = p_uw.data - p_ana.data
-
+    v_err.data[...] = v_err_values
+    p_err.data[...] = p_err_values
 
 # %%
-def relative_l2_error(mesh, err_expr, ana_expr):
+def relative_l2_error(mesh, err_var, ana_var):
+    """Relative L2 error for scalar or vector mesh variables / expressions."""
+    err_expr = err_var.sym if hasattr(err_var, "sym") else err_var
+    ana_expr = ana_var.sym if hasattr(ana_var, "sym") else ana_var
+
     if isinstance(err_expr, sp.MatrixBase):
         err_expr = err_expr.dot(err_expr)
         ana_expr = ana_expr.dot(ana_expr)

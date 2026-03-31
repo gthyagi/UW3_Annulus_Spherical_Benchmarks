@@ -279,7 +279,7 @@ stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
 # %%
 timing.reset()
 timing.start()
-stokes.solve(verbose=False, debug=False)
+stokes.solve(verbose=False)
 timing.stop()
 timing.print_table(display_fraction=0.999, output_file=f"{output_dir}/stokes_timing.txt")
 
