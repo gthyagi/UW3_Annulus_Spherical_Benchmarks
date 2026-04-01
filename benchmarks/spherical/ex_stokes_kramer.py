@@ -88,7 +88,7 @@ params = uw.Params(
         description="Pressure continuity flag",
     ),
     uw_stokes_tol=uw.Param(
-        1e-10,
+        1e-5,
         type=uw.ParamType.FLOAT,
         description="Stokes solver tolerance",
     ),
@@ -98,9 +98,19 @@ params = uw.Params(
         description="Penalty for natural-BC velocity matching",
     ),
     uw_bc_type=uw.Param(
-        "natural",
+        None,
         type=uw.ParamType.STRING,
         description="Boundary-condition mode: natural or essential",
+    ),
+    uw_pressure_pc_type=uw.Param(
+        "mg",
+        type=uw.ParamType.STRING,
+        description="Pressure-block preconditioner type for debug runs",
+    ),
+    uw_pressure_pc_mg_type=uw.Param(
+        "multiplicative",
+        type=uw.ParamType.STRING,
+        description="Pressure-block MG type when uw_pressure_pc_type=mg",
     ),
 )
 
@@ -108,13 +118,7 @@ if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
     print(params.cli_help())
     raise SystemExit(0)
 
-
-def _cli_flag_provided(name: str) -> bool:
-    return any(
-        arg == name or arg.startswith(f"{name}=")
-        for arg in sys.argv[1:]
-    )
-
+# %%
 params.uw_cellsize = float(eval(str(params.uw_cellsize), {"__builtins__": {}}, {}))
 
 pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
@@ -147,8 +151,8 @@ elif params.uw_case in ("case4",):
 else:
     raise ValueError(f"Unknown case: {params.uw_case}")
 
-if not _cli_flag_provided("-uw_stokes_tol"):
-    params.uw_stokes_tol = 1.0e-8 if freeslip else 1.0e-5
+# hard set the stokes tolerance based on the case bc type.
+params.uw_stokes_tol = 1.0e-5 if freeslip else 1.0e-5
 
 # %% [markdown]
 # ### Output Directory
@@ -182,6 +186,8 @@ case_id = make_case_id(
     pcont=params.uw_pcont,
     vel_penalty=params.uw_vel_penalty,
     stokes_tol=params.uw_stokes_tol,
+    ppc=params.uw_pressure_pc_type if params.uw_pressure_pc_type != "mg" else None,
+    pmg=params.uw_pressure_pc_mg_type if params.uw_pressure_pc_mg_type != "multiplicative" else None,
     ncpus=uw.mpi.size,
     bc=params.uw_bc_type,
 )
@@ -448,6 +454,19 @@ v_ana_above_sym = analytical_velocity_cartesian_sympy(soln_above, r_uw, y_lm_sym
 v_ana_below_sym = analytical_velocity_cartesian_sympy(soln_below, r_uw, y_lm_sym)
 p_ana_above_sym = analytical_pressure_sympy(soln_above, r_uw, y_lm_sym)
 p_ana_below_sym = analytical_pressure_sympy(soln_below, r_uw, y_lm_sym)
+v_ana_sym = sp.Matrix(
+    [[
+        sp.Piecewise(
+            (v_ana_above_sym[i], r_uw > params.uw_radius_internal),
+            (v_ana_below_sym[i], True),
+        )
+        for i in range(v_ana_above_sym.rows)
+    ]]
+)
+p_ana_sym = sp.Piecewise(
+    (p_ana_above_sym, r_uw > params.uw_radius_internal),
+    (p_ana_below_sym, True),
+)
 
 # %% [markdown]
 # ### Create Mesh Variables
@@ -511,29 +530,19 @@ p_err = uw.discretisation.MeshVariable(
 
 
 # %% [markdown]
-# ### Analytical Field Fill
+# ### Field Materialisation
 
 # %%
-def analytical_values(var, fn_above, fn_below):
+def fill_from_expression_chunked(var, fn, chunk_size=20000):
     coords = np.asarray(var.coords)
-    radii = np.linalg.norm(coords, axis=1)
-    mask_above = radii > params.uw_radius_internal
-    values = np.empty_like(var.data)
 
-    for mask, fn in ((mask_above, fn_above), (~mask_above, fn_below)):
-        if np.any(mask):
-            values[mask, :] = np.asarray(uw.function.evaluate(fn, coords[mask])).reshape(-1, var.data.shape[1])
-
-    return values
-
-
-# %%
-v_ana_values = analytical_values(v_ana, v_ana_above_sym, v_ana_below_sym)
-p_ana_values = analytical_values(p_ana, p_ana_above_sym, p_ana_below_sym)
-
-with uw.synchronised_array_update():
-    v_ana.data[...] = v_ana_values
-    p_ana.data[...] = p_ana_values
+    with uw.synchronised_array_update():
+        for start in range(0, coords.shape[0], chunk_size):
+            chunk = slice(start, start + chunk_size)
+            values = np.asarray(uw.function.evaluate(fn, coords[chunk])).reshape(
+                -1, var.data.shape[1]
+            )
+            var.data[chunk, :] = values
 
 # %% [markdown]
 # ### Stokes
@@ -547,6 +556,11 @@ stokes.constitutive_model = uw.constitutive_models.ViscousFlowModel
 stokes.constitutive_model.Parameters.viscosity = 1.0
 stokes.saddle_preconditioner = 1.0
 stokes.petsc_use_pressure_nullspace = True
+if freeslip:
+    if hasattr(type(stokes), "petsc_use_nullspace"):
+        stokes.petsc_use_nullspace = True
+    else:
+        stokes.petsc_velocity_nullspace_basis = velocity_nullspace_basis
 
 
 if delta_fn:
@@ -557,8 +571,6 @@ else:
     rho = ((r_uw / params.uw_radius_outer) ** params.uw_k) * y_lm_sym
     gravity_fn = -1.0 * unit_rvec
     stokes.bodyforce = rho * gravity_fn
-
-rho_ana.data[:] = np.asarray(uw.function.evaluate(rho, rho_ana.coords)).reshape(-1, 1)
 
 # %% [markdown]
 # #### Nullspace Handling
@@ -571,9 +583,10 @@ rho_ana.data[:] = np.asarray(uw.function.evaluate(rho, rho_ana.coords)).reshape(
 # We still subtract the domain-average pressure after the solve so the reported
 # pressure field has a unique zero-mean gauge for benchmark comparisons.
 #
-# This benchmark driver follows the legacy UW / current UW-example treatment:
-# solve with the usual pressure nullspace, then subtract the benchmark's rigid
-# rotation mode from the reported free-slip velocity field after the solve.
+# This benchmark driver follows the annulus Kramer path and newer UW examples:
+# for free-slip shells, enable the PETSc rigid-rotation nullspace during the
+# solve, then subtract the benchmark's selected rigid rotation mode from the
+# reported free-slip velocity field after the solve.
 #
 # %% [markdown]
 # #### Tolerance And BC Type
@@ -605,26 +618,39 @@ rho_ana.data[:] = np.asarray(uw.function.evaluate(rho, rho_ana.coords)).reshape(
 # #### Boundary Conditions
 
 # %%
+# if freeslip:
+#     if params.uw_bc_type == "natural":
+#         v_diff = v_uw.sym - v_ana.sym
+#         stokes.add_natural_bc(params.uw_vel_penalty * v_diff, mesh.boundaries.Upper.name)
+#         stokes.add_natural_bc(params.uw_vel_penalty * v_diff, mesh.boundaries.Lower.name)
+#     elif params.uw_bc_type == "essential":
+#         stokes.add_essential_bc(v_ana.sym, mesh.boundaries.Upper.name)
+#         stokes.add_essential_bc(v_ana.sym, mesh.boundaries.Lower.name)
+#     else:
+#         raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
+# elif noslip:
+#     if params.uw_bc_type == "natural":
+#         v_diff = v_uw.sym - v_ana.sym
+#         stokes.add_natural_bc(params.uw_vel_penalty * v_diff, mesh.boundaries.Upper.name)
+#         stokes.add_natural_bc(params.uw_vel_penalty * v_diff, mesh.boundaries.Lower.name)
+#     elif params.uw_bc_type == "essential":
+#         stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), mesh.boundaries.Upper.name)
+#         stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), mesh.boundaries.Lower.name)
+#     else:
+#         raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
+# else:
+#     raise ValueError(f"Unsupported case flags: freeslip={freeslip}, noslip={noslip}")
+
 if freeslip:
-    if params.uw_bc_type == "natural":
-        v_diff = v_uw.sym - v_ana.sym
-        stokes.add_natural_bc(params.uw_vel_penalty * v_diff, mesh.boundaries.Upper.name)
-        stokes.add_natural_bc(params.uw_vel_penalty * v_diff, mesh.boundaries.Lower.name)
-    elif params.uw_bc_type == "essential":
-        stokes.add_essential_bc(v_ana.sym, mesh.boundaries.Upper.name)
-        stokes.add_essential_bc(v_ana.sym, mesh.boundaries.Lower.name)
-    else:
-        raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
+    # UW implements annulus free-slip through a penalty on the normal velocity
+    # component. This matches the authors' physical condition u.n = 0 while
+    # leaving tangential motion free on the shell boundaries.
+    Gamma_N = mesh.CoordinateSystem.unit_e_0
+    stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, mesh.boundaries.Upper.name)
+    stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, mesh.boundaries.Lower.name)
 elif noslip:
-    if params.uw_bc_type == "natural":
-        v_diff = v_uw.sym - v_ana.sym
-        stokes.add_natural_bc(params.uw_vel_penalty * v_diff, mesh.boundaries.Upper.name)
-        stokes.add_natural_bc(params.uw_vel_penalty * v_diff, mesh.boundaries.Lower.name)
-    elif params.uw_bc_type == "essential":
-        stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), mesh.boundaries.Upper.name)
-        stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), mesh.boundaries.Lower.name)
-    else:
-        raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
+    stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), mesh.boundaries.Upper.name)
+    stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), mesh.boundaries.Lower.name)
 else:
     raise ValueError(f"Unsupported case flags: freeslip={freeslip}, noslip={noslip}")
 
@@ -711,9 +737,10 @@ else:
     stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_max_it"] = 5
     stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_converged_maxits"] = None
 
-    stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", "mg")
-    stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative")
-    stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
+    stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", params.uw_pressure_pc_type)
+    if params.uw_pressure_pc_type == "mg":
+        stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", params.uw_pressure_pc_mg_type)
+        stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
 
 # %% [markdown]
 # #### Solve Stokes
@@ -757,14 +784,12 @@ def subtract_rigid_rotation(mesh, velocity_var, rotation_mode):
 
     This matches the benchmark-paper postprocessing used for free-slip cases.
     """
-    mode_I = uw.maths.Integral(mesh, rotation_mode.dot(velocity_var.sym))
-    mode_int = mode_I.evaluate()
-    mode_I.fn = rotation_mode.dot(rotation_mode)
-    mode_norm = mode_I.evaluate()
+    mode_int = uw.maths.Integral(mesh, rotation_mode.dot(velocity_var.sym)).evaluate()
+    mode_norm = uw.maths.Integral(mesh, rotation_mode.dot(rotation_mode)).evaluate()
+    coeff = mode_int / mode_norm
 
-    with mesh.access(velocity_var):
-        dv = uw.function.evaluate(mode_int * rotation_mode, velocity_var.coords) / mode_norm
-        velocity_var.data[...] -= dv.reshape(velocity_var.data.shape)
+    dv = uw.function.evaluate(coeff * rotation_mode, velocity_var.coords)
+    velocity_var.data[...] -= dv.reshape(velocity_var.data.shape)
 
 
 subtract_pressure_mean(mesh, p_uw)
@@ -776,16 +801,8 @@ if freeslip:
 # ### Errors and L2 Norm
 
 # %%
-def compute_error(mesh_var, var_num, fn_above, fn_below):
-    ana_values = analytical_values(mesh_var, fn_above, fn_below)
-    return np.asarray(var_num.data) - ana_values
-
-v_err_values = compute_error(v_err, v_uw, v_ana_above_sym, v_ana_below_sym)
-p_err_values = compute_error(p_err, p_uw, p_ana_above_sym, p_ana_below_sym)
-
-with uw.synchronised_array_update():
-    v_err.data[...] = v_err_values
-    p_err.data[...] = p_err_values
+v_err_sym = v_uw.sym - v_ana_sym
+p_err_sym = p_uw.sym[0] - p_ana_sym
 
 # %%
 def relative_l2_error(mesh, err_var, ana_var):
@@ -806,8 +823,8 @@ def relative_l2_error(mesh, err_var, ana_var):
 
 
 # %%
-v_err_l2 = relative_l2_error(mesh, v_err.sym, v_ana.sym)
-p_err_l2 = relative_l2_error(mesh, p_err.sym[0], p_ana.sym[0])
+v_err_l2 = relative_l2_error(mesh, v_err_sym, v_ana_sym)
+p_err_l2 = relative_l2_error(mesh, p_err_sym, p_ana_sym)
 
 if uw.mpi.rank == 0:
     print("Relative velocity L2 error:", v_err_l2)
@@ -825,6 +842,13 @@ if uw.mpi.rank == 0:
         f_h5.create_dataset("cellsize", data=params.uw_cellsize)
         f_h5.create_dataset("v_l2_norm", data=v_err_l2)
         f_h5.create_dataset("p_l2_norm", data=p_err_l2)
+
+# %%
+fill_from_expression_chunked(v_ana, v_ana_sym)
+fill_from_expression_chunked(p_ana, p_ana_sym)
+fill_from_expression_chunked(rho_ana, rho)
+fill_from_expression_chunked(v_err, v_err_sym)
+fill_from_expression_chunked(p_err, p_err_sym)
 
 # %%
 mesh.write_timestep(

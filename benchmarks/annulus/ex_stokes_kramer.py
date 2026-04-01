@@ -98,7 +98,7 @@ params = uw.Params(
         description="Penalty for natural-BC velocity matching",
     ),
     uw_bc_type=uw.Param(
-        "paper",
+        None,
         type=uw.ParamType.STRING,
         description="Boundary-condition mode: natural or essential or paper",
     ),
@@ -108,6 +108,7 @@ if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
     print(params.cli_help())
     raise SystemExit(0)
 
+# %%
 params.uw_cellsize = float(eval(str(params.uw_cellsize), {"__builtins__": {}}, {}))
 
 pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
@@ -159,13 +160,8 @@ elif case in ("case4",):
 else:
     raise ValueError(f"Unknown case: {case}")
 
-if params.uw_bc_type != "paper":
-    raise ValueError(
-        f"Unsupported bc_type '{params.uw_bc_type}'. "
-        "This script now implements only the paper boundary conditions: use -uw_bc_type paper."
-    )
-
-params.uw_stokes_tol = 1.0e-5 if freeslip else 1.0e-5
+# hard set the stokes tolerance based on the case bc type.
+params.uw_stokes_tol = 1.0e-8 if freeslip else 1.0e-5
 
 # %% [markdown]
 # ### Output Directory

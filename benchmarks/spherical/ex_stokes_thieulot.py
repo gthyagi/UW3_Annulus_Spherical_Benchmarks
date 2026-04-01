@@ -557,7 +557,7 @@ else:
 # %%
 uw.timing.reset()
 uw.timing.start()
-stokes.solve(verbose=False, debug=False)
+stokes.solve(verbose=False)
 uw.timing.stop()
 uw.timing.print_table(filename=os.path.join(output_dir, "stokes_timing.txt"))
 
