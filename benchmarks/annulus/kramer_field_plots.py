@@ -16,12 +16,13 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
+from types import SimpleNamespace
 
 # %% [markdown]
 # ### Parameters And Paths
 
 # %%
-dirname = f'case4_inv_lc_32_n_2_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-05_ncpus_8_bc_paper'
+dirname = f'case2_inv_lc_32_n_2_k_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-05_ncpus_8_bc_natural_nitsche'
 
 # %%
 output_dir = os.path.join("../../output/annulus/kramer/latest/", f'{dirname}/')
@@ -35,11 +36,16 @@ pattern = (
     r"vdeg_(?P<vdeg>\d+)_"
     r"pdeg_(?P<pdeg>\d+)_"
     r"pcont_(?P<pcont>true|false)_"
-    r"vel_penalty_(?P<vel_penalty>[0-9.eE+\-]+)_"
-    r"stokes_tol_(?P<stokes_tol>[0-9.eE+\-]+)"
+    r"(?:vel_penalty_(?P<vel_penalty>[0-9.eE+\-]+)_)?"
+    r"stokes_tol_(?P<stokes_tol>[0-9.eE+\-]+)_"
+    r"ncpus_(?P<ncpus>\d+)_"
+    r"bc_(?P<bc_type>[A-Za-z]+)"
+    r"(?:_(?P<freeslip_type>nitsche|penalty))?$"
 )
 
 m = re.search(pattern, dirname)
+if m is None:
+    raise ValueError(f"Could not parse dirname: {dirname}")
 params = m.groupdict()
 
 # %%
@@ -56,16 +62,245 @@ pdegree = int(params["pdeg"])
 pcont = params["pcont"] == "true"
 pcont_str = str(pcont).lower()
 
-vel_penalty = float(params["vel_penalty"])
+vel_penalty = None if params["vel_penalty"] is None else float(params["vel_penalty"])
 stokes_tol = float(params["stokes_tol"])
+ncpus = int(params["ncpus"])
+bc_type = params["bc_type"]
+freeslip_type = params["freeslip_type"]
 
 # constants (not encoded in name)
 r_o = 2.22
 r_int = 2.0
 r_i = 1.22
 
+freeslip = case in ("case1", "case2")
+noslip = case in ("case3", "case4")
+delta_fn = case in ("case1", "case3")
+smooth = case in ("case2", "case4")
+
 # %%
 plot_size = (750, 750)
+
+
+def coefficients_cylinder_delta_fs(Rp, Rm, rp, n, g, nu, sign):
+    alpha_pm, alpha_mp = [Rp / rp, Rm / rp][:: int(sign)]
+    pm = sign
+
+    A = -0.125 * (alpha_mp ** (2 * n - 2) - 1) * g * pm * rp ** (-n + 2) / (
+        (alpha_mp ** (2 * n - 2) - alpha_pm ** (2 * n - 2)) * (n - 1) * nu
+    )
+    B = -0.125 * (alpha_mp ** (2 * n + 2) - 1) * alpha_pm ** (2 * n + 2) * g * pm * rp ** (n + 2) / (
+        (alpha_mp ** (2 * n + 2) - alpha_pm ** (2 * n + 2)) * (n + 1) * nu
+    )
+    C = 0.125 * (alpha_mp ** (2 * n + 2) - 1) * g * pm / (
+        (alpha_mp ** (2 * n + 2) - alpha_pm ** (2 * n + 2)) * (n + 1) * nu * rp**n
+    )
+    D = 0.125 * (alpha_mp ** (2 * n - 2) - 1) * alpha_pm ** (2 * n - 2) * g * pm * rp**n / (
+        (alpha_mp ** (2 * n - 2) - alpha_pm ** (2 * n - 2)) * (n - 1) * nu
+    )
+    return A, B, C, D
+
+
+def coefficients_cylinder_delta_ns(Rp, Rm, rp, n, g, nu, sign):
+    alpha_p, alpha_m = [Rp / rp, Rm / rp]
+    pm, mp = sign, -sign
+
+    A = -0.125 * (
+        ((alpha_m**2 - alpha_p**2) * n - (n + 1) * pm + 1 / alpha_m ** (2 * n) - 1 / alpha_p ** (2 * n)) * (n - 1)
+        + (alpha_m**2 / alpha_p ** (2 * n) - alpha_p**2 / alpha_m ** (2 * n)) * n
+        + (n**2 * (alpha_m / alpha_p) ** (2 * mp) - (alpha_m / alpha_p) ** (2 * n * pm)) * pm
+    ) * g * rp ** (-n + 2) / (
+        (n**2 * (alpha_m / alpha_p - alpha_p / alpha_m) ** 2 - ((alpha_m / alpha_p) ** n - 1 / (alpha_m / alpha_p) ** n) ** 2)
+        * (n - 1)
+        * nu
+    )
+    B = -0.125 * (
+        ((alpha_m**2 - alpha_p**2) * n - (n - 1) * pm - alpha_m ** (2 * n) + alpha_p ** (2 * n)) * (n + 1)
+        - (alpha_m**2 * alpha_p ** (2 * n) - alpha_m ** (2 * n) * alpha_p**2) * n
+        + (n**2 * (alpha_m / alpha_p) ** (2 * mp) - (alpha_m / alpha_p) ** (2 * mp * n)) * pm
+    ) * g * rp ** (n + 2) / (
+        (n**2 * (alpha_m / alpha_p - alpha_p / alpha_m) ** 2 - ((alpha_m / alpha_p) ** n - 1 / (alpha_m / alpha_p) ** n) ** 2)
+        * (n + 1)
+        * nu
+    )
+    C = -0.125 * (
+        (n**2 * (alpha_m / alpha_p) ** (2 * pm) - (alpha_m / alpha_p) ** (2 * n * pm)) * mp
+        - (mp * (n - 1) + n * (1 / alpha_m**2 - 1 / alpha_p**2) - 1 / alpha_m ** (2 * n) + 1 / alpha_p ** (2 * n)) * (n + 1)
+        - n * (1 / (alpha_m ** (2 * n) * alpha_p**2) - 1 / (alpha_m**2 * alpha_p ** (2 * n)))
+    ) * g / (
+        (n**2 * (alpha_m / alpha_p - alpha_p / alpha_m) ** 2 - ((alpha_m / alpha_p) ** n - 1 / (alpha_m / alpha_p) ** n) ** 2)
+        * (n + 1)
+        * nu
+        * rp**n
+    )
+    D = -0.125 * (
+        (n**2 * (alpha_m / alpha_p) ** (2 * pm) - (alpha_m / alpha_p) ** (2 * mp * n)) * mp
+        - (mp * (n + 1) + n * (1 / alpha_m**2 - 1 / alpha_p**2) + alpha_m ** (2 * n) - alpha_p ** (2 * n)) * (n - 1)
+        + n * (alpha_m ** (2 * n) / alpha_p**2 - alpha_p ** (2 * n) / alpha_m**2)
+    ) * g * rp**n / (
+        (n**2 * (alpha_m / alpha_p - alpha_p / alpha_m) ** 2 - ((alpha_m / alpha_p) ** n - 1 / (alpha_m / alpha_p) ** n) ** 2)
+        * (n - 1)
+        * nu
+    )
+    return A, B, C, D
+
+
+def coefficients_cylinder_smooth_fs(Rp, Rm, k, n, g, nu):
+    alpha = Rm / Rp
+    A = -0.25 * (alpha**2 - alpha ** (k + n + 3)) * Rp ** (-n + 3) * g / (
+        (alpha + alpha**n) * (alpha**n - alpha) * (k + n + 1) * (k - n + 3) * nu
+    )
+    B = 0.25 * Rp ** (n + 3) * (alpha ** (k + n + 3) - alpha ** (2 * n + 2)) * g / (
+        (alpha ** (n + 1) + 1) * (alpha ** (n + 1) - 1) * (k + n + 3) * (k - n + 1) * nu
+    )
+    C = -0.25 * Rp ** (-n + 1) * (alpha ** (k + n + 3) - 1) * g / (
+        (alpha ** (n + 1) + 1) * (alpha ** (n + 1) - 1) * (k + n + 3) * (k - n + 1) * nu
+    )
+    D = -0.25 * Rp ** (n + 1) * (alpha ** (k + n + 3) - alpha ** (2 * n)) * g / (
+        (alpha + alpha**n) * (alpha**n - alpha) * (k + n + 1) * (k - n + 3) * nu
+    )
+    E = g * n / (((k + 3) ** 2 - n**2) * ((k + 1) ** 2 - n**2) * Rp**k * nu)
+    return A, B, C, D, E
+
+
+def coefficients_cylinder_smooth_ns(Rp, Rm, k, n, g, nu):
+    alpha = Rm / Rp
+    denom = ((alpha ** (n + 1) - alpha ** (n - 1)) ** 2 * n**2 - (alpha ** (2 * n) - 1) ** 2) * ((k + 3) ** 2 - n**2) * (
+        (k + 1) ** 2 - n**2
+    ) * nu
+    A = 0.5 * (
+        (alpha ** (k + n + 3) + alpha ** (2 * n)) * (k + n + 1) * (n + 1)
+        - (alpha ** (k + n + 1) + alpha ** (2 * n + 2)) * (k + n + 3) * n
+        - (alpha ** (k + 3 * n + 3) + 1) * (k - n + 1)
+    ) * Rp ** (-n + 3) * g * n / denom
+    B = -0.5 * (
+        (alpha ** (k + 3 * n + 3) + alpha ** (2 * n)) * (k - n + 1) * (n - 1)
+        - (alpha ** (k + 3 * n + 1) + alpha ** (2 * n + 2)) * (k - n + 3) * n
+        + (alpha ** (k + n + 3) + alpha ** (4 * n)) * (k + n + 1)
+    ) * Rp ** (n + 3) * g * n / denom
+    C = 0.5 * (
+        (alpha ** (k + n + 1) + alpha ** (2 * n)) * (k + n + 3) * (n - 1)
+        - (alpha ** (k + n + 3) + alpha ** (2 * n - 2)) * (k + n + 1) * n
+        + (alpha ** (k + 3 * n + 1) + 1) * (k - n + 3)
+    ) * Rp ** (-n + 1) * g * n / denom
+    D = -0.5 * (
+        (alpha ** (k + 3 * n + 1) + alpha ** (2 * n)) * (k - n + 3) * (n + 1)
+        - (alpha ** (k + 3 * n + 3) + alpha ** (2 * n - 2)) * (k - n + 1) * n
+        - (alpha ** (k + n + 1) + alpha ** (4 * n)) * (k + n + 3)
+    ) * Rp ** (n + 1) * g * n / denom
+    E = g * n / (((k + 3) ** 2 - n**2) * ((k + 1) ** 2 - n**2) * Rp**k * nu)
+    return A, B, C, D, E
+
+
+def build_delta_solution(Rp, Rm, rp, n, g, nu, sign, no_slip):
+    coeffs = coefficients_cylinder_delta_ns(Rp, Rm, rp, n, g, nu, sign) if no_slip else coefficients_cylinder_delta_fs(Rp, Rm, rp, n, g, nu, sign)
+    _, _, C, D = coeffs
+    return SimpleNamespace(
+        n=n,
+        g=g,
+        nu=nu,
+        ABCD=coeffs,
+        G=-4 * nu * C * (n + 1),
+        H=-4 * nu * D * (n - 1),
+    )
+
+
+def build_smooth_solution(Rp, Rm, k, n, g, nu, no_slip):
+    if abs(k + 3) == n or abs(k + 1) == n:
+        raise NotImplementedError(f"Smooth solution not implemented for k={k}, n={n}")
+    coeffs = coefficients_cylinder_smooth_ns(Rp, Rm, k, n, g, nu) if no_slip else coefficients_cylinder_smooth_fs(Rp, Rm, k, n, g, nu)
+    _, _, C, D, _ = coeffs
+    F = -g * (k + 1) * Rp ** (-k) / ((k + 1) ** 2 - n**2)
+    return SimpleNamespace(
+        n=n,
+        k=k,
+        g=g,
+        nu=nu,
+        ABCDE=coeffs,
+        G=-4 * nu * C * (n + 1),
+        H=-4 * nu * D * (n - 1),
+        F=F,
+    )
+
+
+def build_case_solutions():
+    if freeslip and delta_fn:
+        return (
+            build_delta_solution(r_o, r_i, r_int, n, -1.0, 1.0, +1, no_slip=False),
+            build_delta_solution(r_o, r_i, r_int, n, -1.0, 1.0, -1, no_slip=False),
+        )
+    if freeslip and smooth:
+        soln = build_smooth_solution(r_o, r_i, k, n, 1.0, 1.0, no_slip=False)
+        return soln, soln
+    if noslip and delta_fn:
+        return (
+            build_delta_solution(r_o, r_i, r_int, n, -1.0, 1.0, +1, no_slip=True),
+            build_delta_solution(r_o, r_i, r_int, n, -1.0, 1.0, -1, no_slip=True),
+        )
+    if noslip and smooth:
+        soln = build_smooth_solution(r_o, r_i, k, n, 1.0, 1.0, no_slip=True)
+        return soln, soln
+    raise ValueError(f"Unsupported case: {case}")
+
+
+def analytical_velocity_cartesian(soln, rr, tt):
+    n_sol = int(soln.n)
+    if hasattr(soln, "ABCD"):
+        A, B, C, D = soln.ABCD
+        psi_r = A * rr**n_sol + B * rr**(-n_sol) + C * rr ** (n_sol + 2) + D * rr ** (-n_sol + 2)
+        dpsi_rdr = (
+            A * n_sol * rr ** (n_sol - 1)
+            + B * (-n_sol) * rr ** (-n_sol - 1)
+            + C * (n_sol + 2) * rr ** (n_sol + 1)
+            + D * (-n_sol + 2) * rr ** (-n_sol + 1)
+        )
+    else:
+        A, B, C, D, E = soln.ABCDE
+        k_sol = int(soln.k)
+        psi_r = A * rr**n_sol + B * rr**(-n_sol) + C * rr ** (n_sol + 2) + D * rr ** (-n_sol + 2) + E * rr ** (k_sol + 3)
+        dpsi_rdr = (
+            A * n_sol * rr ** (n_sol - 1)
+            + B * (-n_sol) * rr ** (-n_sol - 1)
+            + C * (n_sol + 2) * rr ** (n_sol + 1)
+            + D * (-n_sol + 2) * rr ** (-n_sol + 1)
+            + E * (k_sol + 3) * rr ** (k_sol + 2)
+        )
+
+    u_r = -(n_sol * np.cos(n_sol * tt) * psi_r) / rr
+    u_theta = np.sin(n_sol * tt) * dpsi_rdr
+    v_x = u_r * np.cos(tt) - u_theta * np.sin(tt)
+    v_y = u_r * np.sin(tt) + u_theta * np.cos(tt)
+    return np.column_stack([v_x, v_y, np.zeros_like(v_x)])
+
+
+def analytical_pressure(soln, rr, tt):
+    n_sol = int(soln.n)
+    p_expr = (soln.G * rr**n_sol + soln.H * rr**(-n_sol)) * np.cos(n_sol * tt)
+    if hasattr(soln, "F"):
+        p_expr += soln.F * rr ** (int(soln.k) + 1) * np.cos(n_sol * tt)
+    return p_expr
+
+
+def analytical_solution(points_xy):
+    soln_above, soln_below = build_case_solutions()
+    rr = np.sqrt(points_xy[:, 0] ** 2 + points_xy[:, 1] ** 2)
+    tt = np.arctan2(points_xy[:, 1], points_xy[:, 0])
+    mask_above = rr > r_int
+
+    v_ana = np.empty((points_xy.shape[0], 3), dtype=np.float64)
+    p_ana = np.empty(points_xy.shape[0], dtype=np.float64)
+
+    for mask, soln in ((mask_above, soln_above), (~mask_above, soln_below)):
+        if np.any(mask):
+            v_ana[mask] = analytical_velocity_cartesian(soln, rr[mask], tt[mask])
+            p_ana[mask] = analytical_pressure(soln, rr[mask], tt[mask])
+
+    if delta_fn:
+        rho_ana = np.cos(n * tt) * np.exp(-1e5 * ((rr - r_int) ** 2))
+    else:
+        rho_ana = ((rr / r_o) ** k) * np.cos(n * tt)
+
+    return v_ana, p_ana, rho_ana
 
 # %%
 def resolve_checkpoint_paths(output_dir):
@@ -213,7 +448,7 @@ def load_grid_and_fields(
     xdmf_file,
     h5_file,
 ):
-    """Load mesh plus required Kramer fields from checkpoint files."""
+    """Load mesh plus reconstruct analytical and error fields from checkpoint files."""
     grid = None
     if os.path.isfile(xdmf_file):
         try:
@@ -272,67 +507,26 @@ def load_grid_and_fields(
             "P_u",
             n_points,
         )
-        v_a = read_field_from_files(
-            h5_file,
-            h5f,
-            "V_a",
-            n_points,
-        )
-        p_a = read_field_from_files(
-            h5_file,
-            h5f,
-            "P_a",
-            n_points,
-        )
-        v_e = read_field_from_files(
-            h5_file,
-            h5f,
-            "V_e",
-            n_points,
-        )
-        p_e = read_field_from_files(
-            h5_file,
-            h5f,
-            "P_e",
-            n_points,
-        )
-
-        try:
-            rho_a = read_field_from_files(
-                h5_file,
-                h5f,
-                "RHO_a",
-                n_points,
-            )
-        except Exception:
-            rho_a = None
 
     if v_u.ndim == 2 and v_u.shape[1] == 2:
         v_u = np.c_[v_u, np.zeros(v_u.shape[0], dtype=np.float64)]
-    if v_a.ndim == 2 and v_a.shape[1] == 2:
-        v_a = np.c_[v_a, np.zeros(v_a.shape[0], dtype=np.float64)]
-    if v_e.ndim == 2 and v_e.shape[1] == 2:
-        v_e = np.c_[v_e, np.zeros(v_e.shape[0], dtype=np.float64)]
+    if p_u.ndim == 2 and p_u.shape[1] == 1:
+        p_u = p_u.reshape(-1)
 
-    grid.point_data["V_u"] = v_u
-    grid.point_data["P_u"] = p_u.reshape(-1)
-    grid.point_data["V_a"] = v_a
-    grid.point_data["P_a"] = p_a.reshape(-1)
-    grid.point_data["V_e"] = v_e
-    grid.point_data["P_e"] = p_e.reshape(-1)
+    pts = np.asarray(
+        grid.points[:, :2],
+        dtype=np.float64,
+    )
+    v_a, p_a, rho_a = analytical_solution(pts)
+    v_e = np.asarray(v_u, dtype=np.float64) - v_a
+    p_e = np.asarray(p_u, dtype=np.float64).reshape(-1) - p_a
 
-    if rho_a is None:
-        pts = np.asarray(
-            grid.points[:, :2],
-            dtype=np.float64,
-        )
-        rr = np.sqrt(pts[:, 0] * pts[:, 0] + pts[:, 1] * pts[:, 1])
-        tt = np.arctan2(pts[:, 1], pts[:, 0])
-        if case in ("case1", "case3"):
-            rho_a = np.cos(n * tt) * np.exp(-1e5 * ((rr - r_int) ** 2))
-        else:
-            rho_a = ((rr / r_o) ** k) * np.cos(n * tt)
-
+    grid.point_data["V_u"] = np.asarray(v_u, dtype=np.float64)
+    grid.point_data["P_u"] = np.asarray(p_u, dtype=np.float64).reshape(-1)
+    grid.point_data["V_a"] = np.asarray(v_a, dtype=np.float64)
+    grid.point_data["P_a"] = np.asarray(p_a, dtype=np.float64).reshape(-1)
+    grid.point_data["V_e"] = np.asarray(v_e, dtype=np.float64)
+    grid.point_data["P_e"] = np.asarray(p_e, dtype=np.float64).reshape(-1)
     grid.point_data["RHO_a"] = np.asarray(
         rho_a,
         dtype=np.float64,

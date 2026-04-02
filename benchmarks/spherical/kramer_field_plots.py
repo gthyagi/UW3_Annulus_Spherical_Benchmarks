@@ -5,20 +5,43 @@
 # field plots from the latest split checkpoint output.
 
 # %%
+# to fix trame issue
+import nest_asyncio
+
+nest_asyncio.apply()
+
+# %%
 import os
 import re
+import sys
+from math import factorial
+from types import SimpleNamespace
 
 import cmcrameri.cm as cmc
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
+from scipy import special
+
+try:
+    from IPython.display import display
+except ImportError:
+    display = None
+
+IS_INTERACTIVE = (
+    hasattr(sys, "ps1") or sys.flags.interactive or "ipykernel" in sys.modules
+)
+JUPYTER_BACKEND = "html"
+
+if IS_INTERACTIVE:
+    pv.global_theme.jupyter_backend = JUPYTER_BACKEND
 
 # %% [markdown]
 # ### Parameters And Paths
 
 # %%
-dirname = "case2_inv_lc_4_l_2_m_1_k_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_1e+08_stokes_tol_1e-10_ncpus_8_bc_natural"
+dirname = "case2_inv_lc_8_l_2_m_1_k_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-05_ncpus_8_bc_natural_nitsche"
 
 # %%
 output_dir = os.path.join("../../output/spherical/kramer/latest/", f"{dirname}/")
@@ -33,10 +56,11 @@ pattern = (
     r"vdeg_(?P<vdeg>\d+)_"
     r"pdeg_(?P<pdeg>\d+)_"
     r"pcont_(?P<pcont>true|false)_"
-    r"vel_penalty_(?P<vel_penalty>[0-9.eE+\-]+)_"
+    r"(?:vel_penalty_(?P<vel_penalty>[0-9.eE+\-]+)_)?"
     r"stokes_tol_(?P<stokes_tol>[0-9.eE+\-]+)_"
     r"ncpus_(?P<ncpus>\d+)_"
-    r"bc_(?P<bc_type>\w+)"
+    r"bc_(?P<bc_type>[A-Za-z]+)"
+    r"(?:_(?P<freeslip_type>nitsche|penalty))?$"
 )
 
 match = re.search(pattern, dirname)
@@ -56,10 +80,11 @@ vdegree = int(params["vdeg"])
 pdegree = int(params["pdeg"])
 pcont = params["pcont"] == "true"
 pcont_str = str(pcont).lower()
-vel_penalty = float(params["vel_penalty"])
+vel_penalty = None if params["vel_penalty"] is None else float(params["vel_penalty"])
 stokes_tol = float(params["stokes_tol"])
 ncpus = int(params["ncpus"])
 bc_type = params["bc_type"]
+freeslip_type = params["freeslip_type"]
 
 r_i = 1.22
 r_int = 2.0
@@ -67,8 +92,290 @@ r_o = 2.22
 clip_angle = 135.0
 cpos = "yz"
 
+freeslip = case in ("case1", "case2")
+noslip = case in ("case3", "case4")
+delta_fn = case in ("case1", "case3")
+smooth = case in ("case2", "case4")
+
+
+def coefficients_sphere_delta_fs(Rp, Rm, rp, l, g, nu, sign):
+    alpha_pm, alpha_mp = [Rp / rp, Rm / rp][:: int(sign)]
+    pm = sign
+
+    A = -0.5 * (alpha_mp ** (2 * l - 1) - 1) * g * pm * rp ** (-l + 2) / (
+        (alpha_mp ** (2 * l - 1) - alpha_pm ** (2 * l - 1)) * (2 * l + 1) * (2 * l - 1) * nu
+    )
+    B = -0.5 * (alpha_mp ** (-2 * l - 3) - 1) * g * pm * rp ** (l + 3) / (
+        (alpha_mp ** (-2 * l - 3) - alpha_pm ** (-2 * l - 3)) * (2 * l + 3) * (2 * l + 1) * nu
+    )
+    C = 0.5 * (alpha_mp ** (2 * l + 3) - 1) * g * pm / (
+        (alpha_mp ** (2 * l + 3) - alpha_pm ** (2 * l + 3)) * (2 * l + 3) * (2 * l + 1) * nu * rp**l
+    )
+    D = 0.5 * (alpha_mp ** (-2 * l + 1) - 1) * g * pm * rp ** (l + 1) / (
+        (alpha_mp ** (-2 * l + 1) - alpha_pm ** (-2 * l + 1)) * (2 * l + 1) * (2 * l - 1) * nu
+    )
+    return A, B, C, D
+
+
+def coefficients_sphere_delta_ns(Rp, Rm, rp, l, g, nu, sign):
+    alpha_p, alpha_m = [Rp / rp, Rm / rp]
+    pm, mp = sign, -sign
+
+    denom = (
+        (2 * l + 1) ** 2 * (alpha_m**2 / alpha_p**2 + alpha_p**2 / alpha_m**2)
+        - 2 * (2 * l + 3) * (2 * l - 1)
+        - 4 * (alpha_m / alpha_p) ** (2 * l + 1)
+        - 4 * (alpha_m / alpha_p) ** (-2 * l - 1)
+    ) * nu
+
+    A = -0.5 * (
+        alpha_m**2
+        - alpha_p**2
+        - (2 * l + 1) * mp * (alpha_m / alpha_p) ** (2 * mp) / (2 * l - 1)
+        - (2 * l + 3) * pm / (2 * l + 1)
+        + 2 * (alpha_m ** (-2 * l - 1) - alpha_p ** (-2 * l - 1)) / (2 * l + 1)
+        + 2 * (alpha_m**2 * alpha_p ** (-2 * l - 1) - alpha_m ** (-2 * l - 1) * alpha_p**2) / (2 * l - 1)
+        - 4 * pm * (alpha_m / alpha_p) ** ((2 * l + 1) * pm) / ((2 * l + 1) * (2 * l - 1))
+    ) * g * rp ** (-l + 2) / denom
+    B = -0.5 * (
+        alpha_m**2
+        - alpha_p**2
+        - (2 * l + 1) * mp * (alpha_m / alpha_p) ** (2 * mp) / (2 * l + 3)
+        - (2 * l - 1) * pm / (2 * l + 1)
+        - 2 * (alpha_m**2 * alpha_p ** (2 * l + 1) - alpha_m ** (2 * l + 1) * alpha_p**2) / (2 * l + 3)
+        - 2 * (alpha_m ** (2 * l + 1) - alpha_p ** (2 * l + 1)) / (2 * l + 1)
+        - 4 * pm * (alpha_m / alpha_p) ** ((2 * l + 1) * mp) / ((2 * l + 3) * (2 * l + 1))
+    ) * g * rp ** (l + 3) / denom
+    C = 0.5 * (
+        (2 * l + 1) * pm * (alpha_m / alpha_p) ** (2 * pm) / (2 * l + 3)
+        + (2 * l - 1) * mp / (2 * l + 1)
+        - 2 * (alpha_m ** (-2 * l - 1) - alpha_p ** (-2 * l - 1)) / (2 * l + 1)
+        + 4 * mp * (alpha_m / alpha_p) ** ((2 * l + 1) * pm) / ((2 * l + 3) * (2 * l + 1))
+        + 2 * (alpha_m ** (-2 * l - 1) / alpha_p**2 - alpha_p ** (-2 * l - 1) / alpha_m**2) / (2 * l + 3)
+        + 1 / alpha_m**2
+        - 1 / alpha_p**2
+    ) * g / (denom * rp**l)
+    D = 0.5 * (
+        (2 * l + 1) * pm * (alpha_m / alpha_p) ** (2 * pm) / (2 * l - 1)
+        + (2 * l + 3) * mp / (2 * l + 1)
+        + 2 * (alpha_m ** (2 * l + 1) - alpha_p ** (2 * l + 1)) / (2 * l + 1)
+        + 4 * mp * (alpha_m / alpha_p) ** ((2 * l + 1) * mp) / ((2 * l + 1) * (2 * l - 1))
+        - 2 * (alpha_m ** (2 * l + 1) / alpha_p**2 - alpha_p ** (2 * l + 1) / alpha_m**2) / (2 * l - 1)
+        + 1 / alpha_m**2
+        - 1 / alpha_p**2
+    ) * g * rp ** (l + 1) / denom
+    return A, B, C, D
+
+
+def coefficients_sphere_smooth_fs(Rp, Rm, k, l, g, nu):
+    alpha = Rm / Rp
+    A = 0.5 * Rp ** (-l + 3) * (alpha ** (k + 3) - alpha ** (-l + 1)) * g / (
+        (alpha**l - alpha ** (-l + 1)) * (k + l + 2) * (k - l + 3) * (2 * l + 1) * nu
+    )
+    B = 0.5 * Rp ** (l + 4) * (alpha ** (k + 4) - alpha ** (l + 3)) * g / (
+        (alpha ** (l + 3) - 1 / alpha**l) * (k + l + 4) * (k - l + 1) * (2 * l + 1) * nu
+    )
+    C = -0.5 * Rp ** (-l + 1) * (alpha ** (k + 4) - 1 / alpha**l) * g / (
+        (alpha ** (l + 3) - 1 / alpha**l) * (k + l + 4) * (k - l + 1) * (2 * l + 1) * nu
+    )
+    D = -0.5 * Rp ** (l + 2) * (alpha ** (k + 3) - alpha**l) * g / (
+        (alpha**l - alpha ** (-l + 1)) * (k + l + 2) * (k - l + 3) * (2 * l + 1) * nu
+    )
+    E = g / (Rp**k * (k + l + 4) * (k + l + 2) * (k - l + 3) * (k - l + 1) * nu)
+    return A, B, C, D, E
+
+
+def coefficients_sphere_smooth_ns(Rp, Rm, k, l, g, nu):
+    alpha = Rm / Rp
+    gamma = (
+        (alpha ** (l + 1) + alpha ** (l - 3)) * (2 * l + 1) ** 2
+        - 2 * alpha ** (l - 1) * (2 * l + 3) * (2 * l - 1)
+        - 4 * alpha ** (3 * l)
+        - 4 * alpha ** (-l - 2)
+    ) * (k + l + 4) * (k + l + 2) * (k - l + 3) * (k - l + 1)
+
+    A = (
+        (alpha ** (k + 2) + alpha ** (l - 1)) * (k + l + 2) * (2 * l + 3)
+        - (alpha**k + alpha ** (l + 1)) * (k + l + 4) * (2 * l + 1)
+        - 2 * (alpha ** (k + 2 * l + 3) + alpha ** (-l - 2)) * (k - l + 1)
+    ) * Rp ** (-l + 3) * g / (gamma * nu)
+    B = (
+        (alpha ** (k + 2 * l + 1) + alpha ** (l + 1)) * (k - l + 3) * (2 * l + 1)
+        - (alpha ** (k + 2 * l + 3) + alpha ** (l - 1)) * (k - l + 1) * (2 * l - 1)
+        - 2 * (alpha ** (k + 2) + alpha ** (3 * l)) * (k + l + 2)
+    ) * Rp ** (l + 4) * g / (gamma * nu)
+    C = -(
+        (alpha ** (k + 2) + alpha ** (l - 3)) * (k + l + 2) * (2 * l + 1)
+        - (alpha**k + alpha ** (l - 1)) * (k + l + 4) * (2 * l - 1)
+        - 2 * (alpha ** (k + 2 * l + 1) + alpha ** (-l - 2)) * (k - l + 3)
+    ) * Rp ** (-l + 1) * g / (gamma * nu)
+    D = -(
+        (alpha ** (k + 2 * l + 1) + alpha ** (l - 1)) * (k - l + 3) * (2 * l + 3)
+        - (alpha ** (k + 2 * l + 3) + alpha ** (l - 3)) * (k - l + 1) * (2 * l + 1)
+        - 2 * (alpha**k + alpha ** (3 * l)) * (k + l + 4)
+    ) * Rp ** (l + 2) * g / (gamma * nu)
+    E = g / (Rp**k * (k + l + 4) * (k + l + 2) * (k - l + 3) * (k - l + 1) * nu)
+    return A, B, C, D, E
+
+
+def build_delta_solution(Rp, Rm, rp, l, m, g, nu, sign, no_slip):
+    coeffs = coefficients_sphere_delta_ns(Rp, Rm, rp, l, g, nu, sign) if no_slip else coefficients_sphere_delta_fs(Rp, Rm, rp, l, g, nu, sign)
+    _, _, C, D = coeffs
+    return SimpleNamespace(
+        l=l,
+        m=m,
+        g=g,
+        nu=nu,
+        ABCD=coeffs,
+        G=-2 * nu * (l + 1) * (2 * l + 3) * C,
+        H=-2 * nu * l * (2 * l - 1) * D,
+    )
+
+
+def build_smooth_solution(Rp, Rm, k, l, m, g, nu, no_slip):
+    if (k + 1) * (k + 2) == l * (l + 1) or (k + 3) * (k + 4) == l * (l + 1):
+        raise NotImplementedError(f"Smooth solution not implemented for k={k}, l={l}")
+    coeffs = coefficients_sphere_smooth_ns(Rp, Rm, k, l, g, nu) if no_slip else coefficients_sphere_smooth_fs(Rp, Rm, k, l, g, nu)
+    _, _, C, D, _ = coeffs
+    return SimpleNamespace(
+        l=l,
+        m=m,
+        k=k,
+        g=g,
+        nu=nu,
+        ABCDE=coeffs,
+        G=-2 * nu * (l + 1) * (2 * l + 3) * C,
+        H=-2 * nu * l * (2 * l - 1) * D,
+        K=-g * (k + 2) / ((k + 1) * (k + 2) - l * (l + 1)) / Rp**k,
+    )
+
+
+def build_case_solutions():
+    if freeslip and delta_fn:
+        return (
+            build_delta_solution(r_o, r_i, r_int, l, m, -1.0, 1.0, +1, no_slip=False),
+            build_delta_solution(r_o, r_i, r_int, l, m, -1.0, 1.0, -1, no_slip=False),
+        )
+    if freeslip and smooth:
+        soln = build_smooth_solution(r_o, r_i, k, l, m, 1.0, 1.0, no_slip=False)
+        return soln, soln
+    if noslip and delta_fn:
+        return (
+            build_delta_solution(r_o, r_i, r_int, l, m, -1.0, 1.0, +1, no_slip=True),
+            build_delta_solution(r_o, r_i, r_int, l, m, -1.0, 1.0, -1, no_slip=True),
+        )
+    if noslip and smooth:
+        soln = build_smooth_solution(r_o, r_i, k, l, m, 1.0, 1.0, no_slip=True)
+        return soln, soln
+    raise ValueError(f"Unsupported case: {case}")
+
+
+def real_spherical_harmonic_and_derivatives(l_val, m_val, theta, phi):
+    x = np.cos(theta)
+    p_lm = special.lpmv(m_val, l_val, x)
+    if l_val - 1 >= m_val:
+        p_lm_prev = special.lpmv(m_val, l_val - 1, x)
+    else:
+        p_lm_prev = np.zeros_like(theta)
+
+    norm = np.sqrt(
+        (2 * l_val + 1)
+        / (4 * np.pi)
+        * factorial(l_val - m_val)
+        / factorial(l_val + m_val)
+    )
+    cos_mphi = np.cos(m_val * phi)
+    sin_mphi = np.sin(m_val * phi)
+    y_lm = norm * cos_mphi * p_lm
+
+    sin_theta = np.sin(theta)
+    safe_sin = np.where(np.abs(sin_theta) > 1.0e-12, sin_theta, np.inf)
+    dplm_dtheta = (l_val * x * p_lm - (l_val + m_val) * p_lm_prev) / safe_sin
+    dy_dtheta = norm * cos_mphi * dplm_dtheta
+    dy_dphi = -m_val * norm * sin_mphi * p_lm
+    return y_lm, dy_dtheta, dy_dphi
+
+
+def analytical_velocity_cartesian(soln, rr, theta, phi, y_lm, dy_dtheta, dy_dphi):
+    l_val = int(soln.l)
+    if hasattr(soln, "ABCD"):
+        A, B, C, D = soln.ABCD
+        P_l = A * rr**l_val + B * rr ** (-l_val - 1) + C * rr ** (l_val + 2) + D * rr ** (-l_val + 1)
+        dPldr = (
+            A * l_val * rr ** (l_val - 1)
+            + B * (-l_val - 1) * rr ** (-l_val - 2)
+            + C * (l_val + 2) * rr ** (l_val + 1)
+            + D * (-l_val + 1) * rr ** (-l_val)
+        )
+    else:
+        A, B, C, D, E = soln.ABCDE
+        k_val = int(soln.k)
+        P_l = A * rr**l_val + B * rr ** (-l_val - 1) + C * rr ** (l_val + 2) + D * rr ** (-l_val + 1) + E * rr ** (k_val + 3)
+        dPldr = (
+            A * l_val * rr ** (l_val - 1)
+            + B * (-l_val - 1) * rr ** (-l_val - 2)
+            + C * (l_val + 2) * rr ** (l_val + 1)
+            + D * (-l_val + 1) * rr ** (-l_val)
+            + E * (k_val + 3) * rr ** (k_val + 2)
+        )
+
+    prefactor = -(P_l / rr + dPldr)
+    u_r = -l_val * (l_val + 1) * P_l * y_lm / rr
+    u_theta = prefactor * dy_dtheta
+    sin_theta = np.sin(theta)
+    safe_sin = np.where(np.abs(sin_theta) > 1.0e-12, sin_theta, np.inf)
+    u_phi = prefactor * dy_dphi / safe_sin
+
+    sin_theta = np.sin(theta)
+    cos_theta = np.cos(theta)
+    cos_phi = np.cos(phi)
+    sin_phi = np.sin(phi)
+    u_x = sin_theta * cos_phi * u_r + cos_theta * cos_phi * u_theta - sin_phi * u_phi
+    u_y = sin_theta * sin_phi * u_r + cos_theta * sin_phi * u_theta + cos_phi * u_phi
+    u_z = cos_theta * u_r - sin_theta * u_theta
+    return np.column_stack([u_x, u_y, u_z])
+
+
+def analytical_pressure(soln, rr, y_lm):
+    p_expr = (soln.G * rr**soln.l + soln.H * rr ** (-soln.l - 1)) * y_lm
+    if hasattr(soln, "K"):
+        p_expr += soln.K * rr ** (int(soln.k) + 1) * y_lm
+    return p_expr
+
+
+def analytical_solution(points_xyz):
+    soln_above, soln_below = build_case_solutions()
+    rr = np.linalg.norm(points_xyz, axis=1)
+    theta = np.arccos(np.clip(points_xyz[:, 2] / rr, -1.0, 1.0))
+    phi = np.mod(np.arctan2(points_xyz[:, 1], points_xyz[:, 0]), 2 * np.pi)
+    y_lm, dy_dtheta, dy_dphi = real_spherical_harmonic_and_derivatives(l, m, theta, phi)
+    mask_above = rr > r_int
+
+    v_ana = np.empty((points_xyz.shape[0], 3), dtype=np.float64)
+    p_ana = np.empty(points_xyz.shape[0], dtype=np.float64)
+
+    for mask, soln in ((mask_above, soln_above), (~mask_above, soln_below)):
+        if np.any(mask):
+            v_ana[mask] = analytical_velocity_cartesian(
+                soln,
+                rr[mask],
+                theta[mask],
+                phi[mask],
+                y_lm[mask],
+                dy_dtheta[mask],
+                dy_dphi[mask],
+            )
+            p_ana[mask] = analytical_pressure(soln, rr[mask], y_lm[mask])
+
+    if delta_fn:
+        rho_ana = np.exp(-1e5 * ((rr - r_int) ** 2)) * y_lm
+    else:
+        rho_ana = ((rr / r_o) ** k) * y_lm
+
+    return v_ana, p_ana, rho_ana
+
 # %%
-plot_size = (750, 750)
+SCREENSHOT_WINDOW_SIZE = (750, 750)
 mesh_h5_path = os.path.join(output_dir, "output.mesh.00000.h5")
 
 if not os.path.isfile(mesh_h5_path):
@@ -139,24 +446,22 @@ with h5py.File(mesh_h5_path, "r") as h5f:
 
 v_u = read_split_field(mesh_h5_path, "V_u", points.shape[0])
 p_u = read_split_field(mesh_h5_path, "P_u", points.shape[0]).reshape(-1)
-v_a = read_split_field(mesh_h5_path, "V_a", points.shape[0])
-p_a = read_split_field(mesh_h5_path, "P_a", points.shape[0]).reshape(-1)
-v_e = read_split_field(mesh_h5_path, "V_e", points.shape[0])
-p_e = read_split_field(mesh_h5_path, "P_e", points.shape[0]).reshape(-1)
-rho_a = read_split_field(mesh_h5_path, "RHO_a", points.shape[0]).reshape(-1)
+v_a, p_a, rho_a = analytical_solution(points)
+v_e = np.asarray(v_u, dtype=np.float64) - v_a
+p_e = np.asarray(p_u, dtype=np.float64).reshape(-1) - p_a
 
 cells_flat = np.hstack([np.full((cells.shape[0], 1), cells.shape[1], dtype=np.int64), cells]).ravel()
 celltypes = np.full(cells.shape[0], pv.CellType.TETRA, dtype=np.uint8)
 
 grid = pv.UnstructuredGrid(cells_flat, celltypes, points)
-grid.point_data["V_u"] = v_u
-grid.point_data["P_u"] = p_u
-grid.point_data["V_a"] = v_a
-grid.point_data["P_a"] = p_a
-grid.point_data["V_e"] = v_e
-grid.point_data["P_e"] = p_e
-grid.point_data["RHO_a"] = rho_a
-grid.point_data["RHO_plot"] = -rho_a
+grid.point_data["V_u"] = np.asarray(v_u, dtype=np.float64)
+grid.point_data["P_u"] = np.asarray(p_u, dtype=np.float64).reshape(-1)
+grid.point_data["V_a"] = np.asarray(v_a, dtype=np.float64)
+grid.point_data["P_a"] = np.asarray(p_a, dtype=np.float64).reshape(-1)
+grid.point_data["V_e"] = np.asarray(v_e, dtype=np.float64)
+grid.point_data["P_e"] = np.asarray(p_e, dtype=np.float64).reshape(-1)
+grid.point_data["RHO_a"] = np.asarray(rho_a, dtype=np.float64).reshape(-1)
+grid.point_data["RHO_plot"] = -np.asarray(rho_a, dtype=np.float64).reshape(-1)
 
 v_ana_mag = np.linalg.norm(v_a, axis=1)
 v_err_mag = np.linalg.norm(v_e, axis=1)
@@ -243,7 +548,50 @@ def save_colorbar(colormap, clim, label, fname, label_y):
     cb.ax.set_title(label, fontsize=18, x=0.5, y=label_y)
 
     fig.savefig(os.path.join(output_dir, f"{fname}_cbhorz.pdf"), dpi=150, bbox_inches="tight")
+    if IS_INTERACTIVE and display is not None:
+        display(fig)
     plt.close(fig)
+
+
+def make_plotter(off_screen, window_size=None):
+    kwargs = {"off_screen": off_screen}
+    if window_size is not None:
+        kwargs["window_size"] = window_size
+
+    plotter = pv.Plotter(**kwargs)
+    plotter.image_scale = 3.5
+    plotter.set_background("white")
+    return plotter
+
+
+def configure_camera(plotter):
+    plotter.camera_position = cpos
+    plotter.render()
+    plotter.camera.zoom(1.4)
+
+
+def add_field_meshes(plotter, work, scalars, colormap, clim):
+    for clipped in clip_grid(work, clip_angle):
+        plotter.add_mesh(
+            clipped,
+            scalars=scalars,
+            cmap=colormap,
+            clim=clim,
+            edge_color="k",
+            show_edges=False,
+            show_scalar_bar=False,
+        )
+
+
+def add_mesh_scene(plotter):
+    for clipped in clip_grid(grid, clip_angle, crinkle=True):
+        plotter.add_mesh(
+            clipped,
+            color="white",
+            edge_color="black",
+            show_edges=True,
+            show_scalar_bar=False,
+        )
 
 
 def save_field_plot(field_name, png_name, colormap, clim, cb_label, cb_name, label_y, vector=False):
@@ -256,26 +604,20 @@ def save_field_plot(field_name, png_name, colormap, clim, cb_label, cb_name, lab
     else:
         scalars = field_name
 
-    plotter = pv.Plotter(window_size=plot_size, off_screen=True)
-    plotter.image_scale = 3.5
-    plotter.set_background("white")
+    if IS_INTERACTIVE:
+        display_plotter = make_plotter(off_screen=False)
+        add_field_meshes(display_plotter, work, scalars, colormap, clim)
+        configure_camera(display_plotter)
+        display_plotter.show(auto_close=False)
 
-    for clipped in clip_grid(work, clip_angle):
-        plotter.add_mesh(
-            clipped,
-            scalars=scalars,
-            cmap=colormap,
-            clim=clim,
-            edge_color="k",
-            show_edges=False,
-            show_scalar_bar=False,
-        )
-
-    plotter.camera_position = cpos
-    plotter.render()
-    plotter.camera.zoom(1.4)
-    plotter.screenshot(os.path.join(output_dir, png_name))
-    plotter.close()
+    save_plotter = make_plotter(
+        off_screen=True,
+        window_size=SCREENSHOT_WINDOW_SIZE,
+    )
+    add_field_meshes(save_plotter, work, scalars, colormap, clim)
+    configure_camera(save_plotter)
+    save_plotter.screenshot(os.path.join(output_dir, png_name))
+    save_plotter.close()
 
     save_colorbar(colormap, clim, cb_label, cb_name, label_y)
 
@@ -283,24 +625,20 @@ def save_field_plot(field_name, png_name, colormap, clim, cb_label, cb_name, lab
 # ### Mesh Plot
 
 # %%
-mesh_plotter = pv.Plotter(window_size=plot_size, off_screen=True)
-mesh_plotter.image_scale = 3.5
-mesh_plotter.set_background("white")
+if IS_INTERACTIVE:
+    mesh_display_plotter = make_plotter(off_screen=False)
+    add_mesh_scene(mesh_display_plotter)
+    configure_camera(mesh_display_plotter)
+    mesh_display_plotter.show(auto_close=False)
 
-for clipped in clip_grid(grid, clip_angle, crinkle=True):
-    mesh_plotter.add_mesh(
-        clipped,
-        color="white",
-        edge_color="black",
-        show_edges=True,
-        show_scalar_bar=False,
-    )
-
-mesh_plotter.camera_position = cpos
-mesh_plotter.render()
-mesh_plotter.camera.zoom(1.4)
-mesh_plotter.screenshot(os.path.join(output_dir, "mesh.png"))
-mesh_plotter.close()
+mesh_save_plotter = make_plotter(
+    off_screen=True,
+    window_size=SCREENSHOT_WINDOW_SIZE,
+)
+add_mesh_scene(mesh_save_plotter)
+configure_camera(mesh_save_plotter)
+mesh_save_plotter.screenshot(os.path.join(output_dir, "mesh.png"))
+mesh_save_plotter.close()
 
 # %% [markdown]
 # ### Field Plots
