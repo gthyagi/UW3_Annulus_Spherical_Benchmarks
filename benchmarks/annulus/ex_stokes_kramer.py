@@ -43,7 +43,7 @@ params = uw.Params(
         description="Wave number for density perturbation",
     ),
     uw_k=uw.Param(
-        3,
+        2,
         type=uw.ParamType.INTEGER,
         description="Power exponent for smooth density",
     ),
@@ -100,7 +100,12 @@ params = uw.Params(
     uw_bc_type=uw.Param(
         None,
         type=uw.ParamType.STRING,
-        description="Boundary-condition mode: natural or essential or paper",
+        description="Boundary-condition mode: natural or essential",
+    ),
+    uw_freeslip_type=uw.Param(
+        'nitsche',
+        type=uw.ParamType.STRING,
+        description="Freeslip method: penalty or nitsche",
     ),
 )
 
@@ -148,20 +153,27 @@ smooth = False
 if case in ("case1",):
     freeslip = True
     delta_fn = True
+    params.uw_bc_type = f'natural_{params.uw_freeslip_type}'
+    if params.uw_freeslip_type == "nitsche":
+        params.uw_vel_penalty = None
 elif case in ("case2",):
     freeslip = True
     smooth = True
+    params.uw_bc_type = f'natural_{params.uw_freeslip_type}'
+    if params.uw_freeslip_type == "nitsche":
+        params.uw_vel_penalty = None
 elif case in ("case3",):
     noslip = True
     delta_fn = True
+    params.uw_bc_type = "essential"
+    params.uw_vel_penalty = None
 elif case in ("case4",):
     noslip = True
     smooth = True
+    params.uw_bc_type = "essential"
+    params.uw_vel_penalty = None
 else:
     raise ValueError(f"Unknown case: {case}")
-
-# hard set the stokes tolerance based on the case bc type.
-params.uw_stokes_tol = 1.0e-8 if freeslip else 1.0e-5
 
 # %% [markdown]
 # ### Output Directory
@@ -450,6 +462,19 @@ v_ana_above_sym = analytical_velocity_cartesian_sympy(soln_above, r_uw, th_uw, m
 v_ana_below_sym = analytical_velocity_cartesian_sympy(soln_below, r_uw, th_uw, mesh.CoordinateSystem.rRotN)
 p_ana_above_sym = analytical_pressure_sympy(soln_above, r_uw, th_uw)
 p_ana_below_sym = analytical_pressure_sympy(soln_below, r_uw, th_uw)
+v_ana_sym = sp.Matrix(
+    [[
+        sp.Piecewise(
+            (v_ana_above_sym[i], r_uw > r_int),
+            (v_ana_below_sym[i], True),
+        )
+        for i in range(v_ana_above_sym.rows)
+    ]]
+)
+p_ana_sym = sp.Piecewise(
+    (p_ana_above_sym, r_uw > r_int),
+    (p_ana_below_sym, True),
+)
 
 # %% [markdown]
 # ### Create Mesh Variables
@@ -470,83 +495,6 @@ p_uw = uw.discretisation.MeshVariable(
     varsymbol=r"{P_u}",
     continuous=pressure_is_continuous,
 )
-
-v_ana = uw.discretisation.MeshVariable(
-    varname="V_a",
-    mesh=mesh,
-    degree=params.uw_vdegree,
-    vtype=uw.VarType.VECTOR,
-    varsymbol=r"{V_a}",
-)
-p_ana = uw.discretisation.MeshVariable(
-    varname="P_a",
-    mesh=mesh,
-    degree=params.uw_pdegree,
-    vtype=uw.VarType.SCALAR,
-    varsymbol=r"{P_a}",
-    continuous=pressure_is_continuous,
-)
-rho_ana = uw.discretisation.MeshVariable(
-    varname="RHO_a",
-    mesh=mesh,
-    degree=params.uw_pdegree,
-    vtype=uw.VarType.SCALAR,
-    varsymbol=r"{RHO_a}",
-    continuous=True,
-)
-
-v_err = uw.discretisation.MeshVariable(
-    varname="V_e",
-    mesh=mesh,
-    degree=params.uw_vdegree,
-    vtype=uw.VarType.VECTOR,
-    varsymbol=r"{V_e}",
-)
-p_err = uw.discretisation.MeshVariable(
-    varname="P_e",
-    mesh=mesh,
-    degree=params.uw_pdegree,
-    vtype=uw.VarType.SCALAR,
-    varsymbol=r"{P_e}",
-    continuous=pressure_is_continuous,
-)
-
-
-# %% [markdown]
-# ### Analytical Field Fill
-
-# %%
-def analytical_values(var, r_int, fn_above, fn_below):
-    coords = np.asarray(var.coords)
-    mask_above = np.hypot(coords[:, 0], coords[:, 1]) > r_int
-
-    ncomp = var.data.shape[1]
-    values = np.empty_like(var.data)
-
-    for mask, fn in ((mask_above, fn_above), (~mask_above, fn_below)):
-        if np.any(mask):
-            values[mask, :] = np.asarray(uw.function.evaluate(fn, coords[mask])).reshape(-1, ncomp)
-
-    return values
-
-
-# %%
-v_ana_values = analytical_values(
-    v_ana,
-    r_int,
-    v_ana_above_sym,
-    v_ana_below_sym,
-)
-p_ana_values = analytical_values(
-    p_ana,
-    r_int,
-    p_ana_above_sym,
-    p_ana_below_sym,
-)
-
-with uw.synchronised_array_update():
-    v_ana.data[...] = v_ana_values
-    p_ana.data[...] = p_ana_values
 
 # %% [markdown]
 # ### Stokes
@@ -575,10 +523,6 @@ elif smooth:
     rho = ((r_uw / r_o) ** k) * sp.cos(n * th_uw)
     gravity_fn = -1.0 * unit_rvec
     stokes.bodyforce = rho * gravity_fn
-
-# %%
-# Restore analytical density values into mesh variable
-rho_ana.data[:] = np.asarray(uw.function.evaluate(rho, rho_ana.coords)).reshape(-1, 1)
 
 # %% [markdown]
 # #### Nullspace Handling
@@ -648,12 +592,23 @@ rho_ana.data[:] = np.asarray(uw.function.evaluate(rho, rho_ana.coords)).reshape(
 #         stokes.add_essential_bc(sp.Matrix([0.0, 0.0]), mesh.boundaries.Lower.name)
 
 if freeslip:
-    # UW implements annulus free-slip through a penalty on the normal velocity
-    # component. This matches the authors' physical condition u.n = 0 while
-    # leaving tangential motion free on the shell boundaries.
-    Gamma_N = mesh.CoordinateSystem.unit_e_0
-    stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, mesh.boundaries.Upper.name)
-    stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, mesh.boundaries.Lower.name)
+    if params.uw_freeslip_type == "penalty":
+        # UW implements annulus free-slip through a penalty on the normal velocity
+        # component. This matches the authors' physical condition u.n = 0 while
+        # leaving tangential motion free on the shell boundaries.
+        Gamma_N = mesh.CoordinateSystem.unit_e_0
+        # Gamma_N = mesh.Gamma
+        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, mesh.boundaries.Upper.name)
+        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, mesh.boundaries.Lower.name)
+    elif params.uw_freeslip_type == "nitsche":
+        # Nitsche's method is more robust than the penalty method for free-slip
+        # conditions, and it does not require tuning a penalty parameter. It
+        # imposes the same physical condition u.n = 0 while leaving tangential
+        # motion free on the shell boundaries.
+        outer_normal = mesh.CoordinateSystem.unit_e_0
+        inner_normal = -mesh.CoordinateSystem.unit_e_0
+        stokes.add_nitsche_bc(mesh.boundaries.Upper.name, normal=outer_normal, gamma=10)
+        stokes.add_nitsche_bc(mesh.boundaries.Lower.name, normal=inner_normal, gamma=10)
 elif noslip:
     stokes.add_essential_bc(sp.Matrix([0.0, 0.0]), mesh.boundaries.Upper.name)
     stokes.add_essential_bc(sp.Matrix([0.0, 0.0]), mesh.boundaries.Lower.name)
@@ -807,29 +762,31 @@ if freeslip:
 # ### Errors and L2 Norm
 
 # %%
-def compute_error(mesh_var, var_num, r_int, fn_above, fn_below):
-    ana_values = analytical_values(mesh_var, r_int, fn_above, fn_below)
-    return np.asarray(var_num.data) - ana_values
-
-v_err_values = compute_error(v_err, v_uw, r_int, v_ana_above_sym, v_ana_below_sym)
-p_err_values = compute_error(p_err, p_uw, r_int, p_ana_above_sym, p_ana_below_sym)
-
-with uw.synchronised_array_update():
-    v_err.data[...] = v_err_values
-    p_err.data[...] = p_err_values
+v_err_sym = v_uw.sym - v_ana_sym
+p_err_sym = p_uw.sym[0] - p_ana_sym
 
 
 # %%
 def relative_l2_error(mesh, err_var, ana_var):
-    """Relative L2 error for scalar or vector expressions."""
-    err_I = uw.maths.Integral(mesh, err_var.sym.dot(err_var.sym))
-    ana_I = uw.maths.Integral(mesh, ana_var.sym.dot(ana_var.sym))
+    """Relative L2 error for scalar or vector mesh variables / expressions."""
+    err_expr = err_var.sym if hasattr(err_var, "sym") else err_var
+    ana_expr = ana_var.sym if hasattr(ana_var, "sym") else ana_var
+
+    if isinstance(err_expr, sp.MatrixBase):
+        err_expr = err_expr.dot(err_expr)
+        ana_expr = ana_expr.dot(ana_expr)
+    else:
+        err_expr = err_expr * err_expr
+        ana_expr = ana_expr * ana_expr
+
+    err_I = uw.maths.Integral(mesh, err_expr)
+    ana_I = uw.maths.Integral(mesh, ana_expr)
     return np.sqrt(err_I.evaluate()) / np.sqrt(ana_I.evaluate())
 
 
 # %%
-v_err_l2 = relative_l2_error(mesh, v_err, v_ana)
-p_err_l2 = relative_l2_error(mesh, p_err, p_ana)
+v_err_l2 = relative_l2_error(mesh, v_err_sym, v_ana_sym)
+p_err_l2 = relative_l2_error(mesh, p_err_sym, p_ana_sym)
 
 if uw.mpi.rank == 0:
     print("Relative velocity L2 error:", v_err_l2)
@@ -855,7 +812,7 @@ if uw.mpi.rank == 0:
 mesh.write_timestep(
     'output',
     index=0,
-    meshVars=[v_uw, p_uw, v_ana, p_ana, rho_ana, v_err, p_err],
+    meshVars=[v_uw, p_uw],
     outputPath=str(output_dir),
 )
 

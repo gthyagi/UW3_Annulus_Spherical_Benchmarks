@@ -102,15 +102,10 @@ params = uw.Params(
         type=uw.ParamType.STRING,
         description="Boundary-condition mode: natural or essential",
     ),
-    uw_pressure_pc_type=uw.Param(
-        "mg",
+    uw_freeslip_type=uw.Param(
+        'nitsche',
         type=uw.ParamType.STRING,
-        description="Pressure-block preconditioner type for debug runs",
-    ),
-    uw_pressure_pc_mg_type=uw.Param(
-        "multiplicative",
-        type=uw.ParamType.STRING,
-        description="Pressure-block MG type when uw_pressure_pc_type=mg",
+        description="Freeslip method: penalty or nitsche",
     ),
 )
 
@@ -127,6 +122,9 @@ is_p1p0 = params.uw_vdegree == 1 and params.uw_pdegree == 0
 if uw.mpi.rank == 0 and params.uw_pdegree == 0 and params.uw_pcont:
     print("Degree-0 pressure uses discontinuous storage; overriding uw_pcont to false.")
 
+# benchmark only run k=l+1 for all cases.
+params.uw_k = params.uw_l + 1
+
 # %% [markdown]
 # ### Case Mapping
 
@@ -139,20 +137,27 @@ smooth = False
 if params.uw_case in ("case1",):
     freeslip = True
     delta_fn = True
+    params.uw_bc_type = f'natural_{params.uw_freeslip_type}'
+    if params.uw_freeslip_type == "nitsche":
+        params.uw_vel_penalty = None
 elif params.uw_case in ("case2",):
     freeslip = True
     smooth = True
+    params.uw_bc_type = f'natural_{params.uw_freeslip_type}'
+    if params.uw_freeslip_type == "nitsche":
+        params.uw_vel_penalty = None
 elif params.uw_case in ("case3",):
     noslip = True
     delta_fn = True
+    params.uw_bc_type = "essential"
+    params.uw_vel_penalty = None
 elif params.uw_case in ("case4",):
     noslip = True
     smooth = True
+    params.uw_bc_type = "essential"
+    params.uw_vel_penalty = None
 else:
     raise ValueError(f"Unknown case: {params.uw_case}")
-
-# hard set the stokes tolerance based on the case bc type.
-params.uw_stokes_tol = 1.0e-5 if freeslip else 1.0e-5
 
 # %% [markdown]
 # ### Output Directory
@@ -186,8 +191,6 @@ case_id = make_case_id(
     pcont=params.uw_pcont,
     vel_penalty=params.uw_vel_penalty,
     stokes_tol=params.uw_stokes_tol,
-    ppc=params.uw_pressure_pc_type if params.uw_pressure_pc_type != "mg" else None,
-    pmg=params.uw_pressure_pc_mg_type if params.uw_pressure_pc_mg_type != "multiplicative" else None,
     ncpus=uw.mpi.size,
     bc=params.uw_bc_type,
 )
@@ -411,8 +414,6 @@ velocity_nullspace_basis = [
     sp.Matrix([z_uw, 0, -x_uw]),
     sp.Matrix([-y_uw, x_uw, 0]),
 ]
-# Match the legacy Kramer postprocessing mode for free-slip shells.
-v_theta_phi_fn_xyz = sp.Matrix(((0, 1, 1), (-1, 0, 1), (-1, -1, 0))) * mesh.CoordinateSystem.N.T
 y_lm_sym = (
     sp.sqrt(
         (2 * params.uw_l + 1)
@@ -487,62 +488,6 @@ p_uw = uw.discretisation.MeshVariable(
     varsymbol=r"{P_u}",
     continuous=params.uw_pcont,
 )
-
-v_ana = uw.discretisation.MeshVariable(
-    varname="V_a",
-    mesh=mesh,
-    degree=params.uw_vdegree,
-    vtype=uw.VarType.VECTOR,
-    varsymbol=r"{V_a}",
-)
-p_ana = uw.discretisation.MeshVariable(
-    varname="P_a",
-    mesh=mesh,
-    degree=params.uw_pdegree,
-    vtype=uw.VarType.SCALAR,
-    varsymbol=r"{P_a}",
-    continuous=params.uw_pcont,
-)
-rho_ana = uw.discretisation.MeshVariable(
-    varname="RHO_a",
-    mesh=mesh,
-    degree=params.uw_pdegree,
-    vtype=uw.VarType.SCALAR,
-    varsymbol=r"{RHO_a}",
-    continuous=True,
-)
-
-v_err = uw.discretisation.MeshVariable(
-    varname="V_e",
-    mesh=mesh,
-    degree=params.uw_vdegree,
-    vtype=uw.VarType.VECTOR,
-    varsymbol=r"{V_e}",
-)
-p_err = uw.discretisation.MeshVariable(
-    varname="P_e",
-    mesh=mesh,
-    degree=params.uw_pdegree,
-    vtype=uw.VarType.SCALAR,
-    varsymbol=r"{P_e}",
-    continuous=params.uw_pcont,
-)
-
-
-# %% [markdown]
-# ### Field Materialisation
-
-# %%
-def fill_from_expression_chunked(var, fn, chunk_size=20000):
-    coords = np.asarray(var.coords)
-
-    with uw.synchronised_array_update():
-        for start in range(0, coords.shape[0], chunk_size):
-            chunk = slice(start, start + chunk_size)
-            values = np.asarray(uw.function.evaluate(fn, coords[chunk])).reshape(
-                -1, var.data.shape[1]
-            )
-            var.data[chunk, :] = values
 
 # %% [markdown]
 # ### Stokes
@@ -642,12 +587,22 @@ else:
 #     raise ValueError(f"Unsupported case flags: freeslip={freeslip}, noslip={noslip}")
 
 if freeslip:
-    # UW implements annulus free-slip through a penalty on the normal velocity
-    # component. This matches the authors' physical condition u.n = 0 while
-    # leaving tangential motion free on the shell boundaries.
-    Gamma_N = mesh.CoordinateSystem.unit_e_0
-    stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, mesh.boundaries.Upper.name)
-    stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, mesh.boundaries.Lower.name)
+    if params.uw_freeslip_type == "penalty":
+        # UW implements annulus free-slip through a penalty on the normal velocity
+        # component. This matches the authors' physical condition u.n = 0 while
+        # leaving tangential motion free on the shell boundaries.
+        Gamma_N = mesh.CoordinateSystem.unit_e_0
+        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, mesh.boundaries.Upper.name)
+        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, mesh.boundaries.Lower.name)
+    elif params.uw_freeslip_type == "nitsche":
+        # Nitsche's method is more robust than the penalty method for free-slip
+        # conditions, and it does not require tuning a penalty parameter. It
+        # imposes the same physical condition u.n = 0 while leaving tangential
+        # motion free on the shell boundaries.
+        outer_normal = mesh.CoordinateSystem.unit_e_0
+        inner_normal = -mesh.CoordinateSystem.unit_e_0
+        stokes.add_nitsche_bc(mesh.boundaries.Upper.name, normal=outer_normal, gamma=10)
+        stokes.add_nitsche_bc(mesh.boundaries.Lower.name, normal=inner_normal, gamma=10)
 elif noslip:
     stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), mesh.boundaries.Upper.name)
     stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), mesh.boundaries.Lower.name)
@@ -737,10 +692,9 @@ else:
     stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_max_it"] = 5
     stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_converged_maxits"] = None
 
-    stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", params.uw_pressure_pc_type)
-    if params.uw_pressure_pc_type == "mg":
-        stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", params.uw_pressure_pc_mg_type)
-        stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
+    stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", "mg")
+    stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative")
+    stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
 
 # %% [markdown]
 # #### Solve Stokes
@@ -778,24 +732,32 @@ def subtract_pressure_mean(mesh, pressure_var):
     pressure_var.data[:, 0] -= p_mean
 
 
-def subtract_rigid_rotation(mesh, velocity_var, rotation_mode):
+def subtract_rigid_rotations(mesh, velocity_var, rotation_modes, passes=2):
     """
-    Remove the rigid-body rotation component from the numerical velocity field.
+    Remove rigid-body rotation components from the numerical velocity field.
 
-    This matches the benchmark-paper postprocessing used for free-slip cases.
+    Spherical free-slip has a 3D rotational nullspace. We project the solved
+    velocity onto each rigid-rotation basis mode and subtract those components
+    before computing error norms.
     """
-    mode_int = uw.maths.Integral(mesh, rotation_mode.dot(velocity_var.sym)).evaluate()
-    mode_norm = uw.maths.Integral(mesh, rotation_mode.dot(rotation_mode)).evaluate()
-    coeff = mode_int / mode_norm
+    for _ in range(passes):
+        for rotation_mode in rotation_modes:
+            mode_int = uw.maths.Integral(
+                mesh, rotation_mode.dot(velocity_var.sym)
+            ).evaluate()
+            mode_norm = uw.maths.Integral(
+                mesh, rotation_mode.dot(rotation_mode)
+            ).evaluate()
+            coeff = mode_int / mode_norm
 
-    dv = uw.function.evaluate(coeff * rotation_mode, velocity_var.coords)
-    velocity_var.data[...] -= dv.reshape(velocity_var.data.shape)
+            dv = uw.function.evaluate(coeff * rotation_mode, velocity_var.coords)
+            velocity_var.data[...] -= dv.reshape(velocity_var.data.shape)
 
 
 subtract_pressure_mean(mesh, p_uw)
 
 if freeslip:
-    subtract_rigid_rotation(mesh, v_uw, v_theta_phi_fn_xyz)
+    subtract_rigid_rotations(mesh, v_uw, velocity_nullspace_basis)
 
 # %% [markdown]
 # ### Errors and L2 Norm
@@ -843,18 +805,10 @@ if uw.mpi.rank == 0:
         f_h5.create_dataset("v_l2_norm", data=v_err_l2)
         f_h5.create_dataset("p_l2_norm", data=p_err_l2)
 
-# %%
-fill_from_expression_chunked(v_ana, v_ana_sym)
-fill_from_expression_chunked(p_ana, p_ana_sym)
-fill_from_expression_chunked(rho_ana, rho)
-fill_from_expression_chunked(v_err, v_err_sym)
-fill_from_expression_chunked(p_err, p_err_sym)
-
-# %%
 mesh.write_timestep(
     "output",
     index=0,
-    meshVars=[v_uw, p_uw, v_ana, p_ana, rho_ana, v_err, p_err],
+    meshVars=[v_uw, p_uw],
     outputPath=str(output_dir),
 )
 
