@@ -68,6 +68,18 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
     - the analytical pressure is zero on both spherical boundaries, so pressure boundary treatment matters
     - use this paper when checking spherical `m=-1` and `m=3` velocity, pressure, density/body-force, and `vrms` expressions
 
+- Nitsche free-slip implementation reference:
+  - `docs/benchmark_papers/sime_wilson_2020.pdf`
+  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/sime_wilson_2020.pdf`
+  - Scope:
+    - Nitsche weak imposition of free-slip / normal-velocity constraints for Stokes flow
+    - curved-boundary treatment and robustness relative to pure penalty methods
+    - geodynamics-focused formulation details relevant to annulus and spherical shell benchmarks
+  - Practical notes:
+    - use this paper when checking or extending `uw_freeslip_type = nitsche`
+    - treat it as the primary formulation reference for Nitsche free-slip terms, parameter choices, and expected behaviour
+    - read it together with UW's curved-boundary note at `/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest/underworld3/docs/advanced/curved-boundary-conditions.md`
+
 - Annulus Thieulot benchmark:
   - `docs/benchmark_papers/thieulot_puckett_2018.pdf`
   - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/thieulot_puckett_2018.pdf`
