@@ -422,6 +422,9 @@ elif params.uw_bc_type == "essential":
 else:
     raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
 
+inner = mesh.boundaries.Lower.name
+outer = mesh.boundaries.Upper.name
+
 if params.uw_p_bc:
     stokes.add_condition(
         p_soln.field_id,
@@ -641,28 +644,43 @@ normalize_pressure_for_reporting(mesh, p_soln, params.uw_p_bc)
 # ### Relative Error Norms
 
 # %%
-def relative_l2_error(mesh, err_expr, ana_expr):
-    """Relative L2 error for scalar or vector expressions."""
+def _squared_norm(expr):
+    """Return squared magnitude of scalar/vector expression."""
+    expr = expr.sym if hasattr(expr, "sym") else expr
+    return expr.dot(expr) if isinstance(expr, sp.MatrixBase) else expr**2
 
-    if isinstance(err_expr, sp.MatrixBase):
-        err_expr = err_expr.dot(err_expr)
-        ana_expr = ana_expr.dot(ana_expr)
+
+def relative_l2_error(mesh, err, ana, boundary=None):
+    """Compute relative L2 error over domain or specified boundary."""
+    err_fn = _squared_norm(err)
+    ana_fn = _squared_norm(ana)
+
+    if boundary is None:
+        err_I = uw.maths.Integral(mesh, err_fn)
+        ana_I = uw.maths.Integral(mesh, ana_fn)
     else:
-        err_expr = err_expr * err_expr
-        ana_expr = ana_expr * ana_expr
+        err_I = uw.maths.BdIntegral(mesh=mesh, fn=err_fn, boundary=boundary)
+        ana_I = uw.maths.BdIntegral(mesh=mesh, fn=ana_fn, boundary=boundary)
 
-    err_I = uw.maths.Integral(mesh, err_expr)
-    ana_I = uw.maths.Integral(mesh, ana_expr)
-
-    return np.sqrt(err_I.evaluate()) / np.sqrt(ana_I.evaluate())
+    return np.sqrt(err_I.evaluate() / ana_I.evaluate())
 
 
 # %%
 v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
 p_err_l2 = relative_l2_error(mesh, p_err_expr, p_ana_expr)
+v_err_l2_inner = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=inner)
+v_err_l2_outer = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=outer)
+p_err_l2_inner = relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=inner)
+p_err_l2_outer = relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=outer)
 
-uw.pprint("Relative velocity L2 error:", v_err_l2)
-uw.pprint("Relative pressure L2 error:", p_err_l2)
+if uw.mpi.rank == 0:
+    print("=== Relative L2 Errors ===")
+    print(f"Velocity (domain): {v_err_l2}")
+    print(f"Pressure (domain): {p_err_l2}")
+    print(f"Velocity (inner):  {v_err_l2_inner}")
+    print(f"Velocity (outer):  {v_err_l2_outer}")
+    print(f"Pressure (inner):  {p_err_l2_inner}")
+    print(f"Pressure (outer):  {p_err_l2_outer}")
 
 # %% [markdown]
 # ### Save Outputs
@@ -677,6 +695,10 @@ if uw.mpi.rank == 0:
         f_h5.create_dataset("cellsize", data=params.uw_cellsize)
         f_h5.create_dataset("v_l2_norm", data=v_err_l2)
         f_h5.create_dataset("p_l2_norm", data=p_err_l2)
+        f_h5.create_dataset("v_l2_norm_inner", data=v_err_l2_inner)
+        f_h5.create_dataset("v_l2_norm_outer", data=v_err_l2_outer)
+        f_h5.create_dataset("p_l2_norm_inner", data=p_err_l2_inner)
+        f_h5.create_dataset("p_l2_norm_outer", data=p_err_l2_outer)
 
 # %%
 mesh.write_timestep(

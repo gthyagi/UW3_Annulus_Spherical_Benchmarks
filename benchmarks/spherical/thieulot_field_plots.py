@@ -171,8 +171,18 @@ def analytical_solution(
     z = points_xyz[:, 2]
 
     radius = np.sqrt(x**2 + y**2 + z**2)
+    xy_norm = np.sqrt(x**2 + y**2)
     theta = np.arccos(np.clip(z / radius, -1.0, 1.0))
     phi = np.mod(np.arctan2(y, x), 2.0 * np.pi)
+    pole_epsilon = 1.0e-7
+    pole_mask = xy_norm <= pole_epsilon * radius
+    if np.any(pole_mask):
+        phi[pole_mask] = np.mod(np.arctan2(y[pole_mask], x[pole_mask]), 2.0 * np.pi)
+        phi[np.isnan(phi)] = 0.0
+        north_mask = pole_mask & (z >= 0.0)
+        south_mask = pole_mask & (z < 0.0)
+        theta[north_mask] = pole_epsilon
+        theta[south_mask] = np.pi - pole_epsilon
 
     alpha, beta = thieulot_coefficients(m, r_i, r_o, gamma)
     f, g, h, _ = thieulot_radial_functions(radius, m, r_i, r_o, gamma, mu_0)
@@ -517,17 +527,64 @@ mesh_save_plotter.screenshot(os.path.join(output_dir, "mesh.png"))
 mesh_save_plotter.close()
 
 # %% [markdown]
-# ### Field Plots
+# ### Analytical Velocity
 
 # %%
+print("Plotting: analytical velocity")
 save_field_plot("V_a", "vel_ana.png", cmc.lapaz.resampled(21), limits["velocity"], "Velocity", "v_ana", -2.05, vector=True)
+
+# %% [markdown]
+# ### Analytical Pressure
+
+# %%
+print("Plotting: analytical pressure")
 save_field_plot("P_a", "p_ana.png", cmc.vik.resampled(41), limits["pressure"], "Pressure", "p_ana", -2.0)
+
+# %% [markdown]
+# ### Analytical Density
+
+# %%
+print("Plotting: analytical density")
 save_field_plot("RHO_a", "rho_ana.png", cmc.roma_r.resampled(31), limits["rho"], "Rho", "rho_ana", -2.0)
 
+# %% [markdown]
+# ### Numerical Velocity
+
+# %%
+print("Plotting: numerical velocity")
 save_field_plot("Velocity", "vel_uw.png", cmc.lapaz.resampled(21), limits["velocity"], "Velocity", "v_uw", -2.05, vector=True)
+
+# %% [markdown]
+# ### Relative Velocity Error
+
+# %%
+print("Plotting: relative velocity error")
 save_field_plot("V_e", "vel_r_err.png", cmc.lapaz.resampled(11), limits["velocity_error"], "Velocity Error (relative)", "v_err_rel", -2.05, vector=True)
+
+# %% [markdown]
+# ### Velocity Error (%)
+
+# %%
+print("Plotting: velocity error percentage")
 save_field_plot("V_err_pct", "vel_p_err.png", cmc.oslo_r.resampled(21), limits["velocity_pct"], "Velocity Error (%)", "v_err_perc", -2.05)
 
+# %% [markdown]
+# ### Numerical Pressure
+
+# %%
+print("Plotting: numerical pressure")
 save_field_plot("Pressure", "p_uw.png", cmc.vik.resampled(41), limits["pressure"], "Pressure", "p_uw", -2.0)
+
+# %% [markdown]
+# ### Relative Pressure Error
+
+# %%
+print("Plotting: relative pressure error")
 save_field_plot("P_e", "p_r_err.png", cmc.vik.resampled(41), limits["pressure_error"], "Pressure Error (relative)", "p_err_rel", -2.0)
+
+# %% [markdown]
+# ### Pressure Error (%)
+
+# %%
+print("Plotting: pressure error percentage")
 save_field_plot("P_err_pct", "p_p_err.png", cmc.vik.resampled(41), limits["pressure_pct"], "Pressure Error (%)", "p_err_perc", -2.0)

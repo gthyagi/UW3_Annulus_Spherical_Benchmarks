@@ -11,12 +11,26 @@ nest_asyncio.apply()
 # %%
 import os
 import re
+import sys
 import cmcrameri.cm as cmc
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
 from types import SimpleNamespace
+
+try:
+    from IPython.display import display
+except ImportError:
+    display = None
+
+IS_INTERACTIVE = (
+    hasattr(sys, "ps1") or sys.flags.interactive or "ipykernel" in sys.modules
+)
+JUPYTER_BACKEND = "html"
+
+if IS_INTERACTIVE:
+    pv.global_theme.jupyter_backend = JUPYTER_BACKEND
 
 # %% [markdown]
 # ### Parameters And Paths
@@ -80,6 +94,7 @@ smooth = case in ("case2", "case4")
 
 # %%
 plot_size = (750, 750)
+SCREENSHOT_WINDOW_SIZE = (750, 750)
 
 
 def coefficients_cylinder_delta_fs(Rp, Rm, rp, n, g, nu, sign):
@@ -448,7 +463,7 @@ def load_grid_and_fields(
     xdmf_file,
     h5_file,
 ):
-    """Load mesh plus reconstruct analytical and error fields from checkpoint files."""
+    """Load mesh plus numerical checkpoint fields."""
     grid = None
     if os.path.isfile(xdmf_file):
         try:
@@ -513,26 +528,70 @@ def load_grid_and_fields(
     if p_u.ndim == 2 and p_u.shape[1] == 1:
         p_u = p_u.reshape(-1)
 
-    pts = np.asarray(
-        grid.points[:, :2],
-        dtype=np.float64,
-    )
-    v_a, p_a, rho_a = analytical_solution(pts)
-    v_e = np.asarray(v_u, dtype=np.float64) - v_a
-    p_e = np.asarray(p_u, dtype=np.float64).reshape(-1) - p_a
-
     grid.point_data["V_u"] = np.asarray(v_u, dtype=np.float64)
     grid.point_data["P_u"] = np.asarray(p_u, dtype=np.float64).reshape(-1)
-    grid.point_data["V_a"] = np.asarray(v_a, dtype=np.float64)
-    grid.point_data["P_a"] = np.asarray(p_a, dtype=np.float64).reshape(-1)
-    grid.point_data["V_e"] = np.asarray(v_e, dtype=np.float64)
-    grid.point_data["P_e"] = np.asarray(p_e, dtype=np.float64).reshape(-1)
-    grid.point_data["RHO_a"] = np.asarray(
-        rho_a,
-        dtype=np.float64,
-    ).reshape(-1)
 
     return grid
+
+# %%
+def get_field_association(grid, field_name):
+    """Return whether a field lives on points or cells."""
+
+    if field_name in grid.point_data:
+        return "point"
+    if field_name in grid.cell_data:
+        return "cell"
+
+    raise KeyError(f"Field {field_name} not found in point_data or cell_data.")
+
+
+# %%
+def get_field_array(grid, field_name):
+    """Return a field array plus its association."""
+
+    association = get_field_association(grid, field_name)
+    source = grid.point_data if association == "point" else grid.cell_data
+    return np.asarray(source[field_name], dtype=np.float64), association
+
+
+# %%
+def set_field_array(grid, field_name, values, association):
+    """Store a field array on either points or cells."""
+
+    target = grid.point_data if association == "point" else grid.cell_data
+    target[field_name] = np.asarray(values, dtype=np.float64)
+
+
+# %%
+def snap_support_points_xy(points_xy):
+    """Snap support points lying on benchmark radii back to exact circles."""
+
+    snapped = np.asarray(points_xy, dtype=np.float64).copy()
+    rr = np.linalg.norm(snapped, axis=1)
+    tt = np.arctan2(snapped[:, 1], snapped[:, 0])
+    tol = max(1.0e-10, 1.0e-6 * (r_o - r_i))
+
+    for radius in (r_i, r_o, r_int):
+        mask = np.abs(rr - radius) <= tol
+        if np.any(mask):
+            snapped[mask, 0] = radius * np.cos(tt[mask])
+            snapped[mask, 1] = radius * np.sin(tt[mask])
+
+    return snapped
+
+
+# %%
+def support_points_xy(grid, association):
+    """Return XY support coordinates for point- or cell-associated data."""
+
+    if association == "point":
+        points_xy = np.asarray(grid.points[:, :2], dtype=np.float64)
+    elif association == "cell":
+        points_xy = np.asarray(grid.cell_centers().points[:, :2], dtype=np.float64)
+    else:
+        raise ValueError(f"Unsupported field association: {association}")
+
+    return snap_support_points_xy(points_xy)
 
 # %%
 def save_colorbar(
@@ -551,7 +610,7 @@ def save_colorbar(
     fname="",
 ):
     """Save a standalone colorbar image."""
-    plt.figure(figsize=figsize_cb)
+    fig = plt.figure(figsize=figsize_cb)
     plt.rc("font", size=primary_fs)
 
     if cb_bounds is not None:
@@ -576,7 +635,7 @@ def save_colorbar(
             y=cb_label_ypos,
             rotation=90,
         )
-        plt.savefig(
+        fig.savefig(
             f"{output_path}{fname}_cbvert.{fformat}",
             dpi=150,
             bbox_inches="tight",
@@ -594,11 +653,15 @@ def save_colorbar(
             x=cb_label_xpos,
             y=cb_label_ypos,
         )
-        plt.savefig(
+        fig.savefig(
             f"{output_path}{fname}_cbhorz.{fformat}",
             dpi=150,
             bbox_inches="tight",
         )
+
+    if IS_INTERACTIVE and display is not None:
+        display(fig)
+    plt.close(fig)
 
     return
 
@@ -633,40 +696,51 @@ def plot_vector(
     mag_name = f"{vector_name}_mag"
     work.point_data[mag_name] = vec_mag
 
-    pl = pv.Plotter(
-        window_size=window_size,
-        off_screen=bool(save_png),
-    )
-    pl.image_scale = image_scale
+    def add_scene(plotter):
+        plotter.add_mesh(
+            work,
+            scalars=mag_name,
+            cmap=cmap,
+            clim=clim,
+            edge_color="k",
+            show_edges=show_edges,
+            opacity=1.0,
+            show_scalar_bar=False,
+        )
 
-    pl.add_mesh(
-        work,
-        scalars=mag_name,
-        cmap=cmap,
-        clim=clim,
-        edge_color="k",
-        show_edges=show_edges,
-        opacity=1.0,
-        show_scalar_bar=False,
-    )
+        if show_arrows:
+            idx = np.arange(0, work.n_points, max(1, vfreq), dtype=int)
+            if idx.size:
+                plotter.add_arrows(
+                    work.points[idx],
+                    vec[idx],
+                    mag=vmag,
+                    color="k",
+                )
 
-    if show_arrows:
-        idx = np.arange(0, work.n_points, max(1, vfreq), dtype=int)
-        if idx.size:
-            pl.add_arrows(
-                work.points[idx],
-                vec[idx],
-                mag=vmag,
-                color="k",
-            )
+    if IS_INTERACTIVE:
+        display_plotter = pv.Plotter(off_screen=False)
+        display_plotter.image_scale = image_scale
+        display_plotter.set_background("white")
+        add_scene(display_plotter)
+        display_plotter.camera_position = cpos
+        display_plotter.render()
+        display_plotter.camera.zoom(1.4)
+        display_plotter.show(jupyter_backend=JUPYTER_BACKEND, auto_close=False)
 
     if save_png and dir_fname:
-        pl.camera_position = cpos
-        pl.camera.zoom(1.4)
-        pl.render()
-        pl.screenshot(dir_fname)
-    
-    pl.show(cpos=cpos)
+        save_plotter = pv.Plotter(
+            window_size=window_size,
+            off_screen=True,
+        )
+        save_plotter.image_scale = image_scale
+        save_plotter.set_background("white")
+        add_scene(save_plotter)
+        save_plotter.camera_position = cpos
+        save_plotter.render()
+        save_plotter.camera.zoom(1.4)
+        save_plotter.screenshot(dir_fname)
+        save_plotter.close()
 
     return dir_fname
 
@@ -688,36 +762,47 @@ def plot_scalar(
     """Legacy-style scalar plot."""
     work = grid.copy(deep=True)
 
-    pl = pv.Plotter(
-        window_size=window_size,
-        off_screen=bool(save_png),
-    )
-    pl.image_scale = image_scale
-
-    pl.add_mesh(
-        work,
-        scalars=scalar_name,
-        cmap=cmap,
-        clim=clim,
-        edge_color="k",
-        show_edges=show_edges,
-        opacity=1.0,
-        show_scalar_bar=False,
-    )
-
-    if title:
-        pl.add_text(
-            title,
-            font_size=18,
+    def add_scene(plotter):
+        plotter.add_mesh(
+            work,
+            scalars=scalar_name,
+            cmap=cmap,
+            clim=clim,
+            edge_color="k",
+            show_edges=show_edges,
+            opacity=1.0,
+            show_scalar_bar=False,
         )
 
+        if title:
+            plotter.add_text(
+                title,
+                font_size=18,
+            )
+
+    if IS_INTERACTIVE:
+        display_plotter = pv.Plotter(off_screen=False)
+        display_plotter.image_scale = image_scale
+        display_plotter.set_background("white")
+        add_scene(display_plotter)
+        display_plotter.camera_position = cpos
+        display_plotter.render()
+        display_plotter.camera.zoom(1.4)
+        display_plotter.show(jupyter_backend=JUPYTER_BACKEND, auto_close=False)
+
     if save_png and dir_fname:
-        pl.camera_position = cpos
-        pl.camera.zoom(1.4)
-        pl.render()
-        pl.screenshot(dir_fname)
-    
-    pl.show(cpos=cpos)
+        save_plotter = pv.Plotter(
+            window_size=window_size,
+            off_screen=True,
+        )
+        save_plotter.image_scale = image_scale
+        save_plotter.set_background("white")
+        add_scene(save_plotter)
+        save_plotter.camera_position = cpos
+        save_plotter.render()
+        save_plotter.camera.zoom(1.4)
+        save_plotter.screenshot(dir_fname)
+        save_plotter.close()
 
     return dir_fname
 
@@ -740,7 +825,7 @@ def plot_scalar_with_colorbar(
         clim=clim,
         clip_angle=0.0,
         cpos="xy",
-        window_size=plot_size,
+        window_size=SCREENSHOT_WINDOW_SIZE,
         save_png=True,
         dir_fname=os.path.join(output_dir, png_name),
     )
@@ -788,7 +873,7 @@ def plot_vector_with_colorbar(
         show_arrows=show_arrows,
         clip_angle=0.0,
         cpos="xy",
-        window_size=plot_size,
+        window_size=SCREENSHOT_WINDOW_SIZE,
         save_png=True,
         dir_fname=os.path.join(output_dir, png_name),
     )
@@ -820,25 +905,40 @@ grid = load_grid_and_fields(
     h5_path,
 )
 
-v_a_mag = np.linalg.norm(
-    np.asarray(grid.point_data["V_a"])[:, :2],
-    axis=1,
-)
-v_e_mag = np.linalg.norm(
-    np.asarray(grid.point_data["V_e"])[:, :2],
-    axis=1,
-)
+velocity_points_xy = support_points_xy(grid, "point")
+v_a, p_a, rho_a = analytical_solution(velocity_points_xy)
+grid.point_data["V_a"] = np.asarray(v_a, dtype=np.float64)
+grid.point_data["RHO_a"] = np.asarray(rho_a, dtype=np.float64).reshape(-1)
+
+v_u, velocity_assoc = get_field_array(grid, "V_u")
+if velocity_assoc != "point":
+    raise ValueError(f"Velocity field is {velocity_assoc}-associated, expected point data.")
+
+p_u, pressure_assoc = get_field_array(grid, "P_u")
+p_u = p_u.reshape(-1)
+pressure_points_xy = support_points_xy(grid, pressure_assoc)
+_, p_ana_support, _ = analytical_solution(pressure_points_xy)
+
+v_e = v_u - v_a
+p_e = p_u - p_ana_support
+
+grid.point_data["V_e"] = v_e
+set_field_array(grid, "P_a", np.asarray(p_ana_support, dtype=np.float64).reshape(-1), pressure_assoc)
+set_field_array(grid, "P_e", p_e, pressure_assoc)
+
+v_a_mag = np.linalg.norm(v_a[:, :2], axis=1)
+v_e_mag = np.linalg.norm(v_e[:, :2], axis=1)
 
 with np.errstate(divide="ignore", invalid="ignore"):
     v_err_pct = np.where(v_a_mag > 1.0e-14, (v_e_mag / v_a_mag) * 100.0, 0.0)
     p_err_pct = np.where(
-        np.abs(np.asarray(grid.point_data["P_a"])) > 1.0e-14,
-        (np.asarray(grid.point_data["P_e"]) / np.asarray(grid.point_data["P_a"])) * 100.0,
+        np.abs(np.asarray(p_ana_support)) > 1.0e-14,
+        (np.asarray(p_e) / np.asarray(p_ana_support)) * 100.0,
         0.0,
     )
 
 grid.point_data["V_err_pct"] = np.nan_to_num(v_err_pct)
-grid.point_data["P_err_pct"] = np.nan_to_num(p_err_pct)
+set_field_array(grid, "P_err_pct", np.nan_to_num(p_err_pct), pressure_assoc)
 grid.point_data["RHO_a_neg"] = -np.asarray(grid.point_data["RHO_a"]).reshape(-1)
 
 # %% [markdown]
@@ -883,6 +983,7 @@ if case not in vel_clim:
 # ### Analytical Velocity
 
 # %%
+print("Plotting: analytical velocity")
 vel_ana_png = plot_vector_with_colorbar(
     grid,
     vector_name="V_a",
@@ -901,6 +1002,7 @@ vel_ana_png = plot_vector_with_colorbar(
 # ### Analytical Pressure
 
 # %%
+print("Plotting: analytical pressure")
 p_ana_png = plot_scalar_with_colorbar(
     grid,
     scalar_name="P_a",
@@ -915,6 +1017,7 @@ p_ana_png = plot_scalar_with_colorbar(
 # ### Analytical Density
 
 # %%
+print("Plotting: analytical density")
 rho_ana_png = plot_scalar_with_colorbar(
     grid,
     scalar_name="RHO_a_neg",
@@ -929,6 +1032,7 @@ rho_ana_png = plot_scalar_with_colorbar(
 # ### Solution Velocity
 
 # %%
+print("Plotting: numerical velocity")
 vel_u_png = plot_vector_with_colorbar(
     grid,
     vector_name="V_u",
@@ -947,6 +1051,7 @@ vel_u_png = plot_vector_with_colorbar(
 # ### Relative Velocity Error
 
 # %%
+print("Plotting: relative velocity error")
 vel_err_png = plot_vector_with_colorbar(
     grid,
     vector_name="V_e",
@@ -965,6 +1070,7 @@ vel_err_png = plot_vector_with_colorbar(
 # ### Velocity Error (%)
 
 # %%
+print("Plotting: velocity error percentage")
 vel_pct_png = plot_scalar_with_colorbar(
     grid,
     scalar_name="V_err_pct",
@@ -980,6 +1086,7 @@ vel_pct_png = plot_scalar_with_colorbar(
 # ### Solution Pressure
 
 # %%
+print("Plotting: numerical pressure")
 p_u_png = plot_scalar_with_colorbar(
     grid,
     scalar_name="P_u",
@@ -994,6 +1101,7 @@ p_u_png = plot_scalar_with_colorbar(
 # ### Relative Pressure Error
 
 # %%
+print("Plotting: relative pressure error")
 p_err_png = plot_scalar_with_colorbar(
     grid,
     scalar_name="P_e",
@@ -1008,6 +1116,7 @@ p_err_png = plot_scalar_with_colorbar(
 # ### Pressure Error (%)
 
 # %%
+print("Plotting: pressure error percentage")
 p_pct_png = plot_scalar_with_colorbar(
     grid,
     scalar_name="P_err_pct",

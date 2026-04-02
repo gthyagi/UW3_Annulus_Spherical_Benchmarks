@@ -563,6 +563,9 @@ else:
 # #### Boundary Conditions
 
 # %%
+inner = mesh.boundaries.Lower.name
+outer = mesh.boundaries.Upper.name
+
 # if freeslip:
 #     if params.uw_bc_type == "natural":
 #         v_diff = v_uw.sym - v_ana.sym
@@ -592,8 +595,8 @@ if freeslip:
         # component. This matches the authors' physical condition u.n = 0 while
         # leaving tangential motion free on the shell boundaries.
         Gamma_N = mesh.CoordinateSystem.unit_e_0
-        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, mesh.boundaries.Upper.name)
-        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, mesh.boundaries.Lower.name)
+        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, outer)
+        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, inner)
     elif params.uw_freeslip_type == "nitsche":
         # Nitsche's method is more robust than the penalty method for free-slip
         # conditions, and it does not require tuning a penalty parameter. It
@@ -601,11 +604,11 @@ if freeslip:
         # motion free on the shell boundaries.
         outer_normal = mesh.CoordinateSystem.unit_e_0
         inner_normal = -mesh.CoordinateSystem.unit_e_0
-        stokes.add_nitsche_bc(mesh.boundaries.Upper.name, normal=outer_normal, gamma=10)
-        stokes.add_nitsche_bc(mesh.boundaries.Lower.name, normal=inner_normal, gamma=10)
+        stokes.add_nitsche_bc(outer, normal=outer_normal, gamma=10)
+        stokes.add_nitsche_bc(inner, normal=inner_normal, gamma=10)
 elif noslip:
-    stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), mesh.boundaries.Upper.name)
-    stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), mesh.boundaries.Lower.name)
+    stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), outer)
+    stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), inner)
 else:
     raise ValueError(f"Unsupported case flags: freeslip={freeslip}, noslip={noslip}")
 
@@ -767,30 +770,43 @@ v_err_sym = v_uw.sym - v_ana_sym
 p_err_sym = p_uw.sym[0] - p_ana_sym
 
 # %%
-def relative_l2_error(mesh, err_var, ana_var):
-    """Relative L2 error for scalar or vector mesh variables / expressions."""
-    err_expr = err_var.sym if hasattr(err_var, "sym") else err_var
-    ana_expr = ana_var.sym if hasattr(ana_var, "sym") else ana_var
+def _squared_norm(expr):
+    """Return squared magnitude of scalar/vector expression."""
+    expr = expr.sym if hasattr(expr, "sym") else expr
+    return expr.dot(expr) if isinstance(expr, sp.MatrixBase) else expr**2
 
-    if isinstance(err_expr, sp.MatrixBase):
-        err_expr = err_expr.dot(err_expr)
-        ana_expr = ana_expr.dot(ana_expr)
+
+def relative_l2_error(mesh, err, ana, boundary=None):
+    """Compute relative L2 error over domain or specified boundary."""
+    err_fn = _squared_norm(err)
+    ana_fn = _squared_norm(ana)
+
+    if boundary is None:
+        err_I = uw.maths.Integral(mesh, err_fn)
+        ana_I = uw.maths.Integral(mesh, ana_fn)
     else:
-        err_expr = err_expr * err_expr
-        ana_expr = ana_expr * ana_expr
+        err_I = uw.maths.BdIntegral(mesh=mesh, fn=err_fn, boundary=boundary)
+        ana_I = uw.maths.BdIntegral(mesh=mesh, fn=ana_fn, boundary=boundary)
 
-    err_I = uw.maths.Integral(mesh, err_expr)
-    ana_I = uw.maths.Integral(mesh, ana_expr)
-    return np.sqrt(err_I.evaluate()) / np.sqrt(ana_I.evaluate())
+    return np.sqrt(err_I.evaluate() / ana_I.evaluate())
 
 
 # %%
 v_err_l2 = relative_l2_error(mesh, v_err_sym, v_ana_sym)
 p_err_l2 = relative_l2_error(mesh, p_err_sym, p_ana_sym)
+v_err_l2_inner = relative_l2_error(mesh, v_err_sym, v_ana_sym, boundary=inner)
+v_err_l2_outer = relative_l2_error(mesh, v_err_sym, v_ana_sym, boundary=outer)
+p_err_l2_inner = relative_l2_error(mesh, p_err_sym, p_ana_sym, boundary=inner)
+p_err_l2_outer = relative_l2_error(mesh, p_err_sym, p_ana_sym, boundary=outer)
 
 if uw.mpi.rank == 0:
-    print("Relative velocity L2 error:", v_err_l2)
-    print("Relative pressure L2 error:", p_err_l2)
+    print("=== Relative L2 Errors ===")
+    print(f"Velocity (domain): {v_err_l2}")
+    print(f"Pressure (domain): {p_err_l2}")
+    print(f"Velocity (inner):  {v_err_l2_inner}")
+    print(f"Velocity (outer):  {v_err_l2_outer}")
+    print(f"Pressure (inner):  {p_err_l2_inner}")
+    print(f"Pressure (outer):  {p_err_l2_outer}")
 
 # %% [markdown]
 # ### Save Outputs
@@ -804,6 +820,10 @@ if uw.mpi.rank == 0:
         f_h5.create_dataset("cellsize", data=params.uw_cellsize)
         f_h5.create_dataset("v_l2_norm", data=v_err_l2)
         f_h5.create_dataset("p_l2_norm", data=p_err_l2)
+        f_h5.create_dataset("v_l2_norm_inner", data=v_err_l2_inner)
+        f_h5.create_dataset("v_l2_norm_outer", data=v_err_l2_outer)
+        f_h5.create_dataset("p_l2_norm_inner", data=p_err_l2_inner)
+        f_h5.create_dataset("p_l2_norm_outer", data=p_err_l2_outer)
 
 mesh.write_timestep(
     "output",

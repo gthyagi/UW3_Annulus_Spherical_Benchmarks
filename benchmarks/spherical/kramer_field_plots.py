@@ -343,11 +343,32 @@ def analytical_pressure(soln, rr, y_lm):
     return p_expr
 
 
+def regularize_spherical_angles(points_xyz, rr, pole_epsilon=1.0e-7):
+    """Return stable spherical angles, including finite pole limits."""
+
+    xy_norm = np.linalg.norm(points_xyz[:, :2], axis=1)
+    phi = np.mod(np.arctan2(points_xyz[:, 1], points_xyz[:, 0]), 2.0 * np.pi)
+    theta = np.arccos(np.clip(points_xyz[:, 2] / rr, -1.0, 1.0))
+
+    pole_mask = xy_norm <= pole_epsilon * rr
+    if np.any(pole_mask):
+        phi[pole_mask] = np.mod(
+            np.arctan2(points_xyz[pole_mask, 1], points_xyz[pole_mask, 0]),
+            2.0 * np.pi,
+        )
+        phi[np.isnan(phi)] = 0.0
+        north_mask = pole_mask & (points_xyz[:, 2] >= 0.0)
+        south_mask = pole_mask & (points_xyz[:, 2] < 0.0)
+        theta[north_mask] = pole_epsilon
+        theta[south_mask] = np.pi - pole_epsilon
+
+    return theta, phi
+
+
 def analytical_solution(points_xyz):
     soln_above, soln_below = build_case_solutions()
     rr = np.linalg.norm(points_xyz, axis=1)
-    theta = np.arccos(np.clip(points_xyz[:, 2] / rr, -1.0, 1.0))
-    phi = np.mod(np.arctan2(points_xyz[:, 1], points_xyz[:, 0]), 2 * np.pi)
+    theta, phi = regularize_spherical_angles(points_xyz, rr)
     y_lm, dy_dtheta, dy_dphi = real_spherical_harmonic_and_derivatives(l, m, theta, phi)
     mask_above = rr > r_int
 
@@ -440,15 +461,68 @@ def read_split_field(mesh_h5_file, field_name, n_points):
         return read_field(h5f, field_name, n_points)
 
 
+def get_field_association(grid, field_name):
+    """Return whether a field lives on points or cells."""
+
+    if field_name in grid.point_data:
+        return "point"
+    if field_name in grid.cell_data:
+        return "cell"
+
+    raise KeyError(f"Field {field_name} not found in point_data or cell_data.")
+
+
+def get_field_array(grid, field_name):
+    """Return a field array plus its association."""
+
+    association = get_field_association(grid, field_name)
+    source = grid.point_data if association == "point" else grid.cell_data
+    return np.asarray(source[field_name], dtype=np.float64), association
+
+
+def set_field_array(grid, field_name, values, association):
+    """Store a field array on either points or cells."""
+
+    target = grid.point_data if association == "point" else grid.cell_data
+    target[field_name] = np.asarray(values, dtype=np.float64)
+
+
+def snap_support_points_xyz(points_xyz):
+    """Snap support points lying on benchmark radii back to exact spheres."""
+
+    snapped = np.asarray(points_xyz, dtype=np.float64).copy()
+    rr = np.linalg.norm(snapped, axis=1)
+    safe_rr = np.where(rr > 0.0, rr, 1.0)
+    directions = snapped / safe_rr[:, None]
+    tol = max(1.0e-10, 1.0e-6 * (r_o - r_i))
+
+    for radius in (r_i, r_o, r_int):
+        mask = np.abs(rr - radius) <= tol
+        if np.any(mask):
+            snapped[mask] = radius * directions[mask]
+
+    return snapped
+
+
+def support_points_xyz(grid, association):
+    """Return XYZ support coordinates for point- or cell-associated data."""
+
+    if association == "point":
+        points_xyz = np.asarray(grid.points, dtype=np.float64)
+    elif association == "cell":
+        points_xyz = np.asarray(grid.cell_centers().points, dtype=np.float64)
+    else:
+        raise ValueError(f"Unsupported field association: {association}")
+
+    return snap_support_points_xyz(points_xyz)
+
+
 with h5py.File(mesh_h5_path, "r") as h5f:
     points = np.asarray(h5f["geometry/vertices"], dtype=np.float64)
     cells = np.asarray(h5f["viz/topology/cells"], dtype=np.int64)
 
 v_u = read_split_field(mesh_h5_path, "V_u", points.shape[0])
 p_u = read_split_field(mesh_h5_path, "P_u", points.shape[0]).reshape(-1)
-v_a, p_a, rho_a = analytical_solution(points)
-v_e = np.asarray(v_u, dtype=np.float64) - v_a
-p_e = np.asarray(p_u, dtype=np.float64).reshape(-1) - p_a
 
 cells_flat = np.hstack([np.full((cells.shape[0], 1), cells.shape[1], dtype=np.int64), cells]).ravel()
 celltypes = np.full(cells.shape[0], pv.CellType.TETRA, dtype=np.uint8)
@@ -456,22 +530,38 @@ celltypes = np.full(cells.shape[0], pv.CellType.TETRA, dtype=np.uint8)
 grid = pv.UnstructuredGrid(cells_flat, celltypes, points)
 grid.point_data["V_u"] = np.asarray(v_u, dtype=np.float64)
 grid.point_data["P_u"] = np.asarray(p_u, dtype=np.float64).reshape(-1)
+
+velocity_points_xyz = support_points_xyz(grid, "point")
+v_a, p_a, rho_a = analytical_solution(velocity_points_xyz)
 grid.point_data["V_a"] = np.asarray(v_a, dtype=np.float64)
-grid.point_data["P_a"] = np.asarray(p_a, dtype=np.float64).reshape(-1)
-grid.point_data["V_e"] = np.asarray(v_e, dtype=np.float64)
-grid.point_data["P_e"] = np.asarray(p_e, dtype=np.float64).reshape(-1)
 grid.point_data["RHO_a"] = np.asarray(rho_a, dtype=np.float64).reshape(-1)
 grid.point_data["RHO_plot"] = -np.asarray(rho_a, dtype=np.float64).reshape(-1)
+
+v_u, velocity_assoc = get_field_array(grid, "V_u")
+if velocity_assoc != "point":
+    raise ValueError(f"Velocity field is {velocity_assoc}-associated, expected point data.")
+
+p_u, pressure_assoc = get_field_array(grid, "P_u")
+p_u = p_u.reshape(-1)
+pressure_points_xyz = support_points_xyz(grid, pressure_assoc)
+_, p_ana_support, _ = analytical_solution(pressure_points_xyz)
+
+v_e = v_u - v_a
+p_e = p_u - p_ana_support
+
+grid.point_data["V_e"] = np.asarray(v_e, dtype=np.float64)
+set_field_array(grid, "P_a", np.asarray(p_ana_support, dtype=np.float64).reshape(-1), pressure_assoc)
+set_field_array(grid, "P_e", p_e, pressure_assoc)
 
 v_ana_mag = np.linalg.norm(v_a, axis=1)
 v_err_mag = np.linalg.norm(v_e, axis=1)
 
 with np.errstate(divide="ignore", invalid="ignore"):
     v_err_pct = np.where(v_ana_mag > 1.0e-14, 100.0 * v_err_mag / v_ana_mag, 0.0)
-    p_err_pct = np.where(np.abs(p_a) > 1.0e-14, 100.0 * p_e / p_a, 0.0)
+    p_err_pct = np.where(np.abs(p_ana_support) > 1.0e-14, 100.0 * p_e / p_ana_support, 0.0)
 
 grid.point_data["V_err_pct"] = np.nan_to_num(v_err_pct)
-grid.point_data["P_err_pct"] = np.nan_to_num(p_err_pct)
+set_field_array(grid, "P_err_pct", np.nan_to_num(p_err_pct), pressure_assoc)
 
 # %%
 case_limits = {
@@ -641,17 +731,64 @@ mesh_save_plotter.screenshot(os.path.join(output_dir, "mesh.png"))
 mesh_save_plotter.close()
 
 # %% [markdown]
-# ### Field Plots
+# ### Analytical Velocity
 
 # %%
+print("Plotting: analytical velocity")
 save_field_plot("V_a", "vel_ana.png", cmc.lapaz.resampled(21), limits["velocity"], "Velocity", "v_ana", -2.05, vector=True)
+
+# %% [markdown]
+# ### Analytical Pressure
+
+# %%
+print("Plotting: analytical pressure")
 save_field_plot("P_a", "p_ana.png", cmc.vik.resampled(41), limits["pressure"], "Pressure", "p_ana", -2.0)
+
+# %% [markdown]
+# ### Analytical Density
+
+# %%
+print("Plotting: analytical density")
 save_field_plot("RHO_plot", "rho_ana.png", cmc.roma.resampled(31), limits["rho"], "Rho", "rho_ana", -2.0)
 
+# %% [markdown]
+# ### Numerical Velocity
+
+# %%
+print("Plotting: numerical velocity")
 save_field_plot("V_u", "vel_uw.png", cmc.lapaz.resampled(21), limits["velocity"], "Velocity", "v_uw", -2.05, vector=True)
+
+# %% [markdown]
+# ### Relative Velocity Error
+
+# %%
+print("Plotting: relative velocity error")
 save_field_plot("V_e", "vel_r_err.png", cmc.lapaz.resampled(11), limits["velocity_error"], "Velocity Error (relative)", "v_err_rel", -2.05, vector=True)
+
+# %% [markdown]
+# ### Velocity Error (%)
+
+# %%
+print("Plotting: velocity error percentage")
 save_field_plot("V_err_pct", "vel_p_err.png", cmc.oslo_r.resampled(21), limits["velocity_pct"], "Velocity Error (%)", "v_err_perc", -2.05)
 
+# %% [markdown]
+# ### Numerical Pressure
+
+# %%
+print("Plotting: numerical pressure")
 save_field_plot("P_u", "p_uw.png", cmc.vik.resampled(41), limits["pressure"], "Pressure", "p_uw", -2.0)
+
+# %% [markdown]
+# ### Relative Pressure Error
+
+# %%
+print("Plotting: relative pressure error")
 save_field_plot("P_e", "p_r_err.png", cmc.vik.resampled(41), limits["pressure_error"], "Pressure Error (relative)", "p_err_rel", -2.0)
+
+# %% [markdown]
+# ### Pressure Error (%)
+
+# %%
+print("Plotting: pressure error percentage")
 save_field_plot("P_err_pct", "p_p_err.png", cmc.vik.resampled(41), limits["pressure_pct"], "Pressure Error (%)", "p_err_perc", -2.0)

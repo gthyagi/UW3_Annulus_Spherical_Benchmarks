@@ -82,6 +82,7 @@ r_o = 2.0
 
 arrow_target = 1400
 plot_size = (750, 750)
+SCREENSHOT_WINDOW_SIZE = (750, 750)
 
 
 # %%
@@ -580,43 +581,55 @@ def plot_vector(
     mag_name = f"{vector_name}_mag"
     work.point_data[mag_name] = vector_mag
 
-    plotter = pv.Plotter(window_size=window_size, off_screen=not IS_INTERACTIVE)
-    plotter.image_scale = image_scale
-    plotter.add_mesh(
-        work,
-        scalars=mag_name,
-        cmap=cmap,
-        clim=clim,
-        edge_color="k",
-        show_edges=False,
-        opacity=1.0,
-        show_scalar_bar=False,
-    )
-
+    arrow_points = None
+    arrow_vectors = None
     if show_arrows:
         arrow_points, sample_points = regular_arrow_points(r_i, r_o, n_arrows)
         if arrow_points.size:
             arrow_cloud = pv.PolyData(sample_points).sample(work)
-            arrow_vectors = np.asarray(arrow_cloud.point_data[vector_name], dtype=np.float64)
-            valid = np.all(np.isfinite(arrow_vectors), axis=1)
-            if np.any(valid):
-                plotter.add_arrows(
-                    arrow_points[valid],
-                    arrow_vectors[valid],
-                    mag=vmag,
-                    color="k",
-                )
+            sampled = np.asarray(arrow_cloud.point_data[vector_name], dtype=np.float64)
+            valid = np.all(np.isfinite(sampled), axis=1)
+            arrow_points = arrow_points[valid]
+            arrow_vectors = sampled[valid]
 
-    plotter.camera_position = "xy"
-    plotter.camera.zoom(1.4)
-    plotter.render()
+    def add_scene(plotter):
+        plotter.add_mesh(
+            work,
+            scalars=mag_name,
+            cmap=cmap,
+            clim=clim,
+            edge_color="k",
+            show_edges=False,
+            opacity=1.0,
+            show_scalar_bar=False,
+        )
+        if arrow_points is not None and arrow_points.size:
+            plotter.add_arrows(
+                arrow_points,
+                arrow_vectors,
+                mag=vmag,
+                color="k",
+            )
 
     if IS_INTERACTIVE:
-        plotter.show(jupyter_backend=JUPYTER_BACKEND, screenshot=dir_fname)
-        return
+        display_plotter = pv.Plotter(off_screen=False)
+        display_plotter.image_scale = image_scale
+        display_plotter.set_background("white")
+        add_scene(display_plotter)
+        display_plotter.camera_position = "xy"
+        display_plotter.render()
+        display_plotter.camera.zoom(1.4)
+        display_plotter.show(jupyter_backend=JUPYTER_BACKEND, auto_close=False)
 
-    plotter.screenshot(dir_fname)
-    plotter.close()
+    save_plotter = pv.Plotter(window_size=window_size, off_screen=True)
+    save_plotter.image_scale = image_scale
+    save_plotter.set_background("white")
+    add_scene(save_plotter)
+    save_plotter.camera_position = "xy"
+    save_plotter.render()
+    save_plotter.camera.zoom(1.4)
+    save_plotter.screenshot(dir_fname)
+    save_plotter.close()
 
 
 # %%
@@ -630,32 +643,40 @@ def plot_scalar(
     image_scale=3.5,
 ):
     """Plot a scalar field."""
-
     association = get_field_association(grid, scalar_name)
-    plotter = pv.Plotter(window_size=window_size, off_screen=not IS_INTERACTIVE)
-    plotter.image_scale = image_scale
-    plotter.add_mesh(
-        grid,
-        scalars=scalar_name,
-        preference=association,
-        cmap=cmap,
-        clim=clim,
-        edge_color="k",
-        show_edges=False,
-        opacity=1.0,
-        show_scalar_bar=False,
-    )
 
-    plotter.camera_position = "xy"
-    plotter.camera.zoom(1.4)
-    plotter.render()
+    def add_scene(plotter):
+        plotter.add_mesh(
+            grid,
+            scalars=scalar_name,
+            preference=association,
+            cmap=cmap,
+            clim=clim,
+            edge_color="k",
+            show_edges=False,
+            opacity=1.0,
+            show_scalar_bar=False,
+        )
 
     if IS_INTERACTIVE:
-        plotter.show(jupyter_backend=JUPYTER_BACKEND, screenshot=dir_fname)
-        return
+        display_plotter = pv.Plotter(off_screen=False)
+        display_plotter.image_scale = image_scale
+        display_plotter.set_background("white")
+        add_scene(display_plotter)
+        display_plotter.camera_position = "xy"
+        display_plotter.render()
+        display_plotter.camera.zoom(1.4)
+        display_plotter.show(jupyter_backend=JUPYTER_BACKEND, auto_close=False)
 
-    plotter.screenshot(dir_fname)
-    plotter.close()
+    save_plotter = pv.Plotter(window_size=window_size, off_screen=True)
+    save_plotter.image_scale = image_scale
+    save_plotter.set_background("white")
+    add_scene(save_plotter)
+    save_plotter.camera_position = "xy"
+    save_plotter.render()
+    save_plotter.camera.zoom(1.4)
+    save_plotter.screenshot(dir_fname)
+    save_plotter.close()
 
 
 # %%
@@ -667,7 +688,7 @@ def plot_scalar_with_colorbar(grid, scalar_name, png_name, cmap, clim, cb_label,
         scalar_name=scalar_name,
         cmap=cmap,
         clim=clim,
-        window_size=plot_size,
+        window_size=SCREENSHOT_WINDOW_SIZE,
         dir_fname=os.path.join(output_dir, png_name),
     )
     save_colorbar(
@@ -702,7 +723,7 @@ def plot_vector_with_colorbar(
         clim=clim,
         vmag=vmag,
         show_arrows=show_arrows,
-        window_size=plot_size,
+        window_size=SCREENSHOT_WINDOW_SIZE,
         dir_fname=os.path.join(output_dir, png_name),
         n_arrows=n_arrows,
     )
@@ -850,6 +871,7 @@ save_vertical_colorbar(
 # ### Plot Analytical Velocity
 
 # %%
+print("Plotting: analytical velocity")
 plot_vector_with_colorbar(
     grid,
     vector_name="V_ana",
@@ -868,6 +890,7 @@ plot_vector_with_colorbar(
 # ### Plot Analytical Pressure
 
 # %%
+print("Plotting: analytical pressure")
 plot_scalar_with_colorbar(
     grid,
     scalar_name="P_ana",
@@ -883,6 +906,7 @@ plot_scalar_with_colorbar(
 # ### Plot Analytical Density
 
 # %%
+print("Plotting: analytical density")
 plot_scalar_with_colorbar(
     grid,
     scalar_name="Rho_ana_neg",
@@ -898,6 +922,7 @@ plot_scalar_with_colorbar(
 # ### Plot Solution Velocity
 
 # %%
+print("Plotting: numerical velocity")
 plot_vector_with_colorbar(
     grid,
     vector_name="V_u",
@@ -916,6 +941,7 @@ plot_vector_with_colorbar(
 # ### Plot Relative Velocity Error Vector
 
 # %%
+print("Plotting: relative velocity error")
 plot_vector_with_colorbar(
     grid,
     vector_name="V_err",
@@ -934,6 +960,7 @@ plot_vector_with_colorbar(
 # ### Plot Velocity Error (%)
 
 # %%
+print("Plotting: velocity error percentage")
 plot_scalar_with_colorbar(
     grid,
     scalar_name="V_err_pct",
@@ -949,6 +976,7 @@ plot_scalar_with_colorbar(
 # ### Plot Solution Pressure
 
 # %%
+print("Plotting: numerical pressure")
 plot_scalar_with_colorbar(
     grid,
     scalar_name="P_u",
@@ -964,6 +992,7 @@ plot_scalar_with_colorbar(
 # ### Plot Relative Pressure Error
 
 # %%
+print("Plotting: relative pressure error")
 plot_scalar_with_colorbar(
     grid,
     scalar_name="P_err",
@@ -979,6 +1008,7 @@ plot_scalar_with_colorbar(
 # ### Plot Pressure Error (%)
 
 # %%
+print("Plotting: pressure error percentage")
 plot_scalar_with_colorbar(
     grid,
     scalar_name="P_err_pct",
