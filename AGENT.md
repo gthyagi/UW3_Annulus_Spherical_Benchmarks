@@ -34,7 +34,7 @@ Do not start analysis, editing, command execution, or repo-specific recommendati
 ## Primary Directories
 
 - `benchmarks/annulus/`: annulus benchmark scripts (current main script: legacy Thieulot benchmark).
-- `benchmarks/spherical/`: spherical legacy/latest benchmark scripts and plotting helpers.
+- `benchmarks/sphere/`: spherical legacy/latest benchmark scripts and plotting helpers.
 - `docs/`: documentation notes and migration guidance.
 - `output/`: shared generated output location (if used).
 
@@ -110,8 +110,8 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
   - `benchmarks/annulus/ex_stokes_thieulot.py`
   - `benchmarks/annulus/ex_stokes_kramer.py`
 - Spherical:
-  - `benchmarks/spherical/legacy/ex_stokes_thieulot_legacy.py`
-  - `benchmarks/spherical/ex_stokes_thieulot.py`
+  - `benchmarks/sphere/legacy/ex_stokes_thieulot_legacy.py`
+  - `benchmarks/sphere/ex_stokes_thieulot.py`
 
 ## Benchmark Troubleshooting Notes
 

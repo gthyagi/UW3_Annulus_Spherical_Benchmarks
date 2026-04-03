@@ -42,7 +42,7 @@ if IS_INTERACTIVE:
 dirname = "case_inv_lc_16_m_-1_vdeg_2_pdeg_1_pcont_true_vel_penalty_1e+08_stokes_tol_1e-05_ncpus_8_bc_essential_p_bc_false"
 
 # %%
-output_dir = os.path.join("../../output/spherical/thieulot/latest/", f"{dirname}/")
+output_dir = os.path.join("../../output/sphere/thieulot/latest/", f"{dirname}/")
 
 # %%
 pattern = (

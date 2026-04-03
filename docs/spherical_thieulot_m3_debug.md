@@ -17,7 +17,7 @@ The correct spherical solve path is therefore:
 ## Steps Taken
 
 1. Verified the analytical helper formulas in the spherical benchmark script and created an isolated debug driver:
-   [ex_stokes_thieulot_debug.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot_debug.py)
+   [ex_stokes_thieulot_debug.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/sphere/ex_stokes_thieulot_debug.py)
 2. Validated the setup on cheap serial `m=-1` runs.
 3. Reproduced the bad `m=3` pressure behavior in the debug driver.
 4. Checked gauge, pressure BC, quadrature, polynomial order, and pressure continuity variations.
@@ -69,7 +69,7 @@ The correct spherical solve path is therefore:
 
 ## Files Changed
 
-- [ex_stokes_thieulot.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot.py)
-- [ex_stokes_thieulot_debug.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot_debug.py)
-- [thieulot_field_plots.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/thieulot_field_plots.py)
+- [ex_stokes_thieulot.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/sphere/ex_stokes_thieulot.py)
+- [ex_stokes_thieulot_debug.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/sphere/ex_stokes_thieulot_debug.py)
+- [thieulot_field_plots.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/sphere/thieulot_field_plots.py)
 - [test_spherical_thieulot_bodyforce.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/tests/test_spherical_thieulot_bodyforce.py)

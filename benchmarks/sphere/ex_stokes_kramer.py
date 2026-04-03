@@ -203,7 +203,7 @@ if params.run_on_gadi:
     repo_root = "/scratch/m18/tg7098"
 else:
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-output_root = os.path.join(repo_root, "output", "spherical", "kramer", "latest")
+output_root = os.path.join(repo_root, "output", "sphere", "kramer", "latest")
 metrics_filename = "benchmark_metrics.h5"
 
 case_id = make_case_id(

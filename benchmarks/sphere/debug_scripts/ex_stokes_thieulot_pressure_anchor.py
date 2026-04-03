@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-Standalone spherical Thieulot radial-grading experiment driver.
+Standalone spherical Thieulot pressure-anchor experiment driver.
 
-This script keeps the analytical fields and Stokes formulation fixed and
-applies a purely radial mesh deformation to cluster nodes toward the inner
-boundary. It is intended to test how much inner-boundary-focused resolution
-reduces pressure sensitivity without changing the benchmark equations.
+This script keeps the velocity boundary treatment fixed to the analytical
+essential BC and varies only how pressure is constrained. The goal is to
+separate three effects:
+
+1. pressure gauge choice after a nullspace solve
+2. inner-vs-outer boundary pressure anchoring
+3. genuine changes in the pressure trace shape at the shell boundaries
 """
 
 from __future__ import annotations
@@ -52,7 +55,7 @@ def case_value(value):
     if isinstance(value, bool):
         return str(value).lower()
     if isinstance(value, float):
-        return f"{value:.3g}"
+        return f"{value:.2g}"
     return value
 
 
@@ -76,9 +79,25 @@ class GaugeMetrics:
     pressure_outer_mean: float
 
 
+@dataclass
+class CaseResult:
+    case_name: str
+    pressure_mode: str
+    velocity_volume_l2_analytic: float
+    raw_pressure_volume_l2_analytic: float
+    raw_pressure_inner_l2_analytic: float
+    raw_pressure_outer_l2_analytic: float
+    raw_pressure_volume_mean: float
+    raw_pressure_inner_mean: float
+    raw_pressure_outer_mean: float
+    snes_reason: int
+    ksp_reason: int
+    gauge_metrics: list[GaugeMetrics]
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Standalone spherical Thieulot radial-grading comparison driver.",
+        description="Standalone spherical Thieulot pressure-anchor comparison driver.",
         allow_abbrev=False,
     )
     parser.add_argument("-uw_cellsize", default="1/8")
@@ -88,24 +107,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-uw_vdegree", type=int, default=2)
     parser.add_argument("-uw_pdegree", type=int, default=1)
     parser.add_argument("-uw_pcont", type=parse_bool, default=True)
+    parser.add_argument("-uw_gmsh_element_order", type=int, default=1)
     parser.add_argument("-uw_qdegree", type=int, default=0)
     parser.add_argument("-uw_stokes_tol", type=float, default=1.0e-5)
     parser.add_argument(
-        "-dbg_grading_ratio",
-        type=float,
-        default=1.0,
-        help="Approximate outer/inner radial cell-size ratio. 1.0 means uniform.",
+        "-dbg_pressure_modes",
+        default="none,lower,upper,both",
+        help="Comma-separated pressure anchor modes.",
     )
     parser.add_argument(
         "-dbg_report_gauges",
-        default="volume_mean,inner_surface_mean,outer_surface_mean",
+        default="none,volume_mean,inner_surface_mean,outer_surface_mean",
         help="Comma-separated reporting-only gauge shifts.",
-    )
-    parser.add_argument(
-        "-dbg_metrics_mode",
-        choices=("full", "volume_only"),
-        default="full",
-        help="Compute all diagnostics or only volume L2 norms.",
     )
     parser.add_argument(
         "-dbg_output_root",
@@ -116,7 +129,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-dbg_write_output",
         type=parse_bool,
         default=False,
-        help="Write mesh fields into the run directory.",
+        help="Write mesh fields for each case into the run directory.",
     )
     return parser
 
@@ -260,8 +273,6 @@ def pressure_mean(mesh, pressure_var):
 
 def boundary_pressure_mean(mesh, pressure_var, boundary_name):
     measure = global_boundary_integral(mesh, 1.0, boundary_name)
-    if np.isclose(measure, 0.0):
-        return 0.0
     return global_boundary_integral(mesh, pressure_var.sym[0], boundary_name) / measure
 
 
@@ -272,41 +283,20 @@ def apply_pressure_gauge(mesh, pressure_var, gauge):
         subtract_constant(mesh, pressure_var, pressure_mean(mesh, pressure_var))
         return
     if gauge == "inner_surface_mean":
-        shift = boundary_pressure_mean(mesh, pressure_var, mesh.boundaries.Lower.name)
-        subtract_constant(mesh, pressure_var, shift)
+        subtract_constant(
+            mesh,
+            pressure_var,
+            boundary_pressure_mean(mesh, pressure_var, mesh.boundaries.Lower.name),
+        )
         return
     if gauge == "outer_surface_mean":
-        shift = boundary_pressure_mean(mesh, pressure_var, mesh.boundaries.Upper.name)
-        subtract_constant(mesh, pressure_var, shift)
+        subtract_constant(
+            mesh,
+            pressure_var,
+            boundary_pressure_mean(mesh, pressure_var, mesh.boundaries.Upper.name),
+        )
         return
     raise ValueError(f"Unknown pressure gauge: {gauge}")
-
-
-def grading_scales(grading_ratio):
-    if np.isclose(grading_ratio, 1.0):
-        return 1.0, 1.0
-    a = math.log(grading_ratio)
-    inner_scale = a / (math.exp(a) - 1.0)
-    outer_scale = grading_ratio * inner_scale
-    return inner_scale, outer_scale
-
-
-def deform_mesh_radially(mesh, r_i, r_o, grading_ratio):
-    if grading_ratio <= 0.0:
-        raise ValueError("dbg_grading_ratio must be positive.")
-    if np.isclose(grading_ratio, 1.0):
-        return
-
-    coords = np.asarray(mesh.X.coords, dtype=np.float64).copy()
-    radii = np.sqrt(np.sum(coords**2, axis=1))
-    thickness = r_o - r_i
-    t = (radii - r_i) / thickness
-    a = math.log(grading_ratio)
-    mapped = (np.exp(a * t) - 1.0) / (math.exp(a) - 1.0)
-    new_radii = r_i + thickness * mapped
-    scale = new_radii / radii
-    new_coords = coords * scale.reshape(-1, 1)
-    mesh._deform_mesh(new_coords)
 
 
 def gauge_metrics(mesh, pressure_var, p_ana_expr, gauge):
@@ -314,136 +304,75 @@ def gauge_metrics(mesh, pressure_var, p_ana_expr, gauge):
     try:
         apply_pressure_gauge(mesh, pressure_var, gauge)
         p_err_expr = pressure_var.sym[0] - p_ana_expr
-        inner_l2 = boundary_relative_l2(
-            mesh,
-            p_err_expr,
-            p_ana_expr,
+        return GaugeMetrics(
+            gauge=gauge,
+            pressure_volume_l2_analytic=relative_l2_error(mesh, p_err_expr, p_ana_expr),
+            pressure_inner_l2_analytic=boundary_relative_l2(
+                mesh,
+                p_err_expr,
+                p_ana_expr,
+                mesh.boundaries.Lower.name,
+            ),
+            pressure_outer_l2_analytic=boundary_relative_l2(
+                mesh,
+                p_err_expr,
+                p_ana_expr,
+                mesh.boundaries.Upper.name,
+            ),
+            pressure_volume_mean=pressure_mean(mesh, pressure_var),
+            pressure_inner_mean=boundary_pressure_mean(
+                mesh, pressure_var, mesh.boundaries.Lower.name
+            ),
+            pressure_outer_mean=boundary_pressure_mean(
+                mesh, pressure_var, mesh.boundaries.Upper.name
+            ),
+        )
+    finally:
+        fill_variable_data(mesh, pressure_var, original)
+
+
+def configure_pressure_anchor(stokes, pressure_var, mesh, mode):
+    if mode == "none":
+        stokes.petsc_use_pressure_nullspace = True
+        return
+
+    if mode not in {"lower", "upper", "both"}:
+        raise ValueError(f"Unknown pressure mode: {mode}")
+
+    pressure_field_index = next(
+        index for index, field in enumerate(stokes.fields.values()) if field is pressure_var
+    )
+
+    if mode in {"lower", "both"}:
+        stokes.add_condition(
+            pressure_field_index,
+            "dirichlet",
+            sp.Matrix([0]),
             mesh.boundaries.Lower.name,
+            components=(0),
         )
-        outer_l2 = boundary_relative_l2(
-            mesh,
-            p_err_expr,
-            p_ana_expr,
+    if mode in {"upper", "both"}:
+        stokes.add_condition(
+            pressure_field_index,
+            "dirichlet",
+            sp.Matrix([0]),
             mesh.boundaries.Upper.name,
+            components=(0),
         )
-        inner_mean = boundary_pressure_mean(
-            mesh, pressure_var, mesh.boundaries.Lower.name
-        )
-        outer_mean = boundary_pressure_mean(
-            mesh, pressure_var, mesh.boundaries.Upper.name
-        )
-        return GaugeMetrics(
-            gauge=gauge,
-            pressure_volume_l2_analytic=relative_l2_error(mesh, p_err_expr, p_ana_expr),
-            pressure_inner_l2_analytic=inner_l2,
-            pressure_outer_l2_analytic=outer_l2,
-            pressure_volume_mean=pressure_mean(mesh, pressure_var),
-            pressure_inner_mean=inner_mean,
-            pressure_outer_mean=outer_mean,
-        )
-    finally:
-        fill_variable_data(mesh, pressure_var, original)
 
 
-def gauge_metrics_volume_only(mesh, pressure_var, p_ana_expr, gauge):
-    original = copy_variable_data(mesh, pressure_var)
-    try:
-        apply_pressure_gauge(mesh, pressure_var, gauge)
-        p_err_expr = pressure_var.sym[0] - p_ana_expr
-        return GaugeMetrics(
-            gauge=gauge,
-            pressure_volume_l2_analytic=relative_l2_error(mesh, p_err_expr, p_ana_expr),
-            pressure_inner_l2_analytic=float("nan"),
-            pressure_outer_l2_analytic=float("nan"),
-            pressure_volume_mean=pressure_mean(mesh, pressure_var),
-            pressure_inner_mean=float("nan"),
-            pressure_outer_mean=float("nan"),
-        )
-    finally:
-        fill_variable_data(mesh, pressure_var, original)
-
-
-def run(params):
-    params.uw_cellsize = parse_cellsize(params.uw_cellsize)
-    params.uw_pcont = params.uw_pcont if params.uw_pdegree > 0 else False
-    report_gauges = parse_csv_strings(params.dbg_report_gauges)
-    mesh_qdegree = (
-        params.uw_qdegree if params.uw_qdegree > 0 else max(params.uw_vdegree, params.uw_pdegree)
-    )
-    inner_scale, outer_scale = grading_scales(params.dbg_grading_ratio)
-
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    output_root = (
-        params.dbg_output_root
-        if params.dbg_output_root is not None
-        else os.path.join(repo_root, "output", "spherical", "thieulot", "radial_grading")
-    )
-    run_id = make_case_id(
-        inv_lc=int(round(1.0 / params.uw_cellsize)),
-        m=params.uw_m,
-        grade=params.dbg_grading_ratio,
-        inner_scale=inner_scale,
-        vdeg=params.uw_vdegree,
-        pdeg=params.uw_pdegree,
-        pcont=params.uw_pcont,
-        qdeg=params.uw_qdegree if params.uw_qdegree > 0 else None,
-        tol=params.uw_stokes_tol,
-        np=uw.mpi.size,
-    )
-    run_dir = os.path.join(output_root, run_id)
-    if uw.mpi.rank == 0:
-        os.makedirs(run_dir, exist_ok=True)
-
-    mesh = uw.meshing.SphericalShell(
-        radiusInner=params.uw_r_i,
-        radiusOuter=params.uw_r_o,
-        cellSize=params.uw_cellsize,
-        qdegree=mesh_qdegree,
-        degree=1,
-        filename=os.path.join(run_dir, "mesh.msh"),
-    )
-    deform_mesh_radially(mesh, params.uw_r_i, params.uw_r_o, params.dbg_grading_ratio)
-
-    v_soln = uw.discretisation.MeshVariable(
-        varname="Velocity",
-        mesh=mesh,
-        degree=params.uw_vdegree,
-        vtype=uw.VarType.VECTOR,
-        varsymbol=r"V",
-    )
-    p_soln = uw.discretisation.MeshVariable(
-        varname="Pressure",
-        mesh=mesh,
-        degree=params.uw_pdegree,
-        vtype=uw.VarType.SCALAR,
-        varsymbol=r"P",
-        continuous=params.uw_pcont,
-    )
-
-    v_ana_expr, p_ana_expr, rho_expr, mu_expr = analytic_solution(
-        mesh,
-        params.uw_r_i,
-        params.uw_r_o,
-        params.uw_m,
-    )
-    v_err_expr = sp.Matrix(v_soln.sym).T - v_ana_expr
-    p_err_expr = p_soln.sym[0] - p_ana_expr
-
+def make_stokes(mesh, v_soln, p_soln, mu_expr, bodyforce, tol, pressure_mode):
     stokes = Stokes(mesh, velocityField=v_soln, pressureField=p_soln)
     stokes.constitutive_model = uw.constitutive_models.ViscousFlowModel
     stokes.constitutive_model.Parameters.viscosity = mu_expr
     stokes.saddle_preconditioner = 1.0 / mu_expr
-    stokes.petsc_use_pressure_nullspace = True
-    gravity_fn = -1.0 * mesh.CoordinateSystem.unit_e_0
-    stokes.bodyforce = -rho_expr * gravity_fn
-    stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Upper.name)
-    stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Lower.name)
-    stokes.tolerance = params.uw_stokes_tol
+    stokes.bodyforce = bodyforce
+    stokes.tolerance = tol
     stokes.petsc_options["ksp_monitor"] = None
     stokes.petsc_options["ksp_monitor_true_residual"] = None
     stokes.petsc_options["ksp_converged_reason"] = None
     stokes.petsc_options["snes_type"] = "ksponly"
-    stokes.petsc_options["ksp_rtol"] = params.uw_stokes_tol
+    stokes.petsc_options["ksp_rtol"] = tol
     stokes.petsc_options["ksp_atol"] = 0.0
 
     if uw.mpi.size == 1:
@@ -462,25 +391,156 @@ def run(params):
         stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative")
         stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
 
+    configure_pressure_anchor(stokes, p_soln, mesh, pressure_mode)
+    return stokes
+
+
+def run_case(mesh, params, run_dir, pressure_mode, report_gauges):
     if uw.mpi.rank == 0:
-        print(
-            f"Running graded mesh case: m={params.uw_m}, cellsize={params.uw_cellsize}, "
-            f"grading_ratio={params.dbg_grading_ratio}, inner_scale={inner_scale:.6g}",
-            flush=True,
-        )
+        print(f"Running pressure mode: {pressure_mode}", flush=True)
+
+    v_soln = uw.discretisation.MeshVariable(
+        varname=f"Velocity_{pressure_mode}",
+        mesh=mesh,
+        degree=params.uw_vdegree,
+        vtype=uw.VarType.VECTOR,
+        varsymbol=r"V",
+    )
+    p_soln = uw.discretisation.MeshVariable(
+        varname=f"Pressure_{pressure_mode}",
+        mesh=mesh,
+        degree=params.uw_pdegree,
+        vtype=uw.VarType.SCALAR,
+        varsymbol=r"P",
+        continuous=params.uw_pcont,
+    )
+
+    v_ana_expr, p_ana_expr, rho_expr, mu_expr = analytic_solution(
+        mesh,
+        params.uw_r_i,
+        params.uw_r_o,
+        params.uw_m,
+    )
+    v_err_expr = sp.Matrix(v_soln.sym).T - v_ana_expr
+    p_err_expr = p_soln.sym[0] - p_ana_expr
+    gravity_fn = -1.0 * mesh.CoordinateSystem.unit_e_0
+    bodyforce = -rho_expr * gravity_fn
+
+    stokes = make_stokes(
+        mesh,
+        v_soln,
+        p_soln,
+        mu_expr,
+        bodyforce,
+        params.uw_stokes_tol,
+        pressure_mode,
+    )
+    stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Upper.name)
+    stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Lower.name)
 
     uw.timing.reset()
     uw.timing.start()
     stokes.solve(verbose=False, debug=False)
     uw.timing.stop()
-    uw.timing.print_table(filename=os.path.join(run_dir, "stokes_timing.txt"))
+    uw.timing.print_table(
+        filename=os.path.join(run_dir, f"pressure_mode_{pressure_mode}_timing.txt")
+    )
 
-    gauge_fn = gauge_metrics if params.dbg_metrics_mode == "full" else gauge_metrics_volume_only
-    gauge_results = [
-        gauge_fn(mesh, p_soln, p_ana_expr, gauge)
-        for gauge in report_gauges
-    ]
+    raw_metrics = gauge_metrics(mesh, p_soln, p_ana_expr, "none")
+    gauge_results = [gauge_metrics(mesh, p_soln, p_ana_expr, gauge) for gauge in report_gauges]
     velocity_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
+
+    if params.dbg_write_output:
+        mesh.write_timestep(
+            f"pressure_mode_{pressure_mode}",
+            index=0,
+            meshVars=[v_soln, p_soln],
+            outputPath=run_dir,
+        )
+
+    return CaseResult(
+        case_name=f"essential_pressure_{pressure_mode}",
+        pressure_mode=pressure_mode,
+        velocity_volume_l2_analytic=float(velocity_l2),
+        raw_pressure_volume_l2_analytic=float(raw_metrics.pressure_volume_l2_analytic),
+        raw_pressure_inner_l2_analytic=float(raw_metrics.pressure_inner_l2_analytic),
+        raw_pressure_outer_l2_analytic=float(raw_metrics.pressure_outer_l2_analytic),
+        raw_pressure_volume_mean=float(raw_metrics.pressure_volume_mean),
+        raw_pressure_inner_mean=float(raw_metrics.pressure_inner_mean),
+        raw_pressure_outer_mean=float(raw_metrics.pressure_outer_mean),
+        snes_reason=int(stokes.snes.getConvergedReason()),
+        ksp_reason=int(stokes.snes.ksp.getConvergedReason()),
+        gauge_metrics=gauge_results,
+    )
+
+
+def make_summary_text(params, results):
+    lines = []
+    lines.append(
+        f"m={params.uw_m}, cellsize={params.uw_cellsize}, mesh_order={params.uw_gmsh_element_order}, "
+        f"vdeg={params.uw_vdegree}, "
+        f"pdeg={params.uw_pdegree}, qdeg={params.uw_qdegree if params.uw_qdegree > 0 else 'default'}"
+    )
+    lines.append(
+        "mode | gauge | v_vol_l2 | p_vol_l2 | p_inner_l2 | p_outer_l2 | p_mean | p_inner_mean | p_outer_mean"
+    )
+    for result in results:
+        for metrics in result.gauge_metrics:
+            lines.append(
+                f"{result.pressure_mode} | "
+                f"{metrics.gauge} | "
+                f"{result.velocity_volume_l2_analytic:.6g} | "
+                f"{metrics.pressure_volume_l2_analytic:.6g} | "
+                f"{metrics.pressure_inner_l2_analytic:.6g} | "
+                f"{metrics.pressure_outer_l2_analytic:.6g} | "
+                f"{metrics.pressure_volume_mean:.6g} | "
+                f"{metrics.pressure_inner_mean:.6g} | "
+                f"{metrics.pressure_outer_mean:.6g}"
+            )
+    return "\n".join(lines)
+
+
+def run(params):
+    params.uw_cellsize = parse_cellsize(params.uw_cellsize)
+    params.uw_pcont = params.uw_pcont if params.uw_pdegree > 0 else False
+    pressure_modes = parse_csv_strings(params.dbg_pressure_modes)
+    report_gauges = parse_csv_strings(params.dbg_report_gauges)
+    mesh_qdegree = (
+        params.uw_qdegree if params.uw_qdegree > 0 else max(params.uw_vdegree, params.uw_pdegree)
+    )
+
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    output_root = (
+        params.dbg_output_root
+        if params.dbg_output_root is not None
+        else os.path.join(repo_root, "output", "sphere", "thieulot", "pressure_anchor")
+    )
+    run_id = make_case_id(
+        inv_lc=int(round(1.0 / params.uw_cellsize)),
+        m=params.uw_m,
+        mesh_order=params.uw_gmsh_element_order,
+        vdeg=params.uw_vdegree,
+        pdeg=params.uw_pdegree,
+        pcont=params.uw_pcont,
+        qdeg=params.uw_qdegree if params.uw_qdegree > 0 else None,
+        tol=params.uw_stokes_tol,
+        np=uw.mpi.size,
+    )
+    run_dir = os.path.join(output_root, run_id)
+    if uw.mpi.rank == 0:
+        os.makedirs(run_dir, exist_ok=True)
+
+    mesh = uw.meshing.SphericalShell(
+        radiusInner=params.uw_r_i,
+        radiusOuter=params.uw_r_o,
+        cellSize=params.uw_cellsize,
+        qdegree=mesh_qdegree,
+        degree=1,
+        gmsh_element_order=params.uw_gmsh_element_order,
+        filename=os.path.join(run_dir, "mesh.msh"),
+    )
+
+    results = [run_case(mesh, params, run_dir, mode, report_gauges) for mode in pressure_modes]
 
     payload = {
         "params": {
@@ -491,48 +551,18 @@ def run(params):
             "uw_vdegree": params.uw_vdegree,
             "uw_pdegree": params.uw_pdegree,
             "uw_pcont": params.uw_pcont,
+            "uw_gmsh_element_order": params.uw_gmsh_element_order,
             "uw_qdegree": params.uw_qdegree,
             "uw_stokes_tol": params.uw_stokes_tol,
-            "dbg_grading_ratio": params.dbg_grading_ratio,
+            "dbg_pressure_modes": pressure_modes,
             "dbg_report_gauges": report_gauges,
             "mpi_size": uw.mpi.size,
         },
-        "mesh_grading": {
-            "inner_scale_of_uniform": inner_scale,
-            "outer_scale_of_uniform": outer_scale,
-        },
-        "solver": {
-            "snes_reason": int(stokes.snes.getConvergedReason()),
-            "ksp_reason": int(stokes.snes.ksp.getConvergedReason()),
-        },
-        "velocity_volume_l2_analytic": float(velocity_l2),
-        "gauges": [asdict(result) for result in gauge_results],
+        "results": [asdict(result) for result in results],
     }
 
-    if params.dbg_write_output:
-        mesh.write_timestep(
-            "output",
-            index=0,
-            meshVars=[v_soln, p_soln],
-            outputPath=run_dir,
-        )
-
     if uw.mpi.rank == 0:
-        lines = []
-        lines.append(
-            f"m={params.uw_m}, cellsize={params.uw_cellsize}, grading_ratio={params.dbg_grading_ratio}, "
-            f"inner_scale={inner_scale:.6g}, outer_scale={outer_scale:.6g}"
-        )
-        lines.append("gauge | v_vol_l2 | p_vol_l2 | p_inner_l2 | p_outer_l2 | p_mean")
-        for metrics in gauge_results:
-            lines.append(
-                f"{metrics.gauge} | {velocity_l2:.6g} | "
-                f"{metrics.pressure_volume_l2_analytic:.6g} | "
-                f"{metrics.pressure_inner_l2_analytic:.6g} | "
-                f"{metrics.pressure_outer_l2_analytic:.6g} | "
-                f"{metrics.pressure_volume_mean:.6g}"
-            )
-        summary_text = "\n".join(lines)
+        summary_text = make_summary_text(params, results)
         print(summary_text)
         with open(os.path.join(run_dir, "summary.txt"), "w", encoding="ascii") as stream:
             stream.write(summary_text + "\n")

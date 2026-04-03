@@ -33,7 +33,7 @@ run_dir_names = [
 
 # %%
 IN_NOTEBOOK = "ipykernel" in sys.modules
-OUTPUT_ROOT = "/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/spherical/thieulot/latest"
+OUTPUT_ROOT = "/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/sphere/thieulot/latest"
 FIG_DIR = os.path.join(OUTPUT_ROOT, "l2norm_plots")
 
 print(f"Output root: {OUTPUT_ROOT}")

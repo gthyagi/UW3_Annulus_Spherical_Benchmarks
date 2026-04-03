@@ -435,7 +435,7 @@ def run(params):
     output_root = (
         params.dbg_output_root
         if params.dbg_output_root is not None
-        else os.path.join(repo_root, "output", "spherical", "thieulot", "debug")
+        else os.path.join(repo_root, "output", "sphere", "thieulot", "debug")
     )
     case_id = make_case_id(
         case="case",

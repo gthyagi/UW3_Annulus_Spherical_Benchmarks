@@ -6,9 +6,9 @@ Investigate why pressure remains inaccurate at the inner spherical boundary, eve
 
 Relevant drivers:
 
-- [benchmarks/spherical/ex_stokes_thieulot.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot.py)
-- [benchmarks/spherical/ex_stokes_thieulot_bc_normals.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot_bc_normals.py)
-- [benchmarks/spherical/ex_stokes_thieulot_pressure_anchor.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot_pressure_anchor.py)
+- [benchmarks/sphere/ex_stokes_thieulot.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/sphere/ex_stokes_thieulot.py)
+- [benchmarks/sphere/ex_stokes_thieulot_bc_normals.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/sphere/ex_stokes_thieulot_bc_normals.py)
+- [benchmarks/sphere/ex_stokes_thieulot_pressure_anchor.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/sphere/ex_stokes_thieulot_pressure_anchor.py)
 
 ## Scope
 
@@ -46,7 +46,7 @@ Conclusion:
 
 ### 2. Pressure-anchor experiments
 
-Implemented in [ex_stokes_thieulot_pressure_anchor.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot_pressure_anchor.py).
+Implemented in [ex_stokes_thieulot_pressure_anchor.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/sphere/ex_stokes_thieulot_pressure_anchor.py).
 
 Pressure modes:
 
@@ -84,7 +84,7 @@ Not first-class:
 
 Summary file:
 
-- [pressure_anchor_stage m=-1 summary](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/spherical/thieulot/pressure_anchor_stage/inv_lc_8_m_-1_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_1/summary.txt)
+- [pressure_anchor_stage m=-1 summary](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/sphere/thieulot/pressure_anchor_stage/inv_lc_8_m_-1_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_1/summary.txt)
 
 Key result:
 
@@ -104,7 +104,7 @@ Representative numbers:
 
 Summary file:
 
-- [pressure_anchor_stage m=3 summary](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/spherical/thieulot/pressure_anchor_stage/inv_lc_8_m_3_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_1/summary.txt)
+- [pressure_anchor_stage m=3 summary](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/sphere/thieulot/pressure_anchor_stage/inv_lc_8_m_3_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_1/summary.txt)
 
 Key result:
 
@@ -125,7 +125,7 @@ Representative numbers:
 
 Summary file:
 
-- [pressure_anchor_mpi2 m=-1 summary](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/spherical/thieulot/pressure_anchor_mpi2/inv_lc_8_m_-1_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_2/summary.txt)
+- [pressure_anchor_mpi2 m=-1 summary](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/sphere/thieulot/pressure_anchor_mpi2/inv_lc_8_m_-1_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_2/summary.txt)
 
 Key result:
 
@@ -145,7 +145,7 @@ This means the pressure-anchored solve path is not robust in the current paralle
 
 Summary file:
 
-- [pressure_anchor_mpi2_clean m=3 summary](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/spherical/thieulot/pressure_anchor_mpi2_clean/inv_lc_8_m_3_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_2/summary.txt)
+- [pressure_anchor_mpi2_clean m=3 summary](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/sphere/thieulot/pressure_anchor_mpi2_clean/inv_lc_8_m_3_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_2/summary.txt)
 
 Key result:
 

@@ -22,7 +22,7 @@ When comparing results, treat the legacy branch as baseline and validate migrate
 
 - `benchmarks/annulus/`
   - Annulus benchmark scripts and annulus-specific temporary mesh/checkpoint folders.
-- `benchmarks/spherical/`
+- `benchmarks/sphere/`
   - Spherical benchmark scripts and spherical-specific temporary mesh/checkpoint folders.
 - `docs/`
   - Notes and workflow documentation.
@@ -45,7 +45,7 @@ When comparing results, treat the legacy branch as baseline and validate migrate
 
 - Spherical benchmark scripts are being reintroduced in the new structure.
 - Existing material currently appears mostly as notebook checkpoints under:
-  - `benchmarks/spherical/.ipynb_checkpoints/`
+  - `benchmarks/sphere/.ipynb_checkpoints/`
 
 ## Typical Outputs
 
