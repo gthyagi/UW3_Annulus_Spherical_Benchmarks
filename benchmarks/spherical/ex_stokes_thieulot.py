@@ -127,6 +127,11 @@ params = uw.Params(
         type=uw.ParamType.BOOLEAN,
         description="Pressure Dirichlet BC",
     ),
+    run_on_gadi=uw.Param(
+        False,
+        type=uw.ParamType.BOOLEAN,
+        description="Use Gadi scratch paths for benchmark output",
+    ),
 )
 
 if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
@@ -179,7 +184,10 @@ def make_case_id(*, case, **kwargs):
     return "_".join(parts)
 
 
-repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if params.run_on_gadi:
+    repo_root = "/scratch/m18/tg7098"
+else:
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 output_root = os.path.join(repo_root, "output", "spherical", "thieulot", "latest")
 metrics_filename = "benchmark_metrics.h5"
 

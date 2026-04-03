@@ -14,6 +14,8 @@ import sys
 import h5py
 import matplotlib.pyplot as plt
 
+metrics_filenames = ("benchmark_metrics.h5", "error_norm.h5")
+
 # %% [markdown]
 # ### User run directory list
 
@@ -54,11 +56,19 @@ for run_name in run_dir_names:
 os.makedirs(FIG_DIR, exist_ok=True)
 
 # %% [markdown]
-# ### Read `benchmark_metrics.h5` from each directory
+# ### Read benchmark metrics from each directory
 
 # %%
 ncpus_re = re.compile(r"_ncpus_(\d+)")
 records = []
+
+
+def find_metrics_file(run_dir):
+    for filename in metrics_filenames:
+        candidate = os.path.join(run_dir, filename)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
 
 for run_dir in run_dirs:
     run_name = os.path.basename(run_dir)
@@ -68,9 +78,9 @@ for run_dir in run_dirs:
         continue
 
     ncpus = int(match.group(1))
-    h5_file = os.path.join(run_dir, metrics_filename)
-    if not os.path.isfile(h5_file):
-        print(f"Skipping (missing {metrics_filename}): {run_dir}")
+    h5_file = find_metrics_file(run_dir)
+    if h5_file is None:
+        print(f"Skipping (missing metrics file): {run_dir}")
         continue
 
     with h5py.File(h5_file, "r") as h5f:
@@ -96,7 +106,7 @@ for r in records:
 
 # %%
 if not records:
-    print(f"No valid {metrics_filename} files found.")
+    print("No valid benchmark metrics files found.")
 else:
     x = [r["ncpus"] for r in records]
     y_v = [r["v_l2"] for r in records]
@@ -121,4 +131,3 @@ else:
     plt.close(fig)
 
     print(f"Saved figure: {fig_path}")
-metrics_filename = "benchmark_metrics.h5"

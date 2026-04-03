@@ -15,6 +15,8 @@ import sys
 import h5py
 import matplotlib.pyplot as plt
 
+metrics_filenames = ("benchmark_metrics.h5", "error_norm.h5")
+
 # %% [markdown]
 # ### User Run Directory List
 
@@ -106,17 +108,25 @@ varying_key = varying_keys[0]
 print(f"Varying parameter: {varying_key}")
 
 # %% [markdown]
-# ### Read `benchmark_metrics.h5`
+# ### Read benchmark metrics
 
 # %%
 records = []
 
+
+def find_metrics_file(run_dir):
+    for filename in metrics_filenames:
+        candidate = os.path.join(run_dir, filename)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
 for run_name, params in parsed_runs:
     run_dir = os.path.join(OUTPUT_ROOT, run_name)
-    h5_file = os.path.join(run_dir, metrics_filename)
+    h5_file = find_metrics_file(run_dir)
 
-    if not os.path.isfile(h5_file):
-        raise FileNotFoundError(f"Missing {metrics_filename}: {h5_file}")
+    if h5_file is None:
+        raise FileNotFoundError(f"Missing benchmark metrics file in: {run_dir}")
 
     with h5py.File(h5_file, "r") as h5f:
         v_key = "v_l2_norm" if "v_l2_norm" in h5f else "v_l2"
@@ -151,7 +161,7 @@ for rec in records:
 
 # %%
 if not records:
-    print(f"No valid {metrics_filename} files found.")
+    print("No valid benchmark metrics files found.")
 else:
     x = [rec["x"] for rec in records]
     y_v = [rec["v_l2"] for rec in records]
@@ -182,4 +192,3 @@ else:
     plt.close(fig)
 
     print(f"Saved figure: {fig_path}")
-metrics_filename = "benchmark_metrics.h5"
