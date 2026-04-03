@@ -10,6 +10,23 @@ This note collects approximate `L2` error references from the benchmark paper:
 
 These values are approximate figure readings, not author-supplied tables. Use them as a reference check, not as exact regression targets.
 
+## Annulus Discretisation Setups In The Paper
+
+For the 2-D cylindrical/annulus cases, the paper reports three distinct discretisation setups:
+
+- `P2-P1` Taylor-Hood on a quadratic/isoparametric curved mesh.
+  This is the main annulus setup used for the convergence results in Fig. 3.
+- `P2-P1` Taylor-Hood on a linear mesh.
+  This is the smooth-case comparison shown in Fig. 5 and isolates the effect of not using isoparametric geometry.
+- `P2bubble-P1DG` for the delta-function annulus cases.
+  This is the discontinuous-pressure setup shown in Fig. 6.
+
+For annulus interpretation in this repo:
+
+- Fig. 3 is the paper's main `P2-P1` plus isoparametric-geometry reference.
+- Fig. 5 is the paper's `P2-P1` plus linear-geometry reference.
+- Fig. 6 is the paper's `P2bubble-P1DG` delta-case reference.
+
 ## Refinement Level vs `uw_cellsize`
 
 The paper does not define refinement level by a Gmsh-style target edge length. It defines a mesh family and then doubles the mesh resolution at each level.
