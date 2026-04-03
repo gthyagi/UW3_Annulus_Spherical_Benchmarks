@@ -45,7 +45,7 @@ if IS_INTERACTIVE:
 dirname = "case2_inv_lc_8_l_2_m_1_k_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-05_ncpus_8_bc_natural_nitsche"
 
 # %%
-output_dir = os.path.join("../../output/sphere/kramer/latest/", f"{dirname}/")
+output_dir = os.path.join("../../output/spherical/kramer/latest/", f"{dirname}/")
 
 # %%
 pattern = (

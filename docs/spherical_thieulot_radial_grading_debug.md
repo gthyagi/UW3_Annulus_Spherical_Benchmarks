@@ -1,7 +1,7 @@
 # Spherical Thieulot Radial Grading
 
 Driver:
-- [ex_stokes_thieulot_radial_grading.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/sphere/ex_stokes_thieulot_radial_grading.py)
+- [ex_stokes_thieulot_radial_grading.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot_radial_grading.py)
 
 Setup:
 - radial mesh deformation only; benchmark fields and PDE are unchanged
@@ -38,7 +38,7 @@ Interpretation:
 ## Files
 
 Recent full-diagnostic summaries:
-- [m=-1 grade 1](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/sphere/thieulot/radial_grading_16_mpi8_full_bugfix/inv_lc_16_m_-1_grade_1_inner_scale_1_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_8/summary.txt)
-- [m=-1 grade 4](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/sphere/thieulot/radial_grading_16_mpi8_full_bugfix/inv_lc_16_m_-1_grade_4_inner_scale_0.462_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_8/summary.txt)
-- [m=3 grade 1](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/sphere/thieulot/radial_grading_16_mpi8_full_bugfix/inv_lc_16_m_3_grade_1_inner_scale_1_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_8/summary.txt)
-- [m=3 grade 4](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/sphere/thieulot/radial_grading_16_mpi8_full_bugfix/inv_lc_16_m_3_grade_4_inner_scale_0.462_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_8/summary.txt)
+- [m=-1 grade 1](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/spherical/thieulot/radial_grading_16_mpi8_full_bugfix/inv_lc_16_m_-1_grade_1_inner_scale_1_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_8/summary.txt)
+- [m=-1 grade 4](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/spherical/thieulot/radial_grading_16_mpi8_full_bugfix/inv_lc_16_m_-1_grade_4_inner_scale_0.462_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_8/summary.txt)
+- [m=3 grade 1](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/spherical/thieulot/radial_grading_16_mpi8_full_bugfix/inv_lc_16_m_3_grade_1_inner_scale_1_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_8/summary.txt)
+- [m=3 grade 4](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/output/spherical/thieulot/radial_grading_16_mpi8_full_bugfix/inv_lc_16_m_3_grade_4_inner_scale_0.462_vdeg_2_pdeg_1_pcont_true_tol_1e-05_np_8/summary.txt)

@@ -10,10 +10,10 @@ condition improves pressure on the inner spherical boundary, using the
 
 Standalone script:
 
-`benchmarks/sphere/ex_stokes_thieulot_bc_normals.py`
+`benchmarks/spherical/ex_stokes_thieulot_bc_normals.py`
 
 The main benchmark driver
-`benchmarks/sphere/ex_stokes_thieulot.py`
+`benchmarks/spherical/ex_stokes_thieulot.py`
 was not modified for this experiment.
 
 For each parameter set, the script runs:

@@ -21,7 +21,7 @@ dirname = "case_inv_lc_8_m_3_vdeg_2_pdeg_1_pcont_true_vel_penalty_1e+08_stokes_t
 
 # %%
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-output_dir = os.path.join(repo_root, "output", "sphere", "thieulot", "legacy", dirname)
+output_dir = os.path.join(repo_root, "output", "spherical", "thieulot", "legacy", dirname)
 
 # %%
 pattern = (

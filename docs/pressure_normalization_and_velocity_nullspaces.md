@@ -16,8 +16,8 @@ The Underworld scripts discussed here are:
 
 - `benchmarks/annulus/ex_stokes_thieulot.py`
 - `benchmarks/annulus/ex_stokes_kramer.py`
-- `benchmarks/sphere/ex_stokes_thieulot.py`
-- `benchmarks/sphere/ex_stokes_kramer.py`
+- `benchmarks/spherical/ex_stokes_thieulot.py`
+- `benchmarks/spherical/ex_stokes_kramer.py`
 
 ## 1. What Are Pressure Normalization And Velocity Nullspaces?
 
@@ -442,7 +442,7 @@ This is close to the Kramer paper:
 
 The main difference is implementation style, not mathematics.
 
-## 3.3 `benchmarks/sphere/ex_stokes_thieulot.py`
+## 3.3 `benchmarks/spherical/ex_stokes_thieulot.py`
 
 ### Pressure normalization in Underworld
 
@@ -542,7 +542,7 @@ In the current UW script:
 
 So the script contains the right machinery, but its active behavior is not exactly the same as the benchmark discussion in the paper.
 
-## 3.4 `benchmarks/sphere/ex_stokes_kramer.py`
+## 3.4 `benchmarks/spherical/ex_stokes_kramer.py`
 
 ### Pressure normalization in Underworld
 

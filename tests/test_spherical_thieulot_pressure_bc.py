@@ -9,8 +9,8 @@ import pytest
 
 
 REPO_ROOT = Path("/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks")
-SCRIPT = REPO_ROOT / "benchmarks" / "sphere" / "ex_stokes_thieulot.py"
-OUTPUT_ROOT = REPO_ROOT / "output" / "sphere" / "thieulot" / "latest"
+SCRIPT = REPO_ROOT / "benchmarks" / "spherical" / "ex_stokes_thieulot.py"
+OUTPUT_ROOT = REPO_ROOT / "output" / "spherical" / "thieulot" / "latest"
 
 
 def _read_pressure_points(case_dir: Path):

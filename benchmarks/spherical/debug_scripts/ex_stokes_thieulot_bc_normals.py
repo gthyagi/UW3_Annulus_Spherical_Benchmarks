@@ -667,7 +667,7 @@ def run(params):
     output_root = (
         params.dbg_output_root
         if params.dbg_output_root is not None
-        else os.path.join(repo_root, "output", "sphere", "thieulot", "bc_normals")
+        else os.path.join(repo_root, "output", "spherical", "thieulot", "bc_normals")
     )
     run_id = make_case_id(
         inv_lc=int(round(1.0 / params.uw_cellsize)),
