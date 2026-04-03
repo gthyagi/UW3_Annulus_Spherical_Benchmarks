@@ -20,6 +20,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
+from matplotlib import ticker
 
 try:
     from IPython.display import display
@@ -50,7 +51,7 @@ pattern = (
     r"vdeg_(?P<vdeg>\d+)_"
     r"pdeg_(?P<pdeg>\d+)_"
     r"pcont_(?P<pcont>true|false)_"
-    r"vel_penalty_(?P<vel_penalty>[0-9.eE+\-]+)_"
+    r"(?:vel_penalty_(?P<vel_penalty>[0-9.eE+\-]+)_)?"
     r"stokes_tol_(?P<stokes_tol>[0-9.eE+\-]+)_"
     r"(?:stokes_pen_(?P<stokes_pen>[0-9.eE+\-]+)_)?"
     r"ncpus_(?P<ncpus>\d+)"
@@ -72,7 +73,7 @@ pdegree = int(params["pdeg"])
 pcont = params["pcont"] == "true"
 pcont_str = str(pcont).lower()
 
-vel_penalty = float(params["vel_penalty"])
+vel_penalty = None if params["vel_penalty"] is None else float(params["vel_penalty"])
 stokes_tol = float(params["stokes_tol"])
 stokes_pen = None if params["stokes_pen"] is None else float(params["stokes_pen"])
 ncpus = int(params["ncpus"])
@@ -288,20 +289,11 @@ v_ana, p_ana, rho_ana = analytical_solution(grid.points, m, r_i, r_o)
 v_err = v_u - v_ana
 p_err = p_u - p_ana
 
-v_ana_mag = np.linalg.norm(v_ana, axis=1)
-v_err_mag = np.linalg.norm(v_err, axis=1)
-
-with np.errstate(divide="ignore", invalid="ignore"):
-    v_err_pct = np.where(v_ana_mag > 1.0e-14, 100.0 * v_err_mag / v_ana_mag, 0.0)
-    p_err_pct = np.where(np.abs(p_ana) > 1.0e-14, 100.0 * p_err / p_ana, 0.0)
-
 grid.point_data["V_a"] = v_ana
 grid.point_data["P_a"] = p_ana
 grid.point_data["RHO_a"] = rho_ana
 grid.point_data["V_e"] = v_err
 grid.point_data["P_e"] = p_err
-grid.point_data["V_err_pct"] = np.nan_to_num(v_err_pct)
-grid.point_data["P_err_pct"] = np.nan_to_num(p_err_pct)
 
 # %%
 reference_limits = {
@@ -310,18 +302,14 @@ reference_limits = {
         "pressure": [-2.5, 2.5],
         "rho": [-110.0, 110.0],
         "velocity_error": [0.0, 0.05],
-        "velocity_pct": [0.0, 5.0],
         "pressure_error": [-0.5, 0.5],
-        "pressure_pct": [-10.0, 10.0],
     },
     3: {
         "velocity": [0.0, 20.0],
         "pressure": [-4.0, 4.0],
         "rho": [-35.0, 35.0],
         "velocity_error": [0.0, 4.0],
-        "velocity_pct": [0.0, 5.0],
         "pressure_error": [-0.5, 0.5],
-        "pressure_pct": [-10.0, 10.0],
     },
 }
 
@@ -332,10 +320,8 @@ else:
         "velocity": [0.0, float(np.max(np.linalg.norm(v_u, axis=1)))],
         "pressure": [float(np.min(p_u)), float(np.max(p_u))],
         "rho": [float(np.min(rho_ana)), float(np.max(rho_ana))],
-        "velocity_error": [0.0, float(np.max(v_err_mag))],
-        "velocity_pct": [0.0, 5.0],
+        "velocity_error": [0.0, float(np.max(np.linalg.norm(v_err, axis=1)))],
         "pressure_error": [float(np.min(p_err)), float(np.max(p_err))],
-        "pressure_pct": [-10.0, 10.0],
     }
 
 # %% [markdown]
@@ -382,6 +368,13 @@ def save_colorbar(colormap, clim, label, fname, label_y):
 
     cax = plt.axes([0.1, 0.2, 1.15, 0.06])
     cb = plt.colorbar(image, orientation="horizontal", cax=cax)
+    cb.locator = ticker.MaxNLocator(nbins=5, min_n_ticks=3)
+    formatter = ticker.ScalarFormatter(useMathText=True)
+    formatter.set_powerlimits((-2, 2))
+    cb.formatter = formatter
+    cb.update_ticks()
+    cb.ax.tick_params(labelsize=16)
+    cb.ax.xaxis.get_offset_text().set_size(16)
     cb.ax.set_title(label, fontsize=18, x=0.5, y=label_y)
 
     fig.savefig(
@@ -391,6 +384,50 @@ def save_colorbar(colormap, clim, label, fname, label_y):
     )
     if IS_INTERACTIVE and display is not None:
         display(fig)
+    plt.close(fig)
+
+
+def save_vertical_colorbar(
+    colormap,
+    output_path,
+    fname,
+    cb_axis_label,
+    vmin,
+    vmax,
+    figsize_cb=(4, 2.25),
+    primary_fs=18,
+    cb_label_xpos=3.7,
+    cb_label_ypos=0.3,
+):
+    """Save a standalone vertical colorbar without displaying it."""
+
+    fig = plt.figure(figsize=figsize_cb)
+    plt.rc("font", size=primary_fs)
+    image = plt.imshow(np.array([[vmin, vmax]]), cmap=colormap)
+    plt.gca().set_visible(False)
+
+    cax = plt.axes([0.1, 0.2, 0.06, 1.15])
+    cb = plt.colorbar(image, orientation="vertical", cax=cax)
+    cb.locator = ticker.MaxNLocator(nbins=5, min_n_ticks=3)
+    formatter = ticker.ScalarFormatter(useMathText=True)
+    formatter.set_powerlimits((-2, 2))
+    cb.formatter = formatter
+    cb.update_ticks()
+    cb.ax.tick_params(labelsize=max(primary_fs - 2, 10))
+    cb.ax.yaxis.get_offset_text().set_size(max(primary_fs - 2, 10))
+    cb.ax.set_title(
+        cb_axis_label,
+        fontsize=primary_fs,
+        x=cb_label_xpos,
+        y=cb_label_ypos,
+        rotation=90,
+    )
+
+    fig.savefig(
+        os.path.join(output_dir, f"{fname}_cbvert.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
     plt.close(fig)
 
 
@@ -480,6 +517,7 @@ def save_field_plot(
     save_plotter.close()
 
     save_colorbar(colormap, clim, cb_label, cb_name, label_y)
+    save_vertical_colorbar(colormap, output_dir, cb_name, cb_label, clim[0], clim[1])
 
 # %% [markdown]
 # ### Analytical Function Plot
@@ -555,18 +593,11 @@ print("Plotting: numerical velocity")
 save_field_plot("Velocity", "vel_uw.png", cmc.lapaz.resampled(21), limits["velocity"], "Velocity", "v_uw", -2.05, vector=True)
 
 # %% [markdown]
-# ### Relative Velocity Error
+# ### Absolute Velocity Error
 
 # %%
-print("Plotting: relative velocity error")
-save_field_plot("V_e", "vel_r_err.png", cmc.lapaz.resampled(11), limits["velocity_error"], "Velocity Error (relative)", "v_err_rel", -2.05, vector=True)
-
-# %% [markdown]
-# ### Velocity Error (%)
-
-# %%
-print("Plotting: velocity error percentage")
-save_field_plot("V_err_pct", "vel_p_err.png", cmc.oslo_r.resampled(21), limits["velocity_pct"], "Velocity Error (%)", "v_err_perc", -2.05)
+print("Plotting: absolute velocity error")
+save_field_plot("V_e", "vel_abs_err.png", cmc.lapaz.resampled(11), limits["velocity_error"], "Velocity Error (absolute)", "v_err_abs", -2.05, vector=True)
 
 # %% [markdown]
 # ### Numerical Pressure
@@ -576,15 +607,8 @@ print("Plotting: numerical pressure")
 save_field_plot("Pressure", "p_uw.png", cmc.vik.resampled(41), limits["pressure"], "Pressure", "p_uw", -2.0)
 
 # %% [markdown]
-# ### Relative Pressure Error
+# ### Absolute Pressure Error
 
 # %%
-print("Plotting: relative pressure error")
-save_field_plot("P_e", "p_r_err.png", cmc.vik.resampled(41), limits["pressure_error"], "Pressure Error (relative)", "p_err_rel", -2.0)
-
-# %% [markdown]
-# ### Pressure Error (%)
-
-# %%
-print("Plotting: pressure error percentage")
-save_field_plot("P_err_pct", "p_p_err.png", cmc.vik.resampled(41), limits["pressure_pct"], "Pressure Error (%)", "p_err_perc", -2.0)
+print("Plotting: absolute pressure error")
+save_field_plot("P_e", "p_abs_err.png", cmc.vik.resampled(41), limits["pressure_error"], "Pressure Error (absolute)", "p_err_abs", -2.0)

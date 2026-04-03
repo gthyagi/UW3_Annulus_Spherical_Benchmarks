@@ -17,6 +17,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
+from matplotlib import ticker
 from types import SimpleNamespace
 
 try:
@@ -36,7 +37,7 @@ if IS_INTERACTIVE:
 # ### Parameters And Paths
 
 # %%
-dirname = f'case2_inv_lc_32_n_2_k_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-05_ncpus_8_bc_natural_nitsche'
+dirname = f'case1_inv_lc_32_n_2_k_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche'
 
 # %%
 output_dir = os.path.join("../../output/annulus/kramer/latest/", f'{dirname}/')
@@ -88,7 +89,7 @@ r_int = 2.0
 r_i = 1.22
 
 freeslip = case in ("case1", "case2")
-noslip = case in ("case3", "case4")
+zeroslip = case in ("case3", "case4")
 delta_fn = case in ("case1", "case3")
 smooth = case in ("case2", "case4")
 
@@ -247,12 +248,12 @@ def build_case_solutions():
     if freeslip and smooth:
         soln = build_smooth_solution(r_o, r_i, k, n, 1.0, 1.0, no_slip=False)
         return soln, soln
-    if noslip and delta_fn:
+    if zeroslip and delta_fn:
         return (
             build_delta_solution(r_o, r_i, r_int, n, -1.0, 1.0, +1, no_slip=True),
             build_delta_solution(r_o, r_i, r_int, n, -1.0, 1.0, -1, no_slip=True),
         )
-    if noslip and smooth:
+    if zeroslip and smooth:
         soln = build_smooth_solution(r_o, r_i, k, n, 1.0, 1.0, no_slip=True)
         return soln, soln
     raise ValueError(f"Unsupported case: {case}")
@@ -622,12 +623,23 @@ def save_colorbar(
 
     plt.gca().set_visible(False)
 
+    def format_colorbar_ticks(colorbar, orientation):
+        colorbar.locator = ticker.MaxNLocator(nbins=5, min_n_ticks=3)
+        formatter = ticker.ScalarFormatter(useMathText=True)
+        formatter.set_powerlimits((-2, 2))
+        colorbar.formatter = formatter
+        colorbar.update_ticks()
+        colorbar.ax.tick_params(labelsize=max(primary_fs - 2, 10))
+        axis = colorbar.ax.xaxis if orientation == "horizontal" else colorbar.ax.yaxis
+        axis.get_offset_text().set_size(max(primary_fs - 2, 10))
+
     if cb_orient == "vertical":
         cax = plt.axes([0.1, 0.2, 0.06, 1.15])
         cb = plt.colorbar(
             orientation="vertical",
             cax=cax,
         )
+        format_colorbar_ticks(cb, "vertical")
         cb.ax.set_title(
             cb_axis_label,
             fontsize=primary_fs,
@@ -636,7 +648,7 @@ def save_colorbar(
             rotation=90,
         )
         fig.savefig(
-            f"{output_path}{fname}_cbvert.{fformat}",
+            os.path.join(output_path, f"{fname}_cbvert.{fformat}"),
             dpi=150,
             bbox_inches="tight",
         )
@@ -647,6 +659,7 @@ def save_colorbar(
             orientation="horizontal",
             cax=cax,
         )
+        format_colorbar_ticks(cb, "horizontal")
         cb.ax.set_title(
             cb_axis_label,
             fontsize=primary_fs,
@@ -654,7 +667,7 @@ def save_colorbar(
             y=cb_label_ypos,
         )
         fig.savefig(
-            f"{output_path}{fname}_cbhorz.{fformat}",
+            os.path.join(output_path, f"{fname}_cbhorz.{fformat}"),
             dpi=150,
             bbox_inches="tight",
         )
@@ -681,6 +694,7 @@ def plot_vector(
     save_png=False,
     dir_fname=None,
     image_scale=3.5,
+    show_interface=False,
 ):
     """Legacy-style vector magnitude plot."""
     vec = np.asarray(
@@ -717,6 +731,15 @@ def plot_vector(
                     mag=vmag,
                     color="k",
                 )
+
+        if show_interface and delta_fn:
+            plotter.add_mesh(
+                make_interface_circle(r_int),
+                color="#222222",
+                opacity=0.35,
+                line_width=2.0,
+                show_scalar_bar=False,
+            )
 
     if IS_INTERACTIVE:
         display_plotter = pv.Plotter(off_screen=False)
@@ -758,6 +781,7 @@ def plot_scalar(
     save_png=False,
     dir_fname=None,
     image_scale=3.5,
+    show_interface=False,
 ):
     """Legacy-style scalar plot."""
     work = grid.copy(deep=True)
@@ -778,6 +802,15 @@ def plot_scalar(
             plotter.add_text(
                 title,
                 font_size=18,
+            )
+
+        if show_interface and delta_fn:
+            plotter.add_mesh(
+                make_interface_circle(r_int),
+                color="#222222",
+                opacity=0.35,
+                line_width=2.0,
+                show_scalar_bar=False,
             )
 
     if IS_INTERACTIVE:
@@ -816,6 +849,7 @@ def plot_scalar_with_colorbar(
     cb_label,
     cb_name,
     cb_label_ypos=-2.0,
+    show_interface=False,
 ):
     """Plot scalar field and save matching colorbar."""
     png = plot_scalar(
@@ -828,6 +862,7 @@ def plot_scalar_with_colorbar(
         window_size=SCREENSHOT_WINDOW_SIZE,
         save_png=True,
         dir_fname=os.path.join(output_dir, png_name),
+        show_interface=show_interface,
     )
 
     save_colorbar(
@@ -841,6 +876,21 @@ def plot_scalar_with_colorbar(
         cb_axis_label=cb_label,
         cb_label_xpos=0.5,
         cb_label_ypos=cb_label_ypos,
+        fformat="pdf",
+        output_path=output_dir,
+        fname=cb_name,
+    )
+    save_colorbar(
+        colormap=cmap,
+        cb_bounds=None,
+        vmin=clim[0],
+        vmax=clim[1],
+        figsize_cb=(4, 2.25),
+        primary_fs=18,
+        cb_orient="vertical",
+        cb_axis_label=cb_label,
+        cb_label_xpos=3.7,
+        cb_label_ypos=0.3,
         fformat="pdf",
         output_path=output_dir,
         fname=cb_name,
@@ -861,6 +911,7 @@ def plot_vector_with_colorbar(
     vfreq,
     show_arrows,
     cb_label_ypos=-2.05,
+    show_interface=False,
 ):
     """Plot vector field and save matching colorbar."""
     png = plot_vector(
@@ -876,6 +927,7 @@ def plot_vector_with_colorbar(
         window_size=SCREENSHOT_WINDOW_SIZE,
         save_png=True,
         dir_fname=os.path.join(output_dir, png_name),
+        show_interface=show_interface,
     )
 
     save_colorbar(
@@ -889,6 +941,21 @@ def plot_vector_with_colorbar(
         cb_axis_label=cb_label,
         cb_label_xpos=0.5,
         cb_label_ypos=cb_label_ypos,
+        fformat="pdf",
+        output_path=output_dir,
+        fname=cb_name,
+    )
+    save_colorbar(
+        colormap=cmap,
+        cb_bounds=None,
+        vmin=clim[0],
+        vmax=clim[1],
+        figsize_cb=(4, 2.25),
+        primary_fs=18,
+        cb_orient="vertical",
+        cb_axis_label=cb_label,
+        cb_label_xpos=3.7,
+        cb_label_ypos=0.3,
         fformat="pdf",
         output_path=output_dir,
         fname=cb_name,
@@ -926,20 +993,139 @@ grid.point_data["V_e"] = v_e
 set_field_array(grid, "P_a", np.asarray(p_ana_support, dtype=np.float64).reshape(-1), pressure_assoc)
 set_field_array(grid, "P_e", p_e, pressure_assoc)
 
-v_a_mag = np.linalg.norm(v_a[:, :2], axis=1)
-v_e_mag = np.linalg.norm(v_e[:, :2], axis=1)
+grid.point_data["RHO_a_neg"] = -np.asarray(grid.point_data["RHO_a"]).reshape(-1)
 
-with np.errstate(divide="ignore", invalid="ignore"):
-    v_err_pct = np.where(v_a_mag > 1.0e-14, (v_e_mag / v_a_mag) * 100.0, 0.0)
-    p_err_pct = np.where(
-        np.abs(np.asarray(p_ana_support)) > 1.0e-14,
-        (np.asarray(p_e) / np.asarray(p_ana_support)) * 100.0,
-        0.0,
+
+# %%
+def make_interface_circle(radius, n_points=721):
+    """Return a closed circular polyline for the internal annulus interface."""
+
+    theta = np.linspace(0.0, 2.0 * np.pi, n_points)
+    points = np.column_stack(
+        [
+            radius * np.cos(theta),
+            radius * np.sin(theta),
+            np.zeros_like(theta),
+        ]
+    )
+    poly = pv.lines_from_points(points, close=True)
+    return poly
+
+
+# %%
+def save_exact_interface_density_plot(
+    png_name="rho_ana_interface.png",
+    colormap=None,
+    clim=None,
+    cb_label="Rho",
+    cb_name="rho_ana_interface",
+    label_y=-2.0,
+):
+    """Plot the delta density exactly on the internal annulus interface."""
+
+    background_color = "white"
+    annulus_fill = pv.Disc(
+        inner=r_i,
+        outer=r_o,
+        normal=(0.0, 0.0, 1.0),
+        c_res=720,
+        r_res=4,
     )
 
-grid.point_data["V_err_pct"] = np.nan_to_num(v_err_pct)
-set_field_array(grid, "P_err_pct", np.nan_to_num(p_err_pct), pressure_assoc)
-grid.point_data["RHO_a_neg"] = -np.asarray(grid.point_data["RHO_a"]).reshape(-1)
+    theta = np.linspace(0.0, 2.0 * np.pi, 1441)
+    interface_points = np.column_stack(
+        [
+            r_int * np.cos(theta),
+            r_int * np.sin(theta),
+            np.zeros_like(theta),
+        ]
+    )
+    interface_poly = pv.lines_from_points(interface_points, close=True)
+    interface_poly.point_data["rho_interface"] = -np.cos(n * theta)
+
+    inner_circle = make_interface_circle(r_i)
+    outer_circle = make_interface_circle(r_o)
+
+    def add_scene(plotter):
+        plotter.add_mesh(
+            annulus_fill,
+            color="#e3e1da",
+            opacity=1.0,
+            show_scalar_bar=False,
+        )
+        plotter.add_mesh(
+            inner_circle,
+            color="#bdbdbd",
+            opacity=0.55,
+            line_width=1.0,
+            show_scalar_bar=False,
+        )
+        plotter.add_mesh(
+            outer_circle,
+            color="#bdbdbd",
+            opacity=0.55,
+            line_width=1.0,
+            show_scalar_bar=False,
+        )
+        plotter.add_mesh(
+            interface_poly,
+            scalars="rho_interface",
+            cmap=colormap,
+            clim=clim,
+            line_width=5.0,
+            show_scalar_bar=False,
+        )
+
+    if IS_INTERACTIVE:
+        display_plotter = pv.Plotter(off_screen=False)
+        display_plotter.image_scale = 3.5
+        display_plotter.set_background(background_color)
+        add_scene(display_plotter)
+        display_plotter.camera_position = "xy"
+        display_plotter.render()
+        display_plotter.camera.zoom(1.4)
+        display_plotter.show(jupyter_backend=JUPYTER_BACKEND, auto_close=False)
+
+    save_plotter = pv.Plotter(window_size=SCREENSHOT_WINDOW_SIZE, off_screen=True)
+    save_plotter.image_scale = 3.5
+    save_plotter.set_background(background_color)
+    add_scene(save_plotter)
+    save_plotter.camera_position = "xy"
+    save_plotter.render()
+    save_plotter.camera.zoom(1.4)
+    save_plotter.screenshot(os.path.join(output_dir, png_name))
+    save_plotter.close()
+
+    save_colorbar(
+        colormap=colormap,
+        cb_bounds=None,
+        vmin=clim[0],
+        vmax=clim[1],
+        figsize_cb=(5, 5),
+        primary_fs=18,
+        cb_orient="horizontal",
+        cb_axis_label=cb_label,
+        cb_label_xpos=0.5,
+        cb_label_ypos=label_y,
+        fformat="pdf",
+        output_path=output_dir,
+        fname=cb_name,
+    )
+    save_colorbar(
+        colormap=colormap,
+        cb_bounds=None,
+        vmin=clim[0],
+        vmax=clim[1],
+        figsize_cb=(4, 2.25),
+        primary_fs=18,
+        cb_orient="vertical",
+        cb_axis_label=cb_label,
+        cb_label_xpos=3.7,
+        cb_label_ypos=0.3,
+        fformat="pdf",
+        output_path=output_dir,
+        fname=cb_name,
+    )
 
 # %% [markdown]
 # ### Case Color Limits
@@ -956,12 +1142,6 @@ vel_err_clim = {
     "case2": [0.0, 7e-4],
     "case3": [0.0, 1e-4],
     "case4": [0.0, 1e-5],
-}
-vel_pct_clim = {
-    "case1": [0.0, 20.0],
-    "case2": [0.0, 20.0],
-    "case3": [0.0, 5.0],
-    "case4": [0.0, 1.0],
 }
 p_clim = {
     "case1": [-0.65, 0.65],
@@ -1026,7 +1206,19 @@ rho_ana_png = plot_scalar_with_colorbar(
     clim=[-1.0, 1.0],
     cb_label="Rho",
     cb_name="rho_ana",
+    show_interface=delta_fn,
 )
+
+if delta_fn:
+    print("Plotting: exact interface density")
+    save_exact_interface_density_plot(
+        png_name="rho_ana_interface.png",
+        colormap=cmc.roma.resampled(31),
+        clim=[-1.0, 1.0],
+        cb_label="Rho",
+        cb_name="rho_ana_interface",
+        label_y=-2.0,
+    )
 
 # %% [markdown]
 # ### Solution Velocity
@@ -1048,38 +1240,23 @@ vel_u_png = plot_vector_with_colorbar(
 )
 
 # %% [markdown]
-# ### Relative Velocity Error
+# ### Absolute Velocity Error
 
 # %%
-print("Plotting: relative velocity error")
+print("Plotting: absolute velocity error")
 vel_err_png = plot_vector_with_colorbar(
     grid,
     vector_name="V_e",
-    png_name="vel_r_err.png",
+    png_name="vel_abs_err.png",
     cmap=cmc.lapaz.resampled(11),
     clim=vel_err_clim[case],
-    cb_label="Velocity Error (relative)",
-    cb_name="v_err_rel",
+    cb_label="Velocity Error (absolute)",
+    cb_name="v_err_abs",
     vmag=1.0,
     vfreq=75,
     show_arrows=False,
     cb_label_ypos=-2.05,
-)
-
-# %% [markdown]
-# ### Velocity Error (%)
-
-# %%
-print("Plotting: velocity error percentage")
-vel_pct_png = plot_scalar_with_colorbar(
-    grid,
-    scalar_name="V_err_pct",
-    png_name="vel_p_err.png",
-    cmap=cmc.oslo_r.resampled(21),
-    clim=vel_pct_clim[case],
-    cb_label="Velocity Error (%)",
-    cb_name="v_err_perc",
-    cb_label_ypos=-2.05,
+    show_interface=delta_fn,
 )
 
 # %% [markdown]
@@ -1098,33 +1275,17 @@ p_u_png = plot_scalar_with_colorbar(
 )
 
 # %% [markdown]
-# ### Relative Pressure Error
+# ### Absolute Pressure Error
 
 # %%
-print("Plotting: relative pressure error")
+print("Plotting: absolute pressure error")
 p_err_png = plot_scalar_with_colorbar(
     grid,
     scalar_name="P_e",
-    png_name="p_r_err.png",
+    png_name="p_abs_err.png",
     cmap=cmc.vik.resampled(41),
     clim=p_err_clim[case],
-    cb_label="Pressure Error (relative)",
-    cb_name="p_err_rel",
+    cb_label="Pressure Error (absolute)",
+    cb_name="p_err_abs",
+    show_interface=delta_fn,
 )
-
-# %% [markdown]
-# ### Pressure Error (%)
-
-# %%
-print("Plotting: pressure error percentage")
-p_pct_png = plot_scalar_with_colorbar(
-    grid,
-    scalar_name="P_err_pct",
-    png_name="p_p_err.png",
-    cmap=cmc.vik.resampled(41),
-    clim=[-100.0, 100.0],
-    cb_label="Pressure Error (%)",
-    cb_name="p_err_perc",
-)
-
-# %%

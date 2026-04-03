@@ -20,6 +20,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
+from matplotlib import ticker
 
 try:
     from IPython.display import display
@@ -38,7 +39,7 @@ if IS_INTERACTIVE:
 # ### Parameters And Paths
 
 # %%
-dirname = "model_inv_lc_64_k_2_vdeg_2_pdeg_1_pcont_true_vel_penalty_2.5e+08_stokes_tol_1e-05_ncpus_8_bc_natural"
+dirname = "model_inv_lc_64_k_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_essential"
 
 # %%
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -51,7 +52,7 @@ pattern = (
     r"vdeg_(?P<vdeg>\d+)_"
     r"pdeg_(?P<pdeg>\d+)_"
     r"pcont_(?P<pcont>true|false)_"
-    r"vel_penalty_(?P<vel_penalty>[0-9.eE+\-]+)_"
+    r"(?:vel_penalty_(?P<vel_penalty>[0-9.eE+\-]+)_)?"
     r"stokes_tol_(?P<stokes_tol>[0-9.eE+\-]+)_"
     r"ncpus_(?P<ncpus>\d+)"
     r"(?:_bc_(?P<bc_type>\w+))?"
@@ -72,7 +73,7 @@ vdegree = int(params["vdeg"])
 pdegree = int(params["pdeg"])
 pcont = params["pcont"] == "true"
 
-vel_penalty = float(params["vel_penalty"])
+vel_penalty = None if params["vel_penalty"] is None else float(params["vel_penalty"])
 stokes_tol = float(params["stokes_tol"])
 ncpus = int(params["ncpus"])
 bc_type = params["bc_type"]
@@ -510,6 +511,13 @@ def save_colorbar(
 
     cax = plt.axes([0.1, 0.2, 1.15, 0.06])
     cb = plt.colorbar(img, orientation="horizontal", cax=cax)
+    cb.locator = ticker.MaxNLocator(nbins=5, min_n_ticks=3)
+    formatter = ticker.ScalarFormatter(useMathText=True)
+    formatter.set_powerlimits((-2, 2))
+    cb.formatter = formatter
+    cb.update_ticks()
+    cb.ax.tick_params(labelsize=max(primary_fs - 2, 10))
+    cb.ax.xaxis.get_offset_text().set_size(max(primary_fs - 2, 10))
     cb.ax.set_title(cb_axis_label, fontsize=primary_fs, x=cb_label_xpos, y=cb_label_ypos)
     fig.savefig(
         os.path.join(output_path, f"{fname}_cbhorz.pdf"),
@@ -543,6 +551,13 @@ def save_vertical_colorbar(
 
     cax = plt.axes([0.1, 0.2, 0.06, 1.15])
     cb = plt.colorbar(img, orientation="vertical", cax=cax)
+    cb.locator = ticker.MaxNLocator(nbins=5, min_n_ticks=3)
+    formatter = ticker.ScalarFormatter(useMathText=True)
+    formatter.set_powerlimits((-2, 2))
+    cb.formatter = formatter
+    cb.update_ticks()
+    cb.ax.tick_params(labelsize=max(primary_fs - 2, 10))
+    cb.ax.yaxis.get_offset_text().set_size(max(primary_fs - 2, 10))
     cb.ax.set_title(
         cb_axis_label,
         fontsize=primary_fs,
@@ -817,29 +832,14 @@ p_err = p_u - p_ana_support
 grid.point_data["V_err"] = v_err
 set_field_array(grid, "P_err", p_err, pressure_assoc)
 
-v_ana_mag = np.linalg.norm(v_ana[:, :2], axis=1)
-v_u_mag = np.linalg.norm(v_u[:, :2], axis=1)
 v_err_mag = np.linalg.norm(v_err[:, :2], axis=1)
-
-with np.errstate(divide="ignore", invalid="ignore"):
-    v_err_pct = np.where(v_ana_mag > 1.0e-14, (v_err_mag / v_ana_mag) * 100.0, 0.0)
-    p_err_pct = np.where(
-        np.abs(p_ana_support) > 1.0e-14,
-        (p_err / p_ana_support) * 100.0,
-        0.0,
-    )
-
-grid.point_data["V_err_pct"] = np.nan_to_num(v_err_pct)
-set_field_array(grid, "P_err_pct", np.nan_to_num(p_err_pct), pressure_assoc)
 grid.point_data["Rho_ana_neg"] = -rho_ana
 
 velocity_clim = [0.0, 2.3]
 pressure_clim = [-8.5, 8.5]
 density_clim = [-67.5, 67.5]
 velocity_error_clim = positive_clim(v_err_mag, percentile=99.0, default=1.0e-12)
-velocity_pct_clim = positive_clim(v_err_pct, percentile=99.0, default=1.0)
 pressure_error_clim = symmetric_clim(p_err, percentile=99.0, default=1.0e-12)
-pressure_pct_clim = symmetric_clim(p_err_pct, percentile=99.0, default=100.0)
 
 save_vertical_colorbar(
     colormap=cmc.lapaz.resampled(11),
@@ -938,37 +938,21 @@ plot_vector_with_colorbar(
 
 
 # %% [markdown]
-# ### Plot Relative Velocity Error Vector
+# ### Plot Absolute Velocity Error Vector
 
 # %%
-print("Plotting: relative velocity error")
+print("Plotting: absolute velocity error")
 plot_vector_with_colorbar(
     grid,
     vector_name="V_err",
-    png_name="vel_r_err.png",
+    png_name="vel_abs_err.png",
     cmap=cmc.lapaz.resampled(11),
     clim=velocity_error_clim,
-    cb_label="Velocity Error (relative)",
-    cb_name="v_err_rel",
+    cb_label="Velocity Error (absolute)",
+    cb_name="v_err_abs",
     vmag=10.0,
     show_arrows=False,
     n_arrows=max(80, arrow_target // 2),
-)
-
-
-# %% [markdown]
-# ### Plot Velocity Error (%)
-
-# %%
-print("Plotting: velocity error percentage")
-plot_scalar_with_colorbar(
-    grid,
-    scalar_name="V_err_pct",
-    png_name="vel_p_err.png",
-    cmap=cmc.oslo_r.resampled(21),
-    clim=velocity_pct_clim,
-    cb_label="Velocity Error (%)",
-    cb_name="v_err_perc",
 )
 
 
@@ -989,32 +973,16 @@ plot_scalar_with_colorbar(
 
 
 # %% [markdown]
-# ### Plot Relative Pressure Error
+# ### Plot Absolute Pressure Error
 
 # %%
-print("Plotting: relative pressure error")
+print("Plotting: absolute pressure error")
 plot_scalar_with_colorbar(
     grid,
     scalar_name="P_err",
-    png_name="p_r_err.png",
+    png_name="p_abs_err.png",
     cmap=cmc.vik.resampled(41),
     clim=pressure_error_clim,
-    cb_label="Pressure Error (relative)",
-    cb_name="p_err_rel",
-)
-
-
-# %% [markdown]
-# ### Plot Pressure Error (%)
-
-# %%
-print("Plotting: pressure error percentage")
-plot_scalar_with_colorbar(
-    grid,
-    scalar_name="P_err_pct",
-    png_name="p_p_err.png",
-    cmap=cmc.vik.resampled(41),
-    clim=pressure_pct_clim,
-    cb_label="Pressure Error (%)",
-    cb_name="p_err_perc",
+    cb_label="Pressure Error (absolute)",
+    cb_name="p_err_abs",
 )

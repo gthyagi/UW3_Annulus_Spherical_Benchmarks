@@ -8,18 +8,18 @@
 # Underworld3 Development Team ([UW3 Repository](https://github.com/underworldcode/underworld3))
 #
 #
-# ##### Case1: Freeslip boundaries and delta function density perturbation
+# ##### Case1: Free-slip boundaries and delta function density perturbation
 # <!--    1. Works fine (i.e., bc produce results) -->
-# ##### Case2: Freeslip boundaries and smooth density distribution
+# ##### Case2: Free-slip boundaries and smooth density distribution
 # <!--
 #     1. Works fine (i.e., bc produce results)
 #     2. Output contains null space (for normals = unit radial vector)
 # -->
-# ##### Case3: Noslip boundaries and delta function density perturbation
+# ##### Case3: Zero-slip boundaries and delta function density perturbation
 # <!--
 #     1. Works fine (i.e., bc produce results)
 # -->
-# ##### Case4: Noslip boundaries and smooth density distribution
+# ##### Case4: Zero-slip boundaries and smooth density distribution
 # <!--
 #     1. Works fine (i.e., bc produce results)
 # -->
@@ -130,7 +130,7 @@ petsc_normal = True # petsc Gamma
 
 # %%
 freeslip = False
-noslip = False
+zeroslip = False
 delta_fn = False
 smooth = False
 
@@ -141,10 +141,10 @@ elif case in ("case2",):
     freeslip = True
     smooth = True
 elif case in ("case3",):
-    noslip = True
+    zeroslip = True
     delta_fn = True
 elif case in ("case4",):
-    noslip = True
+    zeroslip = True
     smooth = True
 else:
     raise ValueError(f"Unknown case: {case}")
@@ -179,10 +179,10 @@ if freeslip and delta_fn:
 elif freeslip and smooth:
     soln_above = assess.CylindricalStokesSolutionSmoothFreeSlip(n, k, Rp=r_o, Rm=r_i, nu=1.0, g=1.0)
     soln_below = assess.CylindricalStokesSolutionSmoothFreeSlip(n, k, Rp=r_o, Rm=r_i, nu=1.0, g=1.0)
-elif noslip and delta_fn:
+elif zeroslip and delta_fn:
     soln_above = assess.CylindricalStokesSolutionDeltaZeroSlip(n, +1, Rp=r_o, Rm=r_i, rp=r_int, nu=1.0, g=-1.0)
     soln_below = assess.CylindricalStokesSolutionDeltaZeroSlip(n, -1, Rp=r_o, Rm=r_i, rp=r_int, nu=1.0, g=-1.0)
-elif noslip and smooth:
+elif zeroslip and smooth:
     soln_above = assess.CylindricalStokesSolutionSmoothZeroSlip(n, k, Rp=r_o, Rm=r_i, nu=1.0, g=1.0)
     soln_below = assess.CylindricalStokesSolutionSmoothZeroSlip(n, k, Rp=r_o, Rm=r_i, nu=1.0, g=1.0)
 
@@ -295,7 +295,7 @@ if freeslip:
     elif bc_type == "essential":
         stokes.add_essential_bc(soln_above.velocity_cartesian, mesh.boundaries.Upper.name)
         stokes.add_essential_bc(soln_below.velocity_cartesian, mesh.boundaries.Lower.name)
-elif noslip:
+elif zeroslip:
     if bc_type == "natural":
         v_diff = v_uw.sym - v_ana.sym
         stokes.add_natural_bc(vel_penalty * v_diff, mesh.boundaries.Upper.name)

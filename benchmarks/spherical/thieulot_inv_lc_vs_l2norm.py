@@ -3,7 +3,7 @@
 #
 # Simple workflow:
 # 1) give a list of run directory names
-# 2) read `error_norm.h5`
+# 2) read `benchmark_metrics.h5`
 # 3) infer the varying parameter from the names
 # 4) plot that parameter vs velocity / pressure L2 norms
 
@@ -106,17 +106,17 @@ varying_key = varying_keys[0]
 print(f"Varying parameter: {varying_key}")
 
 # %% [markdown]
-# ### Read `error_norm.h5`
+# ### Read `benchmark_metrics.h5`
 
 # %%
 records = []
 
 for run_name, params in parsed_runs:
     run_dir = os.path.join(OUTPUT_ROOT, run_name)
-    h5_file = os.path.join(run_dir, "error_norm.h5")
+    h5_file = os.path.join(run_dir, metrics_filename)
 
     if not os.path.isfile(h5_file):
-        raise FileNotFoundError(f"Missing error_norm.h5: {h5_file}")
+        raise FileNotFoundError(f"Missing {metrics_filename}: {h5_file}")
 
     with h5py.File(h5_file, "r") as h5f:
         v_key = "v_l2_norm" if "v_l2_norm" in h5f else "v_l2"
@@ -151,7 +151,7 @@ for rec in records:
 
 # %%
 if not records:
-    print("No valid error_norm.h5 files found.")
+    print(f"No valid {metrics_filename} files found.")
 else:
     x = [rec["x"] for rec in records]
     y_v = [rec["v_l2"] for rec in records]
@@ -182,3 +182,4 @@ else:
     plt.close(fig)
 
     print(f"Saved figure: {fig_path}")
+metrics_filename = "benchmark_metrics.h5"

@@ -42,11 +42,14 @@
 
 # %%
 import os
+import subprocess
 import sys
+from fractions import Fraction
 import h5py
 import numpy as np
 import sympy as sp
 import underworld3 as uw
+from mpi4py import MPI
 from underworld3.systems import Stokes
 
 os.environ["SYMPY_USE_CACHE"] = "no"
@@ -95,7 +98,7 @@ params = uw.Params(
         description="Pressure continuity flag",
     ),
     uw_stokes_tol=uw.Param(
-        1e-5,
+        1e-9,
         type=uw.ParamType.FLOAT,
         description="Stokes solver tolerance",
     ),
@@ -105,7 +108,7 @@ params = uw.Params(
         description="Penalty for curved-boundary tangential flow",
     ),
     uw_bc_type=uw.Param(
-        "natural",
+        "essential",
         type=uw.ParamType.STRING,
         description="Boundary-condition mode: natural or essential",
     ),
@@ -115,15 +118,39 @@ if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
     print(params.cli_help())
     raise SystemExit(0)
 
-params.uw_cellsize = float(eval(str(params.uw_cellsize), {"__builtins__": {}}, {}))
+# %%
+def parse_float_fraction(value):
+    """Parse a decimal or simple rational string deterministically."""
 
+    text = str(value).strip().replace(" ", "")
+    if text.count("/") > 1:
+        raise ValueError(f"Unsupported rational format: {value}")
+    if "/" in text:
+        numerator, denominator = text.split("/", 1)
+        return float(Fraction(numerator) / Fraction(denominator))
+    return float(Fraction(text))
+
+
+params.uw_cellsize = parse_float_fraction(params.uw_cellsize)
+
+# set pressure continuity based on velocity degree
 pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
 is_p1p0 = params.uw_vdegree == 1 and params.uw_pdegree == 0
 
 if uw.mpi.rank == 0 and params.uw_pdegree == 0 and params.uw_pcont:
     print("Degree-0 pressure uses discontinuous storage; overriding uw_pcont to false.")
 
-params.uw_stokes_tol = 1.0e-5 if params.uw_bc_type == "essential" else 1.0e-8
+# %%
+# For k = 0 (no body force), the flow must be driven by boundary tractions,
+# so use natural BCs. Essential BCs only prescribe velocities on the boundary
+# and do not drive the interior solution. For k > 0, both BC types are effective.
+if params.uw_k == 0:
+    params.uw_bc_type = "natural"
+
+# %%
+# set uw_vel_penalty to None for essential BCs
+if params.uw_bc_type == "essential":
+    params.uw_vel_penalty = None
 
 # %% [markdown]
 # ### Output Directory
@@ -133,7 +160,7 @@ def _case_value(value):
     if isinstance(value, bool):
         return str(value).lower()
     if isinstance(value, float):
-        return f"{value:.2g}"
+        return np.format_float_scientific(value, unique=True, precision=12, trim="-")
     return value
 
 
@@ -145,6 +172,7 @@ def make_case_id(*, case, **kwargs):
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 output_root = os.path.join(repo_root, "output", "annulus", "thieulot", "latest")
+metrics_filename = "benchmark_metrics.h5"
 
 case_id = make_case_id(
     case="model",
@@ -153,10 +181,10 @@ case_id = make_case_id(
     vdeg=params.uw_vdegree,
     pdeg=params.uw_pdegree,
     pcont=pressure_is_continuous,
-    vel_penalty=params.uw_vel_penalty,
     stokes_tol=params.uw_stokes_tol,
     ncpus=uw.mpi.size,
     bc=params.uw_bc_type,
+    vel_penalty=params.uw_vel_penalty,
 )
 
 output_dir = os.path.join(output_root, case_id)
@@ -344,17 +372,17 @@ stokes.bodyforce = rho_ana_expr * gravity_fn
 # #### Boundary Conditions
 
 # %%
+lower = mesh.boundaries.Lower.name
+upper = mesh.boundaries.Upper.name
+
 if params.uw_bc_type == "natural":
-    stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Upper.name)
-    stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Lower.name)
+    stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, upper)
+    stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, lower)
 elif params.uw_bc_type == "essential":
-    stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Upper.name)
-    stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Lower.name)
+    stokes.add_essential_bc(v_ana_expr, upper)
+    stokes.add_essential_bc(v_ana_expr, lower)
 else:
     raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
-
-inner = mesh.boundaries.Lower.name
-outer = mesh.boundaries.Upper.name
 
 # %% [markdown]
 # #### Solver Notes
@@ -449,13 +477,18 @@ else:
 # %%
 uw.timing.reset()
 uw.timing.start()
-stokes.solve(verbose=False, debug=False)
+stokes.solve()
 uw.timing.stop()
 uw.timing.print_table(filename=os.path.join(output_dir, "stokes_timing.txt"),)
 
+snes_reason = int(stokes.snes.getConvergedReason())
+ksp_reason = int(stokes.snes.ksp.getConvergedReason())
+snes_iterations = int(stokes.snes.getIterationNumber())
+ksp_iterations = int(stokes.snes.ksp.getIterationNumber())
+
 if uw.mpi.rank == 0:
-    print(stokes.snes.getConvergedReason())
-    print(stokes.snes.ksp.getConvergedReason())
+    print(snes_reason)
+    print(ksp_reason)
 
 # %% [markdown]
 # ### Benchmark Calibrations
@@ -505,40 +538,169 @@ def relative_l2_error(mesh, err, ana, boundary=None):
     return np.sqrt(err_I.evaluate() / ana_I.evaluate())
 
 
+def absolute_l2_error(mesh, err, boundary=None):
+    """Compute absolute L2 error over domain or specified boundary."""
+
+    err_fn = _squared_norm(err)
+    if boundary is None:
+        err_I = uw.maths.Integral(mesh, err_fn)
+    else:
+        err_I = uw.maths.BdIntegral(mesh=mesh, fn=err_fn, boundary=boundary)
+    return np.sqrt(err_I.evaluate())
+
+# %%
+def gather_run_metadata(
+    mesh,
+    velocity_var,
+    pressure_var,
+    snes_reason,
+    ksp_reason,
+    snes_iterations,
+    ksp_iterations,
+):
+    """Return solver, mesh, and per-rank partition metadata for this run."""
+    comm = MPI.COMM_WORLD
+
+    v_start, v_end = mesh.dm.getDepthStratum(0)
+    c_start, c_end = mesh.dm.getHeightStratum(0)
+
+    local_vertices = int(v_end - v_start)
+    local_cells = int(c_end - c_start)
+    local_velocity_dofs = int(velocity_var.data.size)
+    local_pressure_dofs = int(pressure_var.data.size)
+
+    vertices_by_rank = comm.gather(local_vertices, root=0)
+    cells_by_rank = comm.gather(local_cells, root=0)
+    velocity_dofs_by_rank = comm.gather(local_velocity_dofs, root=0)
+    pressure_dofs_by_rank = comm.gather(local_pressure_dofs, root=0)
+
+    metadata = {
+        "mpi_size": int(uw.mpi.size),
+        "mesh_dim": int(mesh.dim),
+        "global_vertices": int(comm.allreduce(local_vertices, op=MPI.SUM)),
+        "global_cells": int(comm.allreduce(local_cells, op=MPI.SUM)),
+        "global_velocity_dofs": int(comm.allreduce(local_velocity_dofs, op=MPI.SUM)),
+        "global_pressure_dofs": int(comm.allreduce(local_pressure_dofs, op=MPI.SUM)),
+        "snes_converged_reason": int(snes_reason),
+        "ksp_converged_reason": int(ksp_reason),
+        "snes_iterations": int(snes_iterations),
+        "ksp_iterations": int(ksp_iterations),
+    }
+
+    if uw.mpi.rank == 0:
+        vertices_by_rank = np.asarray(vertices_by_rank, dtype=np.int64)
+        cells_by_rank = np.asarray(cells_by_rank, dtype=np.int64)
+        velocity_dofs_by_rank = np.asarray(velocity_dofs_by_rank, dtype=np.int64)
+        pressure_dofs_by_rank = np.asarray(pressure_dofs_by_rank, dtype=np.int64)
+
+        metadata.update(
+            {
+                "local_vertices_by_rank": vertices_by_rank,
+                "local_cells_by_rank": cells_by_rank,
+                "local_velocity_dofs_by_rank": velocity_dofs_by_rank,
+                "local_pressure_dofs_by_rank": pressure_dofs_by_rank,
+                "cell_imbalance_ratio": float(cells_by_rank.max() / cells_by_rank.mean()),
+                "velocity_dof_imbalance_ratio": float(
+                    velocity_dofs_by_rank.max() / velocity_dofs_by_rank.mean()
+                ),
+                "pressure_dof_imbalance_ratio": float(
+                    pressure_dofs_by_rank.max() / pressure_dofs_by_rank.mean()
+                ),
+                "rank_index_note": np.bytes_("array index corresponds to MPI rank"),
+            }
+        )
+
+    return metadata
+
+# %%
+def current_git_sha(repo_path):
+    """Return current git SHA, or 'unknown' if unavailable."""
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_path,
+            text=True,
+        ).strip()
+    except Exception:
+        return "unknown"
+
+
 # %%
 v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
-p_err_l2 = np.inf if params.uw_k == 0 else relative_l2_error(mesh, p_err_expr, p_ana_expr)
-v_err_l2_inner = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=inner)
-v_err_l2_outer = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=outer)
-p_err_l2_inner = np.inf if params.uw_k == 0 else relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=inner)
-p_err_l2_outer = np.inf if params.uw_k == 0 else relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=outer)
+p_err_l2_abs = absolute_l2_error(mesh, p_err_expr)
+p_err_l2 = np.nan if params.uw_k == 0 else relative_l2_error(mesh, p_err_expr, p_ana_expr)
+
+v_err_l2_lower = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=lower)
+v_err_l2_upper = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=upper)
+
+p_err_l2_lower_abs = absolute_l2_error(mesh, p_err_expr, boundary=lower)
+p_err_l2_upper_abs = absolute_l2_error(mesh, p_err_expr, boundary=upper)
+p_err_l2_lower = (
+    np.nan
+    if params.uw_k == 0
+    else relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=lower)
+)
+p_err_l2_upper = (
+    np.nan
+    if params.uw_k == 0
+    else relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=upper)
+)
+
+u_dot_n_l2_lower_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=lower)
+u_dot_n_l2_upper_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=upper)
+
+run_metadata = gather_run_metadata(
+    mesh,
+    v_soln,
+    p_soln,
+    snes_reason,
+    ksp_reason,
+    snes_iterations,
+    ksp_iterations,
+)
+
+git_sha = current_git_sha(repo_root)
+cli_args = " ".join(sys.argv)
+
+metrics = {
+    "k": params.uw_k,
+    "cellsize": params.uw_cellsize,
+    "v_l2_norm": v_err_l2,
+    "p_l2_norm": p_err_l2,
+    "p_l2_norm_abs": p_err_l2_abs,
+    "v_l2_norm_lower": v_err_l2_lower,
+    "v_l2_norm_upper": v_err_l2_upper,
+    "p_l2_norm_lower": p_err_l2_lower,
+    "p_l2_norm_upper": p_err_l2_upper,
+    "p_l2_norm_lower_abs": p_err_l2_lower_abs,
+    "p_l2_norm_upper_abs": p_err_l2_upper_abs,
+    "u_dot_n_l2_norm_lower_abs": u_dot_n_l2_lower_abs,
+    "u_dot_n_l2_norm_upper_abs": u_dot_n_l2_upper_abs,
+}
 
 if uw.mpi.rank == 0:
-    print("=== Relative L2 Errors ===")
-    print(f"Velocity (domain): {v_err_l2}")
-    print(f"Pressure (domain): {p_err_l2}")
-    print(f"Velocity (inner):  {v_err_l2_inner}")
-    print(f"Velocity (outer):  {v_err_l2_outer}")
-    print(f"Pressure (inner):  {p_err_l2_inner}")
-    print(f"Pressure (outer):  {p_err_l2_outer}")
+    print("=== L2 Error Metrics ===")
+    for key, value in metrics.items():
+        print(f"{key}: {value}")
 
 # %% [markdown]
 # ### Save Outputs
 
 # %%
 if uw.mpi.rank == 0:
-    err_h5 = os.path.join(output_dir, "error_norm.h5",)
-    if os.path.isfile(err_h5):
-        os.remove(err_h5)
-    with h5py.File(err_h5, "w") as f_h5:
-        f_h5.create_dataset("k", data=params.uw_k)
-        f_h5.create_dataset("cellsize", data=params.uw_cellsize)
-        f_h5.create_dataset("v_l2_norm", data=v_err_l2)
-        f_h5.create_dataset("p_l2_norm", data=p_err_l2)
-        f_h5.create_dataset("v_l2_norm_inner", data=v_err_l2_inner)
-        f_h5.create_dataset("v_l2_norm_outer", data=v_err_l2_outer)
-        f_h5.create_dataset("p_l2_norm_inner", data=p_err_l2_inner)
-        f_h5.create_dataset("p_l2_norm_outer", data=p_err_l2_outer)
+    metrics_h5 = os.path.join(output_dir, metrics_filename)
+    if os.path.isfile(metrics_h5):
+        os.remove(metrics_h5)
+
+    with h5py.File(metrics_h5, "w") as f_h5:
+        for key, value in metrics.items():
+            f_h5.create_dataset(key, data=value)
+
+        f_h5.create_dataset("git_sha", data=np.bytes_(git_sha))
+        f_h5.create_dataset("command", data=np.bytes_(cli_args))
+
+        for key, value in run_metadata.items():
+            f_h5.create_dataset(key, data=value)
 
 # %%
 # Save solution checkpoint for post-processing script

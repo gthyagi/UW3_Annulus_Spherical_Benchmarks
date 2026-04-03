@@ -22,6 +22,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
+from matplotlib import ticker
 from scipy import special
 
 try:
@@ -93,7 +94,7 @@ clip_angle = 135.0
 cpos = "yz"
 
 freeslip = case in ("case1", "case2")
-noslip = case in ("case3", "case4")
+zeroslip = case in ("case3", "case4")
 delta_fn = case in ("case1", "case3")
 smooth = case in ("case2", "case4")
 
@@ -259,12 +260,12 @@ def build_case_solutions():
     if freeslip and smooth:
         soln = build_smooth_solution(r_o, r_i, k, l, m, 1.0, 1.0, no_slip=False)
         return soln, soln
-    if noslip and delta_fn:
+    if zeroslip and delta_fn:
         return (
             build_delta_solution(r_o, r_i, r_int, l, m, -1.0, 1.0, +1, no_slip=True),
             build_delta_solution(r_o, r_i, r_int, l, m, -1.0, 1.0, -1, no_slip=True),
         )
-    if noslip and smooth:
+    if zeroslip and smooth:
         soln = build_smooth_solution(r_o, r_i, k, l, m, 1.0, 1.0, no_slip=True)
         return soln, soln
     raise ValueError(f"Unsupported case: {case}")
@@ -553,15 +554,10 @@ grid.point_data["V_e"] = np.asarray(v_e, dtype=np.float64)
 set_field_array(grid, "P_a", np.asarray(p_ana_support, dtype=np.float64).reshape(-1), pressure_assoc)
 set_field_array(grid, "P_e", p_e, pressure_assoc)
 
-v_ana_mag = np.linalg.norm(v_a, axis=1)
-v_err_mag = np.linalg.norm(v_e, axis=1)
-
-with np.errstate(divide="ignore", invalid="ignore"):
-    v_err_pct = np.where(v_ana_mag > 1.0e-14, 100.0 * v_err_mag / v_ana_mag, 0.0)
-    p_err_pct = np.where(np.abs(p_ana_support) > 1.0e-14, 100.0 * p_e / p_ana_support, 0.0)
-
-grid.point_data["V_err_pct"] = np.nan_to_num(v_err_pct)
-set_field_array(grid, "P_err_pct", np.nan_to_num(p_err_pct), pressure_assoc)
+grid.point_data["radius"] = np.linalg.norm(grid.points, axis=1)
+interface_surface = None
+if delta_fn:
+    interface_surface = grid.contour(isosurfaces=[r_int], scalars="radius")
 
 # %%
 case_limits = {
@@ -570,36 +566,28 @@ case_limits = {
         "pressure": [-0.25, 0.25],
         "rho": [-0.4, 0.4],
         "velocity_error": [0.0, 0.005],
-        "velocity_pct": [0.0, 100.0],
         "pressure_error": [-0.065, 0.065],
-        "pressure_pct": [-100.0, 100.0],
     },
     "case2": {
         "velocity": [0.0, 0.007],
         "pressure": [-0.1, 0.1],
         "rho": [-0.4, 0.4],
         "velocity_error": [0.0, 1.0e-4],
-        "velocity_pct": [0.0, 100.0],
         "pressure_error": [-0.01, 0.01],
-        "pressure_pct": [-100.0, 100.0],
     },
     "case3": {
         "velocity": [0.0, 0.003],
         "pressure": [-0.3, 0.3],
         "rho": [-0.4, 0.4],
         "velocity_error": [0.0, 6.0e-3],
-        "velocity_pct": [0.0, 100.0],
         "pressure_error": [-0.065, 0.065],
-        "pressure_pct": [-100.0, 100.0],
     },
     "case4": {
         "velocity": [0.0, 0.001],
         "pressure": [-0.1, 0.1],
         "rho": [-0.4, 0.4],
         "velocity_error": [0.0, 1.0e-4],
-        "velocity_pct": [0.0, 100.0],
         "pressure_error": [-0.01, 0.01],
-        "pressure_pct": [-100.0, 100.0],
     },
 }
 
@@ -635,11 +623,62 @@ def save_colorbar(colormap, clim, label, fname, label_y):
 
     cax = plt.axes([0.1, 0.2, 1.15, 0.06])
     cb = plt.colorbar(image, orientation="horizontal", cax=cax)
+    cb.locator = ticker.MaxNLocator(nbins=5, min_n_ticks=3)
+    formatter = ticker.ScalarFormatter(useMathText=True)
+    formatter.set_powerlimits((-2, 2))
+    cb.formatter = formatter
+    cb.update_ticks()
+    cb.ax.tick_params(labelsize=16)
+    cb.ax.xaxis.get_offset_text().set_size(16)
     cb.ax.set_title(label, fontsize=18, x=0.5, y=label_y)
 
     fig.savefig(os.path.join(output_dir, f"{fname}_cbhorz.pdf"), dpi=150, bbox_inches="tight")
     if IS_INTERACTIVE and display is not None:
         display(fig)
+    plt.close(fig)
+
+
+def save_vertical_colorbar(
+    colormap,
+    output_path,
+    fname,
+    cb_axis_label,
+    vmin,
+    vmax,
+    figsize_cb=(4, 2.25),
+    primary_fs=18,
+    cb_label_xpos=3.7,
+    cb_label_ypos=0.3,
+):
+    """Save a standalone vertical colorbar without changing the plot output."""
+
+    fig = plt.figure(figsize=figsize_cb)
+    plt.rc("font", size=primary_fs)
+    image = plt.imshow(np.array([[vmin, vmax]]), cmap=colormap)
+    plt.gca().set_visible(False)
+
+    cax = plt.axes([0.1, 0.2, 0.06, 1.15])
+    cb = plt.colorbar(image, orientation="vertical", cax=cax)
+    cb.locator = ticker.MaxNLocator(nbins=5, min_n_ticks=3)
+    formatter = ticker.ScalarFormatter(useMathText=True)
+    formatter.set_powerlimits((-2, 2))
+    cb.formatter = formatter
+    cb.update_ticks()
+    cb.ax.tick_params(labelsize=max(primary_fs - 2, 10))
+    cb.ax.yaxis.get_offset_text().set_size(max(primary_fs - 2, 10))
+    cb.ax.set_title(
+        cb_axis_label,
+        fontsize=primary_fs,
+        x=cb_label_xpos,
+        y=cb_label_ypos,
+        rotation=90,
+    )
+
+    fig.savefig(
+        os.path.join(output_path, f"{fname}_cbvert.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
     plt.close(fig)
 
 
@@ -673,6 +712,20 @@ def add_field_meshes(plotter, work, scalars, colormap, clim):
         )
 
 
+def add_internal_interface_overlay(plotter):
+    if interface_surface is None:
+        return
+
+    for clipped in clip_grid(interface_surface, clip_angle):
+        plotter.add_mesh(
+            clipped,
+            color="#222222",
+            opacity=0.08,
+            smooth_shading=False,
+            show_scalar_bar=False,
+        )
+
+
 def add_mesh_scene(plotter):
     for clipped in clip_grid(grid, clip_angle, crinkle=True):
         plotter.add_mesh(
@@ -684,7 +737,81 @@ def add_mesh_scene(plotter):
         )
 
 
-def save_field_plot(field_name, png_name, colormap, clim, cb_label, cb_name, label_y, vector=False):
+def save_exact_interface_density_plot(
+    png_name="rho_ana_interface.png",
+    colormap=None,
+    clim=None,
+    cb_label="Rho",
+    cb_name="rho_ana_interface",
+    label_y=-2.0,
+):
+    """Plot the delta density exactly on the internal spherical interface."""
+
+    outer_context = pv.Sphere(
+        radius=r_o,
+        theta_resolution=240,
+        phi_resolution=120,
+    )
+    inner_context = pv.Sphere(
+        radius=r_i,
+        theta_resolution=240,
+        phi_resolution=120,
+    )
+    interface_grid = pv.Sphere(
+        radius=r_int,
+        theta_resolution=360,
+        phi_resolution=180,
+    )
+    _, _, rho_interface = analytical_solution(np.asarray(interface_grid.points, dtype=np.float64))
+    interface_grid.point_data["rho_interface"] = -np.asarray(rho_interface, dtype=np.float64)
+
+    def add_scene(plotter):
+        for clipped in clip_grid(outer_context, clip_angle):
+            plotter.add_mesh(
+                clipped,
+                color="#d9d7cf",
+                opacity=0.18,
+                smooth_shading=False,
+                show_scalar_bar=False,
+            )
+        for clipped in clip_grid(inner_context, clip_angle):
+            plotter.add_mesh(
+                clipped,
+                color="#cfcbbf",
+                opacity=0.12,
+                smooth_shading=False,
+                show_scalar_bar=False,
+            )
+        for clipped in clip_grid(interface_grid, clip_angle):
+            plotter.add_mesh(
+                clipped,
+                scalars="rho_interface",
+                cmap=colormap,
+                clim=clim,
+                show_edges=False,
+                show_scalar_bar=False,
+            )
+
+    if IS_INTERACTIVE:
+        display_plotter = make_plotter(off_screen=False)
+        add_scene(display_plotter)
+        configure_camera(display_plotter)
+        display_plotter.show(auto_close=False)
+
+    save_plotter = make_plotter(
+        off_screen=True,
+        window_size=SCREENSHOT_WINDOW_SIZE,
+    )
+    add_scene(save_plotter)
+    configure_camera(save_plotter)
+    save_plotter.screenshot(os.path.join(output_dir, png_name))
+    save_plotter.close()
+
+    save_colorbar(colormap, clim, cb_label, cb_name, label_y)
+    save_vertical_colorbar(colormap, output_dir, cb_name, cb_label, clim[0], clim[1])
+
+
+def save_field_plot(field_name, png_name, colormap, clim, cb_label, cb_name, label_y, vector=False, show_interface=False):
     work = grid.copy(deep=True)
 
     if vector:
@@ -697,6 +824,8 @@ def save_field_plot(field_name, png_name, colormap, clim, cb_label, cb_name, lab
     if IS_INTERACTIVE:
         display_plotter = make_plotter(off_screen=False)
         add_field_meshes(display_plotter, work, scalars, colormap, clim)
+        if show_interface:
+            add_internal_interface_overlay(display_plotter)
         configure_camera(display_plotter)
         display_plotter.show(auto_close=False)
 
@@ -705,11 +834,14 @@ def save_field_plot(field_name, png_name, colormap, clim, cb_label, cb_name, lab
         window_size=SCREENSHOT_WINDOW_SIZE,
     )
     add_field_meshes(save_plotter, work, scalars, colormap, clim)
+    if show_interface:
+        add_internal_interface_overlay(save_plotter)
     configure_camera(save_plotter)
     save_plotter.screenshot(os.path.join(output_dir, png_name))
     save_plotter.close()
 
     save_colorbar(colormap, clim, cb_label, cb_name, label_y)
+    save_vertical_colorbar(colormap, output_dir, cb_name, cb_label, clim[0], clim[1])
 
 # %% [markdown]
 # ### Mesh Plot
@@ -749,7 +881,18 @@ save_field_plot("P_a", "p_ana.png", cmc.vik.resampled(41), limits["pressure"], "
 
 # %%
 print("Plotting: analytical density")
-save_field_plot("RHO_plot", "rho_ana.png", cmc.roma.resampled(31), limits["rho"], "Rho", "rho_ana", -2.0)
+save_field_plot("RHO_plot", "rho_ana.png", cmc.roma.resampled(31), limits["rho"], "Rho", "rho_ana", -2.0, show_interface=delta_fn)
+
+if delta_fn:
+    print("Plotting: exact interface density")
+    save_exact_interface_density_plot(
+        png_name="rho_ana_interface.png",
+        colormap=cmc.roma.resampled(31),
+        clim=limits["rho"],
+        cb_label="Rho",
+        cb_name="rho_ana_interface",
+        label_y=-2.0,
+    )
 
 # %% [markdown]
 # ### Numerical Velocity
@@ -759,18 +902,11 @@ print("Plotting: numerical velocity")
 save_field_plot("V_u", "vel_uw.png", cmc.lapaz.resampled(21), limits["velocity"], "Velocity", "v_uw", -2.05, vector=True)
 
 # %% [markdown]
-# ### Relative Velocity Error
+# ### Absolute Velocity Error
 
 # %%
-print("Plotting: relative velocity error")
-save_field_plot("V_e", "vel_r_err.png", cmc.lapaz.resampled(11), limits["velocity_error"], "Velocity Error (relative)", "v_err_rel", -2.05, vector=True)
-
-# %% [markdown]
-# ### Velocity Error (%)
-
-# %%
-print("Plotting: velocity error percentage")
-save_field_plot("V_err_pct", "vel_p_err.png", cmc.oslo_r.resampled(21), limits["velocity_pct"], "Velocity Error (%)", "v_err_perc", -2.05)
+print("Plotting: absolute velocity error")
+save_field_plot("V_e", "vel_abs_err.png", cmc.lapaz.resampled(11), limits["velocity_error"], "Velocity Error (absolute)", "v_err_abs", -2.05, vector=True, show_interface=delta_fn)
 
 # %% [markdown]
 # ### Numerical Pressure
@@ -780,15 +916,8 @@ print("Plotting: numerical pressure")
 save_field_plot("P_u", "p_uw.png", cmc.vik.resampled(41), limits["pressure"], "Pressure", "p_uw", -2.0)
 
 # %% [markdown]
-# ### Relative Pressure Error
+# ### Absolute Pressure Error
 
 # %%
-print("Plotting: relative pressure error")
-save_field_plot("P_e", "p_r_err.png", cmc.vik.resampled(41), limits["pressure_error"], "Pressure Error (relative)", "p_err_rel", -2.0)
-
-# %% [markdown]
-# ### Pressure Error (%)
-
-# %%
-print("Plotting: pressure error percentage")
-save_field_plot("P_err_pct", "p_p_err.png", cmc.vik.resampled(41), limits["pressure_pct"], "Pressure Error (%)", "p_err_perc", -2.0)
+print("Plotting: absolute pressure error")
+save_field_plot("P_e", "p_abs_err.png", cmc.vik.resampled(41), limits["pressure_error"], "Pressure Error (absolute)", "p_err_abs", -2.0, show_interface=delta_fn)

@@ -7,10 +7,10 @@
 # Thyagarajulu Gollapalli ([GitHub](https://github.com/gthyagi)) <br>
 # Underworld3 Development Team ([UW3 Repository](https://github.com/underworldcode/underworld3))
 #
-# ##### Case1: Freeslip boundaries and delta function density perturbation
-# ##### Case2: Freeslip boundaries and smooth density distribution
-# ##### Case3: Noslip boundaries and delta function density perturbation
-# ##### Case4: Noslip boundaries and smooth density distribution
+# ##### Case1: Free-slip boundaries and delta function density perturbation
+# ##### Case2: Free-slip boundaries and smooth density distribution
+# ##### Case3: Zero-slip boundaries and delta function density perturbation
+# ##### Case4: Zero-slip boundaries and smooth density distribution
 
 # %%
 import os
@@ -67,7 +67,7 @@ bc_type = uw.options.getString("bc_type", default="natural")
 
 # %%
 freeslip = False
-noslip = False
+zeroslip = False
 delta_fn = False
 smooth = False
 
@@ -78,10 +78,10 @@ elif case in ("case2",):
     freeslip = True
     smooth = True
 elif case in ("case3",):
-    noslip = True
+    zeroslip = True
     delta_fn = True
 elif case in ("case4",):
-    noslip = True
+    zeroslip = True
     smooth = True
 else:
     raise ValueError(f"Unknown case: {case}")
@@ -116,10 +116,10 @@ if freeslip and delta_fn:
 elif freeslip and smooth:
     soln_above = assess.SphericalStokesSolutionSmoothFreeSlip(l, m, k, Rp=r_o, Rm=r_i, nu=1.0, g=1.0)
     soln_below = assess.SphericalStokesSolutionSmoothFreeSlip(l, m, k, Rp=r_o, Rm=r_i, nu=1.0, g=1.0)
-elif noslip and delta_fn:
+elif zeroslip and delta_fn:
     soln_above = assess.SphericalStokesSolutionDeltaZeroSlip(l, m, +1, Rp=r_o, Rm=r_i, rp=r_int, nu=1.0, g=-1.0)
     soln_below = assess.SphericalStokesSolutionDeltaZeroSlip(l, m, -1, Rp=r_o, Rm=r_i, rp=r_int, nu=1.0, g=-1.0)
-elif noslip and smooth:
+elif zeroslip and smooth:
     soln_above = assess.SphericalStokesSolutionSmoothZeroSlip(l, m, k, Rp=r_o, Rm=r_i, nu=1.0, g=1.0)
     soln_below = assess.SphericalStokesSolutionSmoothZeroSlip(l, m, k, Rp=r_o, Rm=r_i, nu=1.0, g=1.0)
 
@@ -241,7 +241,7 @@ if freeslip:
         stokes.add_essential_bc(v_ana.sym, mesh.boundaries.Lower.name)
     else:
         raise ValueError(f"Unknown bc_type: {bc_type}")
-elif noslip:
+elif zeroslip:
     if bc_type == "natural":
         v_diff = v_uw.sym - v_ana.sym
         stokes.add_natural_bc(vel_penalty * v_diff, mesh.boundaries.Upper.name)

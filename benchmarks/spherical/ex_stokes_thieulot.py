@@ -47,8 +47,11 @@
 
 # %%
 import os
+import subprocess
 import sys
+from fractions import Fraction
 import h5py
+from mpi4py import MPI
 import numpy as np
 import sympy as sp
 import underworld3 as uw
@@ -130,7 +133,19 @@ if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
     print(params.cli_help())
     raise SystemExit(0)
 
-params.uw_cellsize = float(eval(str(params.uw_cellsize), {"__builtins__": {}}, {}))
+def parse_float_fraction(value):
+    """Parse a decimal or simple rational string deterministically."""
+
+    text = str(value).strip().replace(" ", "")
+    if text.count("/") > 1:
+        raise ValueError(f"Unsupported rational format: {value}")
+    if "/" in text:
+        numerator, denominator = text.split("/", 1)
+        return float(Fraction(numerator) / Fraction(denominator))
+    return float(Fraction(text))
+
+
+params.uw_cellsize = parse_float_fraction(params.uw_cellsize)
 
 pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
 is_p1p0 = params.uw_vdegree == 1 and params.uw_pdegree == 0
@@ -154,7 +169,7 @@ def _case_value(value):
     if isinstance(value, bool):
         return str(value).lower()
     if isinstance(value, float):
-        return f"{value:.2g}"
+        return np.format_float_scientific(value, unique=True, precision=12, trim="-")
     return value
 
 
@@ -166,6 +181,7 @@ def make_case_id(*, case, **kwargs):
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 output_root = os.path.join(repo_root, "output", "spherical", "thieulot", "latest")
+metrics_filename = "benchmark_metrics.h5"
 
 case_id = make_case_id(
     case="case",
@@ -173,7 +189,7 @@ case_id = make_case_id(
     m=params.uw_m,
     vdeg=params.uw_vdegree,
     pdeg=params.uw_pdegree,
-    pcont=params.uw_pcont,
+    pcont=pressure_is_continuous,
     qdeg=params.uw_qdegree if params.uw_qdegree > 0 else None,
     vel_penalty=params.uw_vel_penalty,
     stokes_tol=params.uw_stokes_tol,
@@ -564,9 +580,14 @@ stokes.solve(verbose=False)
 uw.timing.stop()
 uw.timing.print_table(filename=os.path.join(output_dir, "stokes_timing.txt"))
 
+snes_reason = int(stokes.snes.getConvergedReason())
+ksp_reason = int(stokes.snes.ksp.getConvergedReason())
+snes_iterations = int(stokes.snes.getIterationNumber())
+ksp_iterations = int(stokes.snes.ksp.getIterationNumber())
+
 if uw.mpi.rank == 0:
-    print(stokes.snes.getConvergedReason())
-    print(stokes.snes.ksp.getConvergedReason())
+    print(snes_reason)
+    print(ksp_reason)
 
 # %% [markdown]
 # ### Benchmark Calibrations
@@ -665,6 +686,59 @@ def relative_l2_error(mesh, err, ana, boundary=None):
     return np.sqrt(err_I.evaluate() / ana_I.evaluate())
 
 
+def absolute_l2_error(mesh, err, boundary=None):
+    """Compute absolute L2 error over domain or specified boundary."""
+
+    err_fn = _squared_norm(err)
+    if boundary is None:
+        err_I = uw.maths.Integral(mesh, err_fn)
+    else:
+        err_I = uw.maths.BdIntegral(mesh=mesh, fn=err_fn, boundary=boundary)
+    return np.sqrt(err_I.evaluate())
+
+
+def gather_run_metadata(mesh, velocity_var, pressure_var):
+    """Return machine-readable solver and mesh metadata for the current run."""
+
+    v_start, v_end = mesh.dm.getDepthStratum(0)
+    c_start, c_end = mesh.dm.getHeightStratum(0)
+
+    local_vertices = int(v_end - v_start)
+    local_cells = int(c_end - c_start)
+    local_velocity_dofs = int(velocity_var.data.size)
+    local_pressure_dofs = int(pressure_var.data.size)
+
+    return {
+        "mpi_size": int(uw.mpi.size),
+        "mesh_dim": int(mesh.dim),
+        "local_vertices": local_vertices,
+        "global_vertices": int(MPI.COMM_WORLD.allreduce(local_vertices, op=MPI.SUM)),
+        "local_cells": local_cells,
+        "global_cells": int(MPI.COMM_WORLD.allreduce(local_cells, op=MPI.SUM)),
+        "local_velocity_dofs": local_velocity_dofs,
+        "global_velocity_dofs": int(MPI.COMM_WORLD.allreduce(local_velocity_dofs, op=MPI.SUM)),
+        "local_pressure_dofs": local_pressure_dofs,
+        "global_pressure_dofs": int(MPI.COMM_WORLD.allreduce(local_pressure_dofs, op=MPI.SUM)),
+        "snes_converged_reason": snes_reason,
+        "ksp_converged_reason": ksp_reason,
+        "snes_iterations": snes_iterations,
+        "ksp_iterations": ksp_iterations,
+    }
+
+
+def current_git_sha(repo_path):
+    """Return the current git SHA, or 'unknown' when unavailable."""
+
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_path,
+            text=True,
+        ).strip()
+    except Exception:
+        return "unknown"
+
+
 # %%
 v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
 p_err_l2 = relative_l2_error(mesh, p_err_expr, p_ana_expr)
@@ -672,6 +746,11 @@ v_err_l2_inner = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=inner)
 v_err_l2_outer = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=outer)
 p_err_l2_inner = relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=inner)
 p_err_l2_outer = relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=outer)
+u_dot_n_l2_inner_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=inner)
+u_dot_n_l2_outer_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=outer)
+run_metadata = gather_run_metadata(mesh, v_soln, p_soln)
+git_sha = current_git_sha(repo_root)
+cli_args = " ".join(sys.argv)
 
 if uw.mpi.rank == 0:
     print("=== Relative L2 Errors ===")
@@ -681,13 +760,15 @@ if uw.mpi.rank == 0:
     print(f"Velocity (outer):  {v_err_l2_outer}")
     print(f"Pressure (inner):  {p_err_l2_inner}")
     print(f"Pressure (outer):  {p_err_l2_outer}")
+    print(f"u.n abs (inner): {u_dot_n_l2_inner_abs}")
+    print(f"u.n abs (outer): {u_dot_n_l2_outer_abs}")
 
 # %% [markdown]
 # ### Save Outputs
 
 # %%
 if uw.mpi.rank == 0:
-    err_h5 = os.path.join(output_dir, "error_norm.h5")
+    err_h5 = os.path.join(output_dir, metrics_filename)
     if os.path.isfile(err_h5):
         os.remove(err_h5)
     with h5py.File(err_h5, "w") as f_h5:
@@ -699,6 +780,12 @@ if uw.mpi.rank == 0:
         f_h5.create_dataset("v_l2_norm_outer", data=v_err_l2_outer)
         f_h5.create_dataset("p_l2_norm_inner", data=p_err_l2_inner)
         f_h5.create_dataset("p_l2_norm_outer", data=p_err_l2_outer)
+        f_h5.create_dataset("u_dot_n_l2_norm_inner_abs", data=u_dot_n_l2_inner_abs)
+        f_h5.create_dataset("u_dot_n_l2_norm_outer_abs", data=u_dot_n_l2_outer_abs)
+        f_h5.create_dataset("git_sha", data=np.bytes_(git_sha))
+        f_h5.create_dataset("command", data=np.bytes_(cli_args))
+        for key, value in run_metadata.items():
+            f_h5.create_dataset(key, data=value)
 
 # %%
 mesh.write_timestep(

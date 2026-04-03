@@ -3,7 +3,7 @@
 # Simple workflow:
 # 1) create output folder
 # 2) get list of run directories
-# 3) read `error_norm.h5`
+# 3) read `benchmark_metrics.h5`
 # 4) plot `ncpus` vs L2 norms
 
 # %%
@@ -54,7 +54,7 @@ for run_name in run_dir_names:
 os.makedirs(FIG_DIR, exist_ok=True)
 
 # %% [markdown]
-# ### Read `error_norm.h5` from each directory
+# ### Read `benchmark_metrics.h5` from each directory
 
 # %%
 ncpus_re = re.compile(r"_ncpus_(\d+)")
@@ -68,9 +68,9 @@ for run_dir in run_dirs:
         continue
 
     ncpus = int(match.group(1))
-    h5_file = os.path.join(run_dir, "error_norm.h5")
+    h5_file = os.path.join(run_dir, metrics_filename)
     if not os.path.isfile(h5_file):
-        print(f"Skipping (missing error_norm.h5): {run_dir}")
+        print(f"Skipping (missing {metrics_filename}): {run_dir}")
         continue
 
     with h5py.File(h5_file, "r") as h5f:
@@ -96,7 +96,7 @@ for r in records:
 
 # %%
 if not records:
-    print("No valid error_norm.h5 files found.")
+    print(f"No valid {metrics_filename} files found.")
 else:
     x = [r["ncpus"] for r in records]
     y_v = [r["v_l2"] for r in records]
@@ -121,3 +121,4 @@ else:
     plt.close(fig)
 
     print(f"Saved figure: {fig_path}")
+metrics_filename = "benchmark_metrics.h5"
