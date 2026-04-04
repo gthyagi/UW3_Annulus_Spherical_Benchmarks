@@ -5,12 +5,12 @@
 # Installs UW3 to /g/data/n69/$USER/uw3-pixi/ using pixi for Python
 # package management. Each user manages their own install.
 #
-# Gadi modules provide OpenMPI and HDF5; pixi (conda-forge) handles
-# pure Python dependencies. mpi4py, PETSc, h5py built from source.
+# Gadi modules provide OpenMPI and HDF5; pixi handles pure Python
+# dependencies. mpi4py, PETSc, and h5py are built against the system MPI/HDF5.
 #
 # Usage:
-#   source gadi_install_user.sh         # activate environment
-#   source gadi_install_user.sh install # full installation (first time only)
+#   source gadi_install_user.sh
+#   source gadi_install_user.sh install
 #
 # NOTE: This script is designed to be sourced, NOT executed directly.
 # Do NOT add 'set -e' here — it would cause your shell to close on any
@@ -18,59 +18,83 @@
 
 usage="
 Usage:
-  A script to install and run an Underworld 3 software stack in Gadi (pixi).
+  source <this_script_name>
+      Activate existing install
 
-** To activate existing install **
-  \$ source <this_script_name>
-
-** To install **
-  Review script details: paths, modules, branch name, INSTALL_NAME (date).
-  \$ source <this_script_name> install
+  source <this_script_name> install
+      Install / rebuild environment
 "
 
 while getopts ':h' option; do
   case "$option" in
-    h) echo "$usage"
-       (return 0 2>/dev/null) && return 0 || exit 0
-       ;;
+    h)
+      echo "$usage"
+      (return 0 2>/dev/null) && return 0 || exit 0
+      ;;
     \?)
-       echo "Error: Incorrect options"
-       echo "$usage"
-       (return 0 2>/dev/null) && return 0 || exit 0
-       ;;
+      echo "Error: Incorrect options"
+      echo "$usage"
+      (return 0 2>/dev/null) && return 0 || exit 0
+      ;;
   esac
 done
 
 # ============================================================
-# CONFIGURATION — review before installing
+# CONFIGURATION
 # ============================================================
 
 export UW3_BRANCH=development
 export UW3_REPO="https://github.com/gthyagi/underworld3.git"
-
-# DDMonYY naming convention — update this for each new install
 export INSTALL_NAME=underworld3
 
+# Persistent source / PETSc location
 export BASE_PATH=/g/data/n69/${USER}/uw3-pixi
-export PIXI_HOME="${HOME}/.pixi"              # default pixi install location
-export UW3_PATH=${BASE_PATH}/${INSTALL_NAME}  # UW3 repo root IS this dated directory
+export UW3_PATH=${BASE_PATH}/${INSTALL_NAME}
+
+# Pixi binary / cache / detached envs on scratch
+export PIXI_HOME="/scratch/n69/${USER}/.pixi"
+export PIXI_CACHE_DIR="/scratch/n69/${USER}/.pixi-cache"
+export PIXI_ENV_ROOT="/scratch/n69/${USER}/pixi-envs"
 
 # ============================================================
-# DERIVED PATHS — do not edit below this line
+# DERIVED PATHS
 # ============================================================
 
 export PIXI_MANIFEST="${UW3_PATH}/pixi.toml"
 export PETSC_DIR="${UW3_PATH}/petsc-custom/petsc"
 export PETSC_ARCH=petsc-4-uw-openmpi
 
-export OPENBLAS_NUM_THREADS=1  # disable numpy internal parallelisation
-export OMPI_MCA_io=ompio       # preferred MPI IO implementation
-
+export OPENBLAS_NUM_THREADS=1
+export OMPI_MCA_io=ompio
 export CDIR=$PWD
 
 # ============================================================
+# HELPERS
+# ============================================================
+
+get_active_pixi_prefix() {
+    python3 - <<'PY'
+import sys
+from pathlib import Path
+print(Path(sys.executable).resolve().parents[1])
+PY
+}
+
+configure_pixi_detached_envs() {
+    mkdir -p "${PIXI_HOME}" "${PIXI_CACHE_DIR}" "${PIXI_ENV_ROOT}"
+    cd "${UW3_PATH}" || return 1
+    pixi config set detached-environments "${PIXI_ENV_ROOT}" >/dev/null
+    cd "${CDIR}" || return 1
+}
+
+activate_hpc_env() {
+    if [ "${PIXI_ENVIRONMENT_NAME:-}" != "hpc" ]; then
+        eval "$(pixi shell-hook -e hpc --manifest-path "${PIXI_MANIFEST}")"
+    fi
+}
+
+# ============================================================
 # ENVIRONMENT ACTIVATION
-# Called automatically at script source time.
 # ============================================================
 
 load_env() {
@@ -80,41 +104,32 @@ load_env() {
     export MPI_DIR
     MPI_DIR="$(dirname "$(dirname "$(which mpicc)")")"
 
-    # Add pixi binary to PATH
     export PATH="${PIXI_HOME}/bin:${PATH}"
 
-    # Activate pixi hpc environment
-    if command -v pixi &>/dev/null && [ -f "${PIXI_MANIFEST}" ]; then
-        if ! echo "${PATH}" | tr ':' '\n' | grep -q "\.pixi/envs/hpc/bin"; then
-            eval "$(pixi shell-hook -e hpc --manifest-path "${PIXI_MANIFEST}")"
-        fi
+    if command -v pixi &>/dev/null && [ -d "${UW3_PATH}" ] && [ -f "${PIXI_MANIFEST}" ]; then
+        configure_pixi_detached_envs
+        activate_hpc_env
     fi
 
-    # Prepend Gadi's HDF5 lib dir AFTER pixi shell-hook, so it takes precedence
-    # over conda's serial libhdf5.so.310 (HDF5 1.14) which pixi adds to
-    # LD_LIBRARY_PATH. DT_RUNPATH in h5py.so is checked after LD_LIBRARY_PATH,
-    # so without this the wrong HDF5 is loaded at runtime.
     export LD_LIBRARY_PATH="${HDF5_DIR}/lib:${LD_LIBRARY_PATH}"
 
-    # PETSc + petsc4py
     if [ -d "${PETSC_DIR}/${PETSC_ARCH}" ]; then
         export PYTHONPATH="${PETSC_DIR}/${PETSC_ARCH}/lib:${PYTHONPATH}"
     fi
 
-    # Prevent Python from searching ~/.local/lib/python*/site-packages.
-    # User-installed packages there can shadow pixi env packages and cause
-    # import failures (e.g. old typing_extensions lacking Sentinel).
     export PYTHONNOUSERSITE=1
-
     export OPENBLAS_NUM_THREADS=1
     export OMPI_MCA_io=ompio
 
     echo "==> Environment ready"
-    echo "    MPI_DIR:    ${MPI_DIR}"
-    echo "    HDF5_DIR:   ${HDF5_DIR}"
-    echo "    UW3_PATH:   ${UW3_PATH}"
-    echo "    PETSC_DIR:  ${PETSC_DIR}"
-    echo "    PETSC_ARCH: ${PETSC_ARCH}"
+    echo "    MPI_DIR:       ${MPI_DIR}"
+    echo "    HDF5_DIR:      ${HDF5_DIR}"
+    echo "    UW3_PATH:      ${UW3_PATH}"
+    echo "    PETSC_DIR:     ${PETSC_DIR}"
+    echo "    PETSC_ARCH:    ${PETSC_ARCH}"
+    echo "    PIXI_HOME:     ${PIXI_HOME}"
+    echo "    PIXI_CACHE_DIR:${PIXI_CACHE_DIR}"
+    echo "    PIXI_ENV_ROOT: ${PIXI_ENV_ROOT}"
 }
 
 # ============================================================
@@ -143,9 +158,10 @@ clone_uw3() {
 }
 
 install_pixi_env() {
-    echo "==> Installing pixi hpc environment (~3 min)..."
+    echo "==> Installing pixi hpc environment on scratch (~3 min)..."
+    configure_pixi_detached_envs
     pixi install -e hpc --manifest-path "${PIXI_MANIFEST}"
-    eval "$(pixi shell-hook -e hpc --manifest-path "${PIXI_MANIFEST}")"
+    activate_hpc_env
     echo "==> pixi hpc environment ready"
 }
 
@@ -164,44 +180,39 @@ install_petsc() {
 
 install_h5py() {
     echo "==> Building h5py against Gadi HDF5 module..."
-    # The conda hpc env ships HDF5 1.14 (serial) as a transitive dependency.
-    # h5py's meson build finds it via cmake config files in the conda env
-    # regardless of LDFLAGS/LD_LIBRARY_PATH, causing the built .so to embed
-    # DT_NEEDED: libhdf5.so.310 (conda 1.14) instead of libhdf5.so.200 (Gadi
-    # 1.12.2p). At runtime, H5E_BADATOM_g (removed in 1.14) is undefined.
-    #
-    # Fix: temporarily rename conda's libhdf5 files so meson can only find
-    # Gadi's HDF5. Restore them immediately after the build.
 
-    local _conda_lib="${UW3_PATH}/.pixi/envs/hpc/lib"
+    local _conda_lib
+    _conda_lib="$(get_active_pixi_prefix)/lib"
+
     local _hidden=()
+    local _f
     for _f in "${_conda_lib}"/libhdf5*.so*; do
         [ -f "${_f}" ] && [[ "${_f}" != *.h5build ]] || continue
         mv "${_f}" "${_f}.h5build"
         _hidden+=("${_f}")
     done
-    [ ${#_hidden[@]} -gt 0 ] && echo "  Hid ${#_hidden[@]} conda HDF5 lib(s) for clean build"
+    [ ${#_hidden[@]} -gt 0 ] && echo "  Hid ${#_hidden[@]} pixi HDF5 lib(s) for clean build"
 
     (
         unset LDFLAGS LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
         export LDFLAGS="-L${HDF5_DIR}/lib -Wl,--disable-new-dtags,-rpath,${HDF5_DIR}/lib"
         export LD_LIBRARY_PATH="${HDF5_DIR}/lib:${MPI_DIR}/lib"
-        # HDF5_VERSION: Gadi module string "1.12.2p" is unparseable by h5py.
-        # Gadi's hdf5.h does not include H5FDmpio.h, so we force-include it.
+
+        python -m pip install --upgrade "setuptools>=77" wheel packaging
+
         CC=mpicc \
         HDF5_MPI="ON" \
         HDF5_DIR="${HDF5_DIR}" \
         HDF5_VERSION="1.12.2" \
         CFLAGS="-I${HDF5_DIR}/include -include ${HDF5_DIR}/include/hdf5.h -include ${HDF5_DIR}/include/H5FDmpio.h" \
-        pip install --no-binary=h5py --no-cache-dir --force-reinstall --no-deps h5py
+        python -m pip install --no-build-isolation --no-binary=h5py --no-cache-dir --force-reinstall --no-deps h5py
     )
     local _rc=$?
 
-    # Always restore conda's HDF5 libs regardless of build outcome
     for _f in "${_hidden[@]}"; do
         mv "${_f}.h5build" "${_f}"
     done
-    [ ${#_hidden[@]} -gt 0 ] && echo "  Restored ${#_hidden[@]} conda HDF5 lib(s)"
+    [ ${#_hidden[@]} -gt 0 ] && echo "  Restored ${#_hidden[@]} pixi HDF5 lib(s)"
 
     [ $_rc -ne 0 ] && { echo "ERROR: h5py build failed (rc=$_rc)"; return $_rc; }
     echo "==> h5py installed"
@@ -210,8 +221,6 @@ install_h5py() {
 install_uw3() {
     echo "==> Installing Underworld3..."
     cd "${UW3_PATH}"
-    # --no-build-isolation: use the already-built petsc4py from PYTHONPATH
-    # rather than letting pip download and rebuild it from PyPI in a fresh env.
     pip install --no-build-isolation -e .
     cd "${CDIR}"
     echo "==> Underworld3 installed"
@@ -255,9 +264,12 @@ load_env
 if [ "${1}" = "install" ]; then
     echo ""
     echo "Starting user installation..."
-    echo "  BASE_PATH:  ${BASE_PATH}"
-    echo "  UW3_PATH:   ${UW3_PATH}"
-    echo "  UW3_BRANCH: ${UW3_BRANCH}"
+    echo "  BASE_PATH:      ${BASE_PATH}"
+    echo "  UW3_PATH:       ${UW3_PATH}"
+    echo "  UW3_BRANCH:     ${UW3_BRANCH}"
+    echo "  PIXI_HOME:      ${PIXI_HOME}"
+    echo "  PIXI_CACHE_DIR: ${PIXI_CACHE_DIR}"
+    echo "  PIXI_ENV_ROOT:  ${PIXI_ENV_ROOT}"
     echo ""
     setup_pixi
     clone_uw3
