@@ -156,6 +156,11 @@ ensure_uw3_checkout() {
     mkdir -p "${BASE_PATH}" || die "cannot create ${BASE_PATH}"
     require_cmd git
 
+    if [[ -d "${UW3_PATH}" && -z "$(ls -A "${UW3_PATH}" 2>/dev/null)" ]]; then
+        note "Removing empty stale directory: ${UW3_PATH}"
+        rmdir "${UW3_PATH}" || die "failed to remove empty stale directory: ${UW3_PATH}"
+    fi
+
     if [[ -d "${UW3_PATH}/.git" && -f "${PIXI_MANIFEST}" ]]; then
         note "Valid UW3 checkout found at ${UW3_PATH}"
         return 0
@@ -170,7 +175,7 @@ ensure_uw3_checkout() {
     fi
 
     note "Cloning Underworld3 (${UW3_BRANCH}) ..."
-    git clone --branch "${UW3_BRANCH}" --depth 1 "${UW3_REPO}" "${UW3_PATH}" \
+    git clone --branch "${UW3_BRANCH}" --single-branch --depth 1 --progress "${UW3_REPO}" "${UW3_PATH}" \
         || die "git clone failed"
 
     [[ -f "${PIXI_MANIFEST}" ]] || die "clone completed but ${PIXI_MANIFEST} not found"
