@@ -157,7 +157,7 @@ install_mpi4py() {
 
 install_petsc() {
     echo "==> Building PETSc with AMR tools (~1 hour)..."
-    bash "${UW3_PATH}/petsc-custom/build-petsc-gadi.sh"
+    bash "${UW3_PATH}/petsc-custom/build-petsc.sh"
     export PYTHONPATH="${PETSC_DIR}/${PETSC_ARCH}/lib:${PYTHONPATH}"
     echo "==> PETSc installed"
 }
