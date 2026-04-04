@@ -91,7 +91,7 @@ params = uw.Params(
         description="Pressure continuity flag",
     ),
     uw_stokes_tol=uw.Param(
-        1e-5,
+        1e-6,
         type=uw.ParamType.FLOAT,
         description="Stokes solver tolerance",
     ),
@@ -133,9 +133,10 @@ def parse_float_fraction(value):
         return float(Fraction(numerator) / Fraction(denominator))
     return float(Fraction(text))
 
-
+# %%
 params.uw_cellsize = parse_float_fraction(params.uw_cellsize)
 
+# set pressure continuity based on velocity degree
 pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
 is_p1p0 = params.uw_vdegree == 1 and params.uw_pdegree == 0
 
@@ -224,10 +225,10 @@ case_id = make_case_id(
     vdeg=params.uw_vdegree,
     pdeg=params.uw_pdegree,
     pcont=pressure_is_continuous,
-    vel_penalty=params.uw_vel_penalty,
     stokes_tol=params.uw_stokes_tol,
     ncpus=uw.mpi.size,
     bc=params.uw_bc_type,
+    vel_penalty=params.uw_vel_penalty,
 )
 
 output_dir = os.path.join(output_root, case_id)
@@ -598,52 +599,25 @@ else:
 # #### Boundary Conditions
 
 # %%
-inner = mesh.boundaries.Lower.name
-outer = mesh.boundaries.Upper.name
-
-# if freeslip:
-#     if params.uw_bc_type == "natural":
-#         v_diff = v_uw.sym - v_ana.sym
-#         stokes.add_natural_bc(params.uw_vel_penalty * v_diff, mesh.boundaries.Upper.name)
-#         stokes.add_natural_bc(params.uw_vel_penalty * v_diff, mesh.boundaries.Lower.name)
-#     elif params.uw_bc_type == "essential":
-#         stokes.add_essential_bc(v_ana.sym, mesh.boundaries.Upper.name)
-#         stokes.add_essential_bc(v_ana.sym, mesh.boundaries.Lower.name)
-#     else:
-#         raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
-# elif zeroslip:
-#     if params.uw_bc_type == "natural":
-#         v_diff = v_uw.sym - v_ana.sym
-#         stokes.add_natural_bc(params.uw_vel_penalty * v_diff, mesh.boundaries.Upper.name)
-#         stokes.add_natural_bc(params.uw_vel_penalty * v_diff, mesh.boundaries.Lower.name)
-#     elif params.uw_bc_type == "essential":
-#         stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), mesh.boundaries.Upper.name)
-#         stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), mesh.boundaries.Lower.name)
-#     else:
-#         raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
-# else:
-#     raise ValueError(f"Unsupported case flags: freeslip={freeslip}, zeroslip={zeroslip}")
+lower = mesh.boundaries.Lower.name
+upper = mesh.boundaries.Upper.name
 
 if freeslip:
     if params.uw_freeslip_type == "penalty":
-        # UW implements annulus free-slip through a penalty on the normal velocity
-        # component. This matches the authors' physical condition u.n = 0 while
-        # leaving tangential motion free on the shell boundaries.
+        # Free-slip through a penalty on the normal velocity component.
         Gamma_N = mesh.CoordinateSystem.unit_e_0
-        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, outer)
-        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, inner)
+        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, upper)
+        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, lower)
     elif params.uw_freeslip_type == "nitsche":
-        # Nitsche's method is more robust than the penalty method for free-slip
-        # conditions, and it does not require tuning a penalty parameter. It
-        # imposes the same physical condition u.n = 0 while leaving tangential
-        # motion free on the shell boundaries.
+        # Nitsche's method is more robust than the penalty method for free-slip conditions, 
+        # and it does not require tuning a penalty parameter.
         outer_normal = mesh.CoordinateSystem.unit_e_0
         inner_normal = -mesh.CoordinateSystem.unit_e_0
-        stokes.add_nitsche_bc(outer, normal=outer_normal, gamma=10)
-        stokes.add_nitsche_bc(inner, normal=inner_normal, gamma=10)
+        stokes.add_nitsche_bc(upper, normal=outer_normal, gamma=10)
+        stokes.add_nitsche_bc(lower, normal=inner_normal, gamma=10)
 elif zeroslip:
-    stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), outer)
-    stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), inner)
+    stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), upper)
+    stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), lower)
 else:
     raise ValueError(f"Unsupported case flags: freeslip={freeslip}, zeroslip={zeroslip}")
 
@@ -888,20 +862,20 @@ def current_git_sha(repo_path):
 # %%
 v_err_l2 = relative_l2_error(mesh, v_err_sym, v_ana_sym)
 p_err_l2 = relative_l2_error(mesh, p_err_sym, p_ana_sym)
-p_err_l2_inner = relative_l2_error(mesh, p_err_sym, p_ana_sym, boundary=inner)
-p_err_l2_outer = relative_l2_error(mesh, p_err_sym, p_ana_sym, boundary=outer)
-v_err_l2_inner_abs = absolute_l2_error(mesh, v_err_sym, boundary=inner)
-v_err_l2_outer_abs = absolute_l2_error(mesh, v_err_sym, boundary=outer)
+p_err_l2_lower = relative_l2_error(mesh, p_err_sym, p_ana_sym, boundary=lower)
+p_err_l2_upper = relative_l2_error(mesh, p_err_sym, p_ana_sym, boundary=upper)
+v_err_l2_lower_abs = absolute_l2_error(mesh, v_err_sym, boundary=lower)
+v_err_l2_upper_abs = absolute_l2_error(mesh, v_err_sym, boundary=upper)
 
 if zeroslip:
-    v_err_l2_inner = np.nan
-    v_err_l2_outer = np.nan
+    v_err_l2_lower = np.nan
+    v_err_l2_upper = np.nan
 else:
-    v_err_l2_inner = relative_l2_error(mesh, v_err_sym, v_ana_sym, boundary=inner)
-    v_err_l2_outer = relative_l2_error(mesh, v_err_sym, v_ana_sym, boundary=outer)
+    v_err_l2_lower = relative_l2_error(mesh, v_err_sym, v_ana_sym, boundary=lower)
+    v_err_l2_upper = relative_l2_error(mesh, v_err_sym, v_ana_sym, boundary=upper)
 
-u_dot_n_l2_inner_abs = absolute_l2_error(mesh, unit_rvec.dot(v_uw.sym), boundary=inner)
-u_dot_n_l2_outer_abs = absolute_l2_error(mesh, unit_rvec.dot(v_uw.sym), boundary=outer)
+u_dot_n_l2_lower_abs = absolute_l2_error(mesh, unit_rvec.dot(v_uw.sym), boundary=lower)
+u_dot_n_l2_upper_abs = absolute_l2_error(mesh, unit_rvec.dot(v_uw.sym), boundary=upper)
 run_metadata = gather_run_metadata(mesh, v_uw, p_uw)
 git_sha = current_git_sha(repo_root)
 cli_args = " ".join(sys.argv)
@@ -910,14 +884,14 @@ if uw.mpi.rank == 0:
     print("=== Relative L2 Errors ===")
     print(f"Velocity (domain): {v_err_l2}")
     print(f"Pressure (domain): {p_err_l2}")
-    print(f"Velocity (inner):  {v_err_l2_inner}")
-    print(f"Velocity (outer):  {v_err_l2_outer}")
-    print(f"Velocity abs (inner): {v_err_l2_inner_abs}")
-    print(f"Velocity abs (outer): {v_err_l2_outer_abs}")
-    print(f"Pressure (inner):  {p_err_l2_inner}")
-    print(f"Pressure (outer):  {p_err_l2_outer}")
-    print(f"u.n abs (inner): {u_dot_n_l2_inner_abs}")
-    print(f"u.n abs (outer): {u_dot_n_l2_outer_abs}")
+    print(f"Velocity (lower):  {v_err_l2_lower}")
+    print(f"Velocity (upper):  {v_err_l2_upper}")
+    print(f"Velocity abs (lower): {v_err_l2_lower_abs}")
+    print(f"Velocity abs (upper): {v_err_l2_upper_abs}")
+    print(f"Pressure (lower):  {p_err_l2_lower}")
+    print(f"Pressure (upper):  {p_err_l2_upper}")
+    print(f"u.n abs (lower): {u_dot_n_l2_lower_abs}")
+    print(f"u.n abs (upper): {u_dot_n_l2_upper_abs}")
 
 # %% [markdown]
 # ### Save Outputs
@@ -931,14 +905,14 @@ if uw.mpi.rank == 0:
         f_h5.create_dataset("cellsize", data=params.uw_cellsize)
         f_h5.create_dataset("v_l2_norm", data=v_err_l2)
         f_h5.create_dataset("p_l2_norm", data=p_err_l2)
-        f_h5.create_dataset("v_l2_norm_inner", data=v_err_l2_inner)
-        f_h5.create_dataset("v_l2_norm_outer", data=v_err_l2_outer)
-        f_h5.create_dataset("v_l2_norm_inner_abs", data=v_err_l2_inner_abs)
-        f_h5.create_dataset("v_l2_norm_outer_abs", data=v_err_l2_outer_abs)
-        f_h5.create_dataset("p_l2_norm_inner", data=p_err_l2_inner)
-        f_h5.create_dataset("p_l2_norm_outer", data=p_err_l2_outer)
-        f_h5.create_dataset("u_dot_n_l2_norm_inner_abs", data=u_dot_n_l2_inner_abs)
-        f_h5.create_dataset("u_dot_n_l2_norm_outer_abs", data=u_dot_n_l2_outer_abs)
+        f_h5.create_dataset("v_l2_norm_lower", data=v_err_l2_lower)
+        f_h5.create_dataset("v_l2_norm_upper", data=v_err_l2_upper)
+        f_h5.create_dataset("v_l2_norm_lower_abs", data=v_err_l2_lower_abs)
+        f_h5.create_dataset("v_l2_norm_upper_abs", data=v_err_l2_upper_abs)
+        f_h5.create_dataset("p_l2_norm_lower", data=p_err_l2_lower)
+        f_h5.create_dataset("p_l2_norm_upper", data=p_err_l2_upper)
+        f_h5.create_dataset("u_dot_n_l2_norm_lower_abs", data=u_dot_n_l2_lower_abs)
+        f_h5.create_dataset("u_dot_n_l2_norm_upper_abs", data=u_dot_n_l2_upper_abs)
         f_h5.create_dataset("git_sha", data=np.bytes_(git_sha))
         f_h5.create_dataset("command", data=np.bytes_(cli_args))
         for key, value in run_metadata.items():

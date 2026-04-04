@@ -11,14 +11,14 @@
 #PBS -l walltime=24:00:00
 #PBS -l ncpus=16
 #PBS -l mem=64gb
-#PBS -l storage=gdata/m18+scratch/m18
+#PBS -l storage=scratch/n69+gdata/n69+scratch/m18+gdata/m18
 #PBS -l wd
 
 set -euo pipefail
 
-INSTALL_SCRIPT="${INSTALL_SCRIPT:-/g/data/m18/software/uw3-pixi/gadi_install_shared.sh}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+INSTALL_SCRIPT="${INSTALL_SCRIPT:-${REPO_ROOT}/production_scripts/gadi_install_user.sh}"
 BENCH_SCRIPT="${REPO_ROOT}/benchmarks/annulus/ex_stokes_kramer.py"
 # Fall back to a single rank for local dry runs outside PBS.
 NCPUS="${PBS_NCPUS:-1}"
@@ -40,8 +40,7 @@ cellsizes=("1/8" "1/16" "1/32" "1/64" "1/128" "1/256")
 run_case() {
     echo
     echo "[$(date)] Running: $*"
-    mpiexec -n "${NCPUS}" -x LD_PRELOAD=libmpi.so \
-        python3 "${BENCH_SCRIPT}" "$@"
+    mpiexec -n "${NCPUS}" python3 "${BENCH_SCRIPT}" "$@"
 }
 
 run_sweep() {

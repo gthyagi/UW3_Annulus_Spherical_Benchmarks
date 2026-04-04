@@ -8,14 +8,14 @@
 #PBS -l walltime=12:00:00
 #PBS -l ncpus=1
 #PBS -l mem=8gb
-#PBS -l storage=gdata/m18+scratch/m18
+#PBS -l storage=scratch/n69+gdata/n69+scratch/m18+gdata/m18
 #PBS -l wd
 
 set -euo pipefail
 
-INSTALL_SCRIPT="${INSTALL_SCRIPT:-/g/data/m18/software/uw3-pixi/gadi_install_shared.sh}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+INSTALL_SCRIPT="${INSTALL_SCRIPT:-${REPO_ROOT}/production_scripts/gadi_install_user.sh}"
 BENCH_SCRIPT="${REPO_ROOT}/benchmarks/annulus/ex_stokes_thieulot.py"
 # Fall back to a single rank for local dry runs outside PBS.
 NCPUS="${PBS_NCPUS:-1}"

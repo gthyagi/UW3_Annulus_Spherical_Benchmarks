@@ -442,31 +442,6 @@ else:
 # %% [markdown]
 # #### Solver Notes
 #
-# The viscosity and body force are prescribed functions of position, so this
-# benchmark is linear in the Stokes unknowns. This script nevertheless keeps
-# `snes_type = "newtonls"` as its current established solve path; switching to
-# `ksponly` should be treated as a separate solver change and validated on this
-# spherical benchmark.
-#
-# `stokes.tolerance` is the UW-level solver tolerance. In the current UW Stokes
-# implementation it also scales the inner fieldsplit tolerances:
-#
-# - `fieldsplit_pressure_ksp_rtol = 0.1 * tolerance`
-# - `fieldsplit_velocity_ksp_rtol = 0.033 * tolerance`
-#
-# So tightening `stokes.tolerance` also tightens the inner Schur-complement
-# solves and can increase runtime sharply under MPI.
-#
-# This script also has no annulus-style `P1/P0` / `is_p1p0` branch. The solver
-# settings below therefore apply directly to the single spherical-shell solve
-# path used here.
-#
-# %% [markdown]
-# #### Solver Settings
-
-# %% [markdown]
-# #### Solver Notes
-#
 # This benchmark is linear: the viscosity is prescribed, and both the
 # `essential` and `natural` boundary conditions are linear in the unknown
 # velocity and pressure fields. For a linear problem we use
