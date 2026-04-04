@@ -27,6 +27,7 @@
 
 INSTALL_SCRIPT=/home/565/tg7098/UW3_Annulus_Spherical_Benchmarks/production_scripts/gadi_install_user.sh
 SCRIPT=${SCRIPT:-gadi_test_stokes.py}
+ARGS=${ARGS:-}
 
 # ============================================================
 # ENV
@@ -38,4 +39,4 @@ source "${INSTALL_SCRIPT}"
 # RUN
 # ============================================================
 
-mpiexec -n "${PBS_NCPUS}" python3 "${SCRIPT}"
+mpiexec -n "${PBS_NCPUS}" python3 "${SCRIPT}" ${ARGS}
