@@ -12,11 +12,11 @@
 #   - SCRIPT can be relative (to submission dir) or absolute
 #
 
-#PBS -P n69
+#PBS -P m18
 #PBS -N uw3_job
 #PBS -q normal
 #PBS -l walltime=01:00:00
-#PBS -l ncpus=4
+#PBS -l ncpus=8
 #PBS -l mem=16gb
 #PBS -l storage=scratch/n69+gdata/n69+scratch/m18+gdata/m18
 #PBS -l wd
