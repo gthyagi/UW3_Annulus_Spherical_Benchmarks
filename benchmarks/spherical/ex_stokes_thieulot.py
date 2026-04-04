@@ -171,11 +171,20 @@ def make_case_id(*, case, **kwargs):
     return "_".join(parts)
 
 
-if params.run_on_gadi:
-    repo_root = "/scratch/m18/tg7098"
-else:
+# --- repo root (for git SHA, code reference) ---
+if "__file__" in globals():
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-output_root = os.path.join(repo_root, "output", "spherical", "thieulot", "latest")
+else:
+    # fallback for Jupyter / interactive
+    repo_root = os.getcwd()
+
+# --- output location (runtime dependent) ---
+if params.run_on_gadi:
+    output_base = "/scratch/m18/tg7098"
+else:
+    output_base = repo_root
+
+output_root = os.path.join(output_base, "output", "spherical", "thieulot", "latest")
 metrics_filename = "benchmark_metrics.h5"
 
 case_id = make_case_id(
@@ -682,12 +691,12 @@ def gather_run_metadata(mesh, velocity_var, pressure_var):
 
 
 def current_git_sha(repo_path):
-    """Return the current git SHA, or 'unknown' when unavailable."""
-
+    """Return current git SHA, or 'unknown' if unavailable."""
     try:
         return subprocess.check_output(
             ["git", "rev-parse", "HEAD"],
             cwd=repo_path,
+            stderr=subprocess.DEVNULL,
             text=True,
         ).strip()
     except Exception:

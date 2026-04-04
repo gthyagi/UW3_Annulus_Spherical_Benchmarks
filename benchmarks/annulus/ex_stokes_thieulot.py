@@ -174,12 +174,20 @@ def make_case_id(*, case, **kwargs):
     parts += [f"{key}_{_case_value(value)}" for key, value in kwargs.items() if value is not None]
     return "_".join(parts)
 
-
-if params.run_on_gadi:
-    repo_root = "/scratch/m18/tg7098"
-else:
+# --- repo root (for git SHA, code reference) ---
+if "__file__" in globals():
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-output_root = os.path.join(repo_root, "output", "annulus", "thieulot", "latest")
+else:
+    # fallback for Jupyter / interactive
+    repo_root = os.getcwd()
+
+# --- output location (runtime dependent) ---
+if params.run_on_gadi:
+    output_base = "/scratch/m18/tg7098"
+else:
+    output_base = repo_root
+
+output_root = os.path.join(output_base, "output", "annulus", "thieulot", "latest")
 metrics_filename = "benchmark_metrics.h5"
 
 case_id = make_case_id(
@@ -627,6 +635,7 @@ def current_git_sha(repo_path):
         return subprocess.check_output(
             ["git", "rev-parse", "HEAD"],
             cwd=repo_path,
+            stderr=subprocess.DEVNULL,
             text=True,
         ).strip()
     except Exception:

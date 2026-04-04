@@ -202,11 +202,20 @@ else:
 # ### Output Directory
 
 # %%
-if params.run_on_gadi:
-    repo_root = "/scratch/m18/tg7098"
-else:
+# --- repo root (for git SHA, code reference) ---
+if "__file__" in globals():
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-output_root = os.path.join(repo_root, "output", "annulus", "kramer", "latest")
+else:
+    # fallback for Jupyter / interactive
+    repo_root = os.getcwd()
+
+# --- output location (runtime dependent) ---
+if params.run_on_gadi:
+    output_base = "/scratch/m18/tg7098"
+else:
+    output_base = repo_root
+
+output_root = os.path.join(output_base, "output", "annulus", "kramer", "latest")
 metrics_filename = "benchmark_metrics.h5"
 
 def _case_value(value):
@@ -880,6 +889,7 @@ def current_git_sha(repo_path):
         return subprocess.check_output(
             ["git", "rev-parse", "HEAD"],
             cwd=repo_path,
+            stderr=subprocess.DEVNULL,
             text=True,
         ).strip()
     except Exception:
