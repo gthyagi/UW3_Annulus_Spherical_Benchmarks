@@ -102,13 +102,8 @@ params = uw.Params(
         type=uw.ParamType.BOOLEAN,
         description="Pressure continuity flag",
     ),
-    uw_qdegree=uw.Param(
-        0,
-        type=uw.ParamType.INTEGER,
-        description="Quadrature degree override; <= 0 uses max(vdegree, pdegree)",
-    ),
     uw_stokes_tol=uw.Param(
-        1e-5,
+        1e-6,
         type=uw.ParamType.FLOAT,
         description="Stokes solver tolerance",
     ),
@@ -118,14 +113,9 @@ params = uw.Params(
         description="Penalty for curved-boundary tangential flow",
     ),
     uw_bc_type=uw.Param(
-        "natural",
+        "essential",
         type=uw.ParamType.STRING,
         description="Boundary-condition mode: natural or essential",
-    ),
-    uw_p_bc=uw.Param(
-        False,
-        type=uw.ParamType.BOOLEAN,
-        description="Pressure Dirichlet BC",
     ),
     run_on_gadi=uw.Param(
         False,
@@ -138,6 +128,7 @@ if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
     print(params.cli_help())
     raise SystemExit(0)
 
+# %%
 def parse_float_fraction(value):
     """Parse a decimal or simple rational string deterministically."""
 
@@ -149,16 +140,12 @@ def parse_float_fraction(value):
         return float(Fraction(numerator) / Fraction(denominator))
     return float(Fraction(text))
 
-
+# %%
 params.uw_cellsize = parse_float_fraction(params.uw_cellsize)
 
+# set pressure continuity based on velocity degree
 pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
 is_p1p0 = params.uw_vdegree == 1 and params.uw_pdegree == 0
-mesh_qdegree = (
-    params.uw_qdegree
-    if params.uw_qdegree > 0
-    else max(params.uw_pdegree, params.uw_vdegree)
-)
 
 if uw.mpi.rank == 0 and params.uw_pdegree == 0 and params.uw_pcont:
     print("Degree-0 pressure uses discontinuous storage; overriding uw_pcont to false.")
@@ -198,18 +185,15 @@ case_id = make_case_id(
     vdeg=params.uw_vdegree,
     pdeg=params.uw_pdegree,
     pcont=pressure_is_continuous,
-    qdeg=params.uw_qdegree if params.uw_qdegree > 0 else None,
-    vel_penalty=params.uw_vel_penalty,
     stokes_tol=params.uw_stokes_tol,
     ncpus=uw.mpi.size,
     bc=params.uw_bc_type,
-    p_bc=params.uw_p_bc,
+    vel_penalty=params.uw_vel_penalty,
 )
 
 output_dir = os.path.join(output_root, case_id)
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
-
 
 # %% [markdown]
 # ### Analytical Solution Helpers
@@ -318,7 +302,7 @@ mesh = uw.meshing.SphericalShell(
     radiusInner=params.uw_r_i,
     radiusOuter=params.uw_r_o,
     cellSize=params.uw_cellsize,
-    qdegree=mesh_qdegree,
+    qdegree=max(params.uw_pdegree, params.uw_vdegree),
     degree=1,
     filename=os.path.join(output_dir, "mesh.msh"),
 )
@@ -372,9 +356,7 @@ stokes = Stokes(mesh, velocityField=v_soln, pressureField=p_soln)
 stokes.constitutive_model = uw.constitutive_models.ViscousFlowModel
 stokes.constitutive_model.Parameters.viscosity = mu_expr
 stokes.saddle_preconditioner = 1.0 / mu_expr
-if not params.uw_p_bc:
-    stokes.petsc_use_pressure_nullspace = True
-
+stokes.petsc_use_pressure_nullspace = True
 
 gravity_fn = -1.0 * unit_rvec
 stokes.bodyforce = rho_bodyforce_expr * gravity_fn
@@ -437,34 +419,16 @@ stokes.bodyforce = rho_bodyforce_expr * gravity_fn
 # #### Boundary Conditions
 
 # %%
+lower = mesh.boundaries.Lower.name
+upper = mesh.boundaries.Upper.name
 if params.uw_bc_type == "natural":
-    stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Upper.name)
-    stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, mesh.boundaries.Lower.name)
+    stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, upper)
+    stokes.add_natural_bc(params.uw_vel_penalty * v_err_expr, lower)
 elif params.uw_bc_type == "essential":
-    stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Upper.name)
-    stokes.add_essential_bc(v_ana_expr, mesh.boundaries.Lower.name)
+    stokes.add_essential_bc(v_ana_expr, upper)
+    stokes.add_essential_bc(v_ana_expr, lower)
 else:
     raise ValueError(f"Unknown bc_type: {params.uw_bc_type}")
-
-inner = mesh.boundaries.Lower.name
-outer = mesh.boundaries.Upper.name
-
-if params.uw_p_bc:
-    stokes.add_condition(
-        p_soln.field_id,
-        "dirichlet",
-        sp.Matrix([0]),
-        mesh.boundaries.Lower.name,
-        components=(0),
-    )
-    stokes.add_condition(
-        p_soln.field_id,
-        "dirichlet",
-        sp.Matrix([0]),
-        mesh.boundaries.Upper.name,
-        components=(0),
-    )
-
 
 # %% [markdown]
 # #### Solver Notes
@@ -584,7 +548,7 @@ else:
 # %%
 uw.timing.reset()
 uw.timing.start()
-stokes.solve(verbose=False)
+stokes.solve()
 uw.timing.stop()
 uw.timing.print_table(filename=os.path.join(output_dir, "stokes_timing.txt"))
 
@@ -650,25 +614,8 @@ def subtract_surface_pressure_mean(
     
     pressure_var.data[:, 0] -= p_bd_int / bd_measure
 
-
-def normalize_pressure_for_reporting(mesh, pressure_var, use_pressure_bc):
-    """
-    Apply reporting-only pressure gauge normalization.
-
-    If pressure Dirichlet BCs are active, the pressure gauge is already fixed by
-    the solve and must not be shifted afterward.
-    """
-    if use_pressure_bc:
-        return
-
-    subtract_pressure_mean(mesh, pressure_var)
-    # subtract_surface_pressure_mean(mesh, pressure_var, mesh.boundaries.Upper.name)
-    # subtract_surface_pressure_mean(mesh, pressure_var, mesh.boundaries.Lower.name)
-
 # %%
-normalize_pressure_for_reporting(mesh, p_soln, params.uw_p_bc)
-
-
+subtract_pressure_mean(mesh, p_soln)
 # %% [markdown]
 # ### Relative Error Norms
 
@@ -750,12 +697,12 @@ def current_git_sha(repo_path):
 # %%
 v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
 p_err_l2 = relative_l2_error(mesh, p_err_expr, p_ana_expr)
-v_err_l2_inner = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=inner)
-v_err_l2_outer = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=outer)
-p_err_l2_inner = relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=inner)
-p_err_l2_outer = relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=outer)
-u_dot_n_l2_inner_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=inner)
-u_dot_n_l2_outer_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=outer)
+v_err_l2_lower = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=lower)
+v_err_l2_upper = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=upper)
+p_err_l2_lower = relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=lower)
+p_err_l2_upper = relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=upper)
+u_dot_n_l2_lower_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=lower)
+u_dot_n_l2_upper_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=upper)
 run_metadata = gather_run_metadata(mesh, v_soln, p_soln)
 git_sha = current_git_sha(repo_root)
 cli_args = " ".join(sys.argv)
@@ -764,12 +711,12 @@ if uw.mpi.rank == 0:
     print("=== Relative L2 Errors ===")
     print(f"Velocity (domain): {v_err_l2}")
     print(f"Pressure (domain): {p_err_l2}")
-    print(f"Velocity (inner):  {v_err_l2_inner}")
-    print(f"Velocity (outer):  {v_err_l2_outer}")
-    print(f"Pressure (inner):  {p_err_l2_inner}")
-    print(f"Pressure (outer):  {p_err_l2_outer}")
-    print(f"u.n abs (inner): {u_dot_n_l2_inner_abs}")
-    print(f"u.n abs (outer): {u_dot_n_l2_outer_abs}")
+    print(f"Velocity (lower):  {v_err_l2_lower}")
+    print(f"Velocity (upper):  {v_err_l2_upper}")
+    print(f"Pressure (lower):  {p_err_l2_lower}")
+    print(f"Pressure (upper):  {p_err_l2_upper}")
+    print(f"u.n abs (lower): {u_dot_n_l2_lower_abs}")
+    print(f"u.n abs (upper): {u_dot_n_l2_upper_abs}")
 
 # %% [markdown]
 # ### Save Outputs
@@ -784,12 +731,12 @@ if uw.mpi.rank == 0:
         f_h5.create_dataset("cellsize", data=params.uw_cellsize)
         f_h5.create_dataset("v_l2_norm", data=v_err_l2)
         f_h5.create_dataset("p_l2_norm", data=p_err_l2)
-        f_h5.create_dataset("v_l2_norm_inner", data=v_err_l2_inner)
-        f_h5.create_dataset("v_l2_norm_outer", data=v_err_l2_outer)
-        f_h5.create_dataset("p_l2_norm_inner", data=p_err_l2_inner)
-        f_h5.create_dataset("p_l2_norm_outer", data=p_err_l2_outer)
-        f_h5.create_dataset("u_dot_n_l2_norm_inner_abs", data=u_dot_n_l2_inner_abs)
-        f_h5.create_dataset("u_dot_n_l2_norm_outer_abs", data=u_dot_n_l2_outer_abs)
+        f_h5.create_dataset("v_l2_norm_lower", data=v_err_l2_lower)
+        f_h5.create_dataset("v_l2_norm_upper", data=v_err_l2_upper)
+        f_h5.create_dataset("p_l2_norm_lower", data=p_err_l2_lower)
+        f_h5.create_dataset("p_l2_norm_upper", data=p_err_l2_upper)
+        f_h5.create_dataset("u_dot_n_l2_norm_lower_abs", data=u_dot_n_l2_lower_abs)
+        f_h5.create_dataset("u_dot_n_l2_norm_upper_abs", data=u_dot_n_l2_upper_abs)
         f_h5.create_dataset("git_sha", data=np.bytes_(git_sha))
         f_h5.create_dataset("command", data=np.bytes_(cli_args))
         for key, value in run_metadata.items():

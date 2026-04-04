@@ -135,7 +135,7 @@ def parse_float_fraction(value):
         return float(Fraction(numerator) / Fraction(denominator))
     return float(Fraction(text))
 
-
+# %%
 params.uw_cellsize = parse_float_fraction(params.uw_cellsize)
 
 # set pressure continuity based on velocity degree
