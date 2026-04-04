@@ -49,7 +49,7 @@ export UW3_BRANCH=development
 export UW3_REPO="https://github.com/gthyagi/underworld3.git"
 
 # DDMonYY naming convention — update this for each new install
-export INSTALL_NAME=underworld3_gthyagi
+export INSTALL_NAME=underworld3
 
 export BASE_PATH=/g/data/n69/${USER}/uw3-pixi
 export PIXI_HOME="${HOME}/.pixi"              # default pixi install location
@@ -83,10 +83,10 @@ load_env() {
     # Add pixi binary to PATH
     export PATH="${PIXI_HOME}/bin:${PATH}"
 
-    # Activate pixi gadi environment
+    # Activate pixi hpc environment
     if command -v pixi &>/dev/null && [ -f "${PIXI_MANIFEST}" ]; then
-        if ! echo "${PATH}" | tr ':' '\n' | grep -q "\.pixi/envs/gadi/bin"; then
-            eval "$(pixi shell-hook -e gadi --manifest-path "${PIXI_MANIFEST}")"
+        if ! echo "${PATH}" | tr ':' '\n' | grep -q "\.pixi/envs/hpc/bin"; then
+            eval "$(pixi shell-hook -e hpc --manifest-path "${PIXI_MANIFEST}")"
         fi
     fi
 
@@ -143,10 +143,10 @@ clone_uw3() {
 }
 
 install_pixi_env() {
-    echo "==> Installing pixi gadi environment (~3 min)..."
-    pixi install -e gadi --manifest-path "${PIXI_MANIFEST}"
-    eval "$(pixi shell-hook -e gadi --manifest-path "${PIXI_MANIFEST}")"
-    echo "==> pixi gadi environment ready"
+    echo "==> Installing pixi hpc environment (~3 min)..."
+    pixi install -e hpc --manifest-path "${PIXI_MANIFEST}"
+    eval "$(pixi shell-hook -e hpc --manifest-path "${PIXI_MANIFEST}")"
+    echo "==> pixi hpc environment ready"
 }
 
 install_mpi4py() {
@@ -164,7 +164,7 @@ install_petsc() {
 
 install_h5py() {
     echo "==> Building h5py against Gadi HDF5 module..."
-    # The conda gadi env ships HDF5 1.14 (serial) as a transitive dependency.
+    # The conda hpc env ships HDF5 1.14 (serial) as a transitive dependency.
     # h5py's meson build finds it via cmake config files in the conda env
     # regardless of LDFLAGS/LD_LIBRARY_PATH, causing the built .so to embed
     # DT_NEEDED: libhdf5.so.310 (conda 1.14) instead of libhdf5.so.200 (Gadi
@@ -173,7 +173,7 @@ install_h5py() {
     # Fix: temporarily rename conda's libhdf5 files so meson can only find
     # Gadi's HDF5. Restore them immediately after the build.
 
-    local _conda_lib="${UW3_PATH}/.pixi/envs/gadi/lib"
+    local _conda_lib="${UW3_PATH}/.pixi/envs/hpc/lib"
     local _hidden=()
     for _f in "${_conda_lib}"/libhdf5*.so*; do
         [ -f "${_f}" ] && [[ "${_f}" != *.h5build ]] || continue
