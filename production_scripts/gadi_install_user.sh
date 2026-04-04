@@ -2,7 +2,7 @@
 #
 # Underworld3 per-user install script for NCI Gadi (pixi-based)
 #
-# Installs UW3 to /g/data/m18/$USER/uw3-pixi/ using pixi for Python
+# Installs UW3 to /g/data/n69/$USER/uw3-pixi/ using pixi for Python
 # package management. Each user manages their own install.
 #
 # Gadi modules provide OpenMPI and HDF5; pixi (conda-forge) handles
@@ -51,7 +51,7 @@ export UW3_REPO="https://github.com/gthyagi/underworld3.git"
 # DDMonYY naming convention — update this for each new install
 export INSTALL_NAME=underworld3_gthyagi
 
-export BASE_PATH=/g/data/m18/${USER}/uw3-pixi
+export BASE_PATH=/g/data/n69/${USER}/uw3-pixi
 export PIXI_HOME="${HOME}/.pixi"              # default pixi install location
 export UW3_PATH=${BASE_PATH}/${INSTALL_NAME}  # UW3 repo root IS this dated directory
 
