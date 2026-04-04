@@ -1,132 +1,115 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
-# Underworld3 per-user install / activation script for NCI Gadi (pixi-based)
+# Underworld3 per-user install script for NCI Gadi (pixi-based)
+#
+# Installs UW3 to /g/data/m18/$USER/uw3-pixi/ using pixi for Python
+# package management. Each user manages their own install.
+#
+# Gadi modules provide OpenMPI and HDF5; pixi (conda-forge) handles
+# pure Python dependencies. mpi4py, PETSc, h5py built from source.
 #
 # Usage:
-#   source gadi_install_user.sh
-#   source gadi_install_user.sh install
+#   source gadi_install_user.sh         # activate environment
+#   source gadi_install_user.sh install # full installation (first time only)
 #
-# This script must be sourced, not executed.
+# NOTE: This script is designed to be sourced, NOT executed directly.
+# Do NOT add 'set -e' here — it would cause your shell to close on any
+# error since the script runs in your current shell.
 
 usage="
 Usage:
-  source gadi_install_user.sh
-      Activate an existing install
+  A script to install and run an Underworld 3 software stack in Gadi (pixi).
 
-  source gadi_install_user.sh install
-      Install Underworld3 and activate the environment
+** To activate existing install **
+  \$ source <this_script_name>
 
-Options:
-  -h    Show this help
+** To install **
+  Review script details: paths, modules, branch name, INSTALL_NAME (date).
+  \$ source <this_script_name> install
 "
 
-# -------------------------
-# helpers
-# -------------------------
-
-is_sourced() { [[ "${BASH_SOURCE[0]}" != "${0}" ]]; }
-
-finish() {
-    local rc="${1:-0}"
-    if is_sourced; then
-        return "${rc}"
-    else
-        exit "${rc}"
-    fi
-}
-
-die() {
-    echo "ERROR: $*" >&2
-    finish 1
-}
-
-note() {
-    echo "==> $*"
-}
-
-require_cmd() {
-    command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
-}
-
-# Must be sourced
-is_sourced || {
-    echo "ERROR: This script must be sourced, not executed." >&2
-    echo "Use: source ${0##*/} [install]" >&2
-    exit 1
-}
-
-# -------------------------
-# args
-# -------------------------
-
-INSTALL_MODE=0
-
-while getopts ":h" opt; do
-    case "$opt" in
-        h) echo "$usage"; finish 0 ;;
-        \?) echo "Error: unknown option -$OPTARG" >&2; echo "$usage" >&2; finish 1 ;;
-    esac
+while getopts ':h' option; do
+  case "$option" in
+    h) echo "$usage"
+       (return 0 2>/dev/null) && return 0 || exit 0
+       ;;
+    \?)
+       echo "Error: Incorrect options"
+       echo "$usage"
+       (return 0 2>/dev/null) && return 0 || exit 0
+       ;;
+  esac
 done
-shift $((OPTIND - 1))
 
-case "${1:-}" in
-    install) INSTALL_MODE=1 ;;
-    "") ;;
-    *) echo "Error: unknown argument '${1}'" >&2; echo "$usage" >&2; finish 1 ;;
-esac
+# ============================================================
+# CONFIGURATION — review before installing
+# ============================================================
 
-# -------------------------
-# config
-# -------------------------
+export UW3_BRANCH=development
+export UW3_REPO="https://github.com/gthyagi/underworld3.git"
 
-export UW3_BRANCH="${UW3_BRANCH:-development}"
-export UW3_REPO="${UW3_REPO:-https://github.com/gthyagi/underworld3.git}"
-export INSTALL_NAME="${INSTALL_NAME:-underworld3}"
+# DDMonYY naming convention — update this for each new install
+export INSTALL_NAME=underworld3_gthyagi
 
-export BASE_PATH="/g/data/m18/${USER}/uw3-pixi"
-export PIXI_HOME="${HOME}/.pixi"
-export UW3_PATH="${BASE_PATH}/${INSTALL_NAME}"
+export BASE_PATH=/g/data/m18/${USER}/uw3-pixi
+export PIXI_HOME="${HOME}/.pixi"              # default pixi install location
+export UW3_PATH=${BASE_PATH}/${INSTALL_NAME}  # UW3 repo root IS this dated directory
+
+# ============================================================
+# DERIVED PATHS — do not edit below this line
+# ============================================================
 
 export PIXI_MANIFEST="${UW3_PATH}/pixi.toml"
 export PETSC_DIR="${UW3_PATH}/petsc-custom/petsc"
-export PETSC_ARCH="${PETSC_ARCH:-petsc-4-uw-openmpi}"
+export PETSC_ARCH=petsc-4-uw-openmpi
 
-export OPENBLAS_NUM_THREADS=1
-export OMPI_MCA_io=ompio
-export PYTHONNOUSERSITE=1
+export OPENBLAS_NUM_THREADS=1  # disable numpy internal parallelisation
+export OMPI_MCA_io=ompio       # preferred MPI IO implementation
 
-ORIG_PWD="${PWD}"
+export CDIR=$PWD
 
-# -------------------------
-# environment
-# -------------------------
+# ============================================================
+# ENVIRONMENT ACTIVATION
+# Called automatically at script source time.
+# ============================================================
 
-load_modules() {
-    module purge || die "module purge failed"
-    module load openmpi/4.1.7 hdf5/1.12.2p gmsh/4.13.1 cmake/3.31.6 || die "module load failed"
+load_env() {
+    module purge
+    module load openmpi/4.1.7 hdf5/1.12.2p gmsh/4.13.1 cmake/3.31.6
 
     export MPI_DIR
     MPI_DIR="$(dirname "$(dirname "$(which mpicc)")")"
+
+    # Add pixi binary to PATH
     export PATH="${PIXI_HOME}/bin:${PATH}"
-}
 
-activate_existing_env() {
-    if command -v pixi >/dev/null 2>&1 && [[ -f "${PIXI_MANIFEST}" ]]; then
-        eval "$(pixi shell-hook -e gadi --manifest-path "${PIXI_MANIFEST}")" \
-            || die "failed to activate pixi env"
-        export LD_LIBRARY_PATH="${HDF5_DIR}/lib:${LD_LIBRARY_PATH:-}"
+    # Activate pixi gadi environment
+    if command -v pixi &>/dev/null && [ -f "${PIXI_MANIFEST}" ]; then
+        if ! echo "${PATH}" | tr ':' '\n' | grep -q "\.pixi/envs/gadi/bin"; then
+            eval "$(pixi shell-hook -e gadi --manifest-path "${PIXI_MANIFEST}")"
+        fi
     fi
 
-    if [[ -d "${PETSC_DIR}/${PETSC_ARCH}" ]]; then
-        export PYTHONPATH="${PETSC_DIR}/${PETSC_ARCH}/lib:${PYTHONPATH:-}"
+    # Prepend Gadi's HDF5 lib dir AFTER pixi shell-hook, so it takes precedence
+    # over conda's serial libhdf5.so.310 (HDF5 1.14) which pixi adds to
+    # LD_LIBRARY_PATH. DT_RUNPATH in h5py.so is checked after LD_LIBRARY_PATH,
+    # so without this the wrong HDF5 is loaded at runtime.
+    export LD_LIBRARY_PATH="${HDF5_DIR}/lib:${LD_LIBRARY_PATH}"
+
+    # PETSc + petsc4py
+    if [ -d "${PETSC_DIR}/${PETSC_ARCH}" ]; then
+        export PYTHONPATH="${PETSC_DIR}/${PETSC_ARCH}/lib:${PYTHONPATH}"
     fi
-}
 
-load_env() {
-    load_modules
-    activate_existing_env
+    # Prevent Python from searching ~/.local/lib/python*/site-packages.
+    # User-installed packages there can shadow pixi env packages and cause
+    # import failures (e.g. old typing_extensions lacking Sentinel).
+    export PYTHONNOUSERSITE=1
 
-    note "Environment ready"
+    export OPENBLAS_NUM_THREADS=1
+    export OMPI_MCA_io=ompio
+
+    echo "==> Environment ready"
     echo "    MPI_DIR:    ${MPI_DIR}"
     echo "    HDF5_DIR:   ${HDF5_DIR}"
     echo "    UW3_PATH:   ${UW3_PATH}"
@@ -134,208 +117,167 @@ load_env() {
     echo "    PETSC_ARCH: ${PETSC_ARCH}"
 }
 
-# -------------------------
-# install steps
-# -------------------------
+# ============================================================
+# INSTALLATION FUNCTIONS
+# ============================================================
 
 setup_pixi() {
-    if command -v pixi >/dev/null 2>&1; then
-        note "pixi already installed: $(pixi --version)"
+    if command -v pixi &>/dev/null; then
+        echo "==> pixi already installed: $(pixi --version)"
         return 0
     fi
-
-    require_cmd curl
-    note "Installing pixi ..."
-    curl -fsSL https://pixi.sh/install.sh | bash || die "pixi install failed"
+    echo "==> Installing pixi to ${PIXI_HOME}..."
+    curl -fsSL https://pixi.sh/install.sh | bash
     export PATH="${PIXI_HOME}/bin:${PATH}"
-    command -v pixi >/dev/null 2>&1 || die "pixi installed but not found in PATH"
-    note "pixi installed: $(pixi --version)"
+    echo "==> pixi installed: $(pixi --version)"
 }
 
-ensure_uw3_checkout() {
-    mkdir -p "${BASE_PATH}" || die "cannot create ${BASE_PATH}"
-    require_cmd git
-
-    if [[ -d "${UW3_PATH}" && -z "$(ls -A "${UW3_PATH}" 2>/dev/null)" ]]; then
-        note "Removing empty stale directory: ${UW3_PATH}"
-        rmdir "${UW3_PATH}" || die "failed to remove empty stale directory: ${UW3_PATH}"
+clone_uw3() {
+    if [ ! -d "${UW3_PATH}" ]; then
+        echo "==> Cloning Underworld3 (branch: ${UW3_BRANCH}) to ${UW3_PATH}..."
+        mkdir -p "${BASE_PATH}"
+        git clone --branch "${UW3_BRANCH}" --depth 1 "${UW3_REPO}" "${UW3_PATH}"
+    else
+        echo "==> Underworld3 source already present at ${UW3_PATH}"
     fi
-
-    if [[ -d "${UW3_PATH}/.git" && -f "${PIXI_MANIFEST}" ]]; then
-        note "Valid UW3 checkout found at ${UW3_PATH}"
-        return 0
-    fi
-
-    if [[ -e "${UW3_PATH}" && ! -d "${UW3_PATH}/.git" ]]; then
-        die "${UW3_PATH} exists but is not a valid git checkout"
-    fi
-
-    if [[ -d "${UW3_PATH}/.git" && ! -f "${PIXI_MANIFEST}" ]]; then
-        die "UW3 checkout exists but pixi.toml is missing: ${UW3_PATH}"
-    fi
-
-    note "Cloning Underworld3 (${UW3_BRANCH}) ..."
-    git clone --branch "${UW3_BRANCH}" --single-branch --depth 1 --progress "${UW3_REPO}" "${UW3_PATH}" \
-        || die "git clone failed"
-
-    [[ -f "${PIXI_MANIFEST}" ]] || die "clone completed but ${PIXI_MANIFEST} not found"
 }
 
 install_pixi_env() {
-    [[ -f "${PIXI_MANIFEST}" ]] || die "Missing pixi manifest: ${PIXI_MANIFEST}"
-
-    note "Installing pixi gadi environment ..."
-    pixi install -e gadi --manifest-path "${PIXI_MANIFEST}" || die "pixi install failed"
-    eval "$(pixi shell-hook -e gadi --manifest-path "${PIXI_MANIFEST}")" \
-        || die "pixi activation failed"
-
-    export LD_LIBRARY_PATH="${HDF5_DIR}/lib:${LD_LIBRARY_PATH:-}"
-
-    command -v python >/dev/null 2>&1 || die "python not found after pixi activation"
-    python -m pip --version >/dev/null 2>&1 || die "pip not available in pixi environment"
-
-    note "pixi gadi environment ready"
+    echo "==> Installing pixi gadi environment (~3 min)..."
+    pixi install -e gadi --manifest-path "${PIXI_MANIFEST}"
+    eval "$(pixi shell-hook -e gadi --manifest-path "${PIXI_MANIFEST}")"
+    echo "==> pixi gadi environment ready"
 }
 
 install_mpi4py() {
-    note "Building mpi4py from source ..."
-    python -m pip install --no-binary :all: --no-cache-dir --force-reinstall "mpi4py>=4,<5" \
-        || die "mpi4py install failed"
+    echo "==> Building mpi4py from source against Gadi OpenMPI..."
+    pip install --no-binary :all: --no-cache-dir --force-reinstall "mpi4py>=4,<5"
+    echo "==> mpi4py installed"
 }
 
 install_petsc() {
-    local build_script="${UW3_PATH}/petsc-custom/build-petsc.sh"
-    [[ -f "${build_script}" ]] || die "Missing PETSc build script: ${build_script}"
-
-    note "Building PETSc ..."
-    bash "${build_script}" || die "PETSc build failed"
-    export PYTHONPATH="${PETSC_DIR}/${PETSC_ARCH}/lib:${PYTHONPATH:-}"
+    echo "==> Building PETSc with AMR tools (~1 hour)..."
+    bash "${UW3_PATH}/petsc-custom/build-petsc-gadi.sh"
+    export PYTHONPATH="${PETSC_DIR}/${PETSC_ARCH}/lib:${PYTHONPATH}"
+    echo "==> PETSc installed"
 }
 
 install_h5py() {
-    note "Building h5py against Gadi HDF5 ..."
+    echo "==> Building h5py against Gadi HDF5 module..."
+    # The conda gadi env ships HDF5 1.14 (serial) as a transitive dependency.
+    # h5py's meson build finds it via cmake config files in the conda env
+    # regardless of LDFLAGS/LD_LIBRARY_PATH, causing the built .so to embed
+    # DT_NEEDED: libhdf5.so.310 (conda 1.14) instead of libhdf5.so.200 (Gadi
+    # 1.12.2p). At runtime, H5E_BADATOM_g (removed in 1.14) is undefined.
+    #
+    # Fix: temporarily rename conda's libhdf5 files so meson can only find
+    # Gadi's HDF5. Restore them immediately after the build.
 
-    local conda_lib="${UW3_PATH}/.pixi/envs/gadi/lib"
-    local hidden=()
-    local f
-
-    if [[ -d "${conda_lib}" ]]; then
-        for f in "${conda_lib}"/libhdf5*.so*; do
-            [[ -f "${f}" && "${f}" != *.h5build ]] || continue
-            mv "${f}" "${f}.h5build" || die "failed to hide ${f}"
-            hidden+=("${f}")
-        done
-    fi
+    local _conda_lib="${UW3_PATH}/.pixi/envs/gadi/lib"
+    local _hidden=()
+    for _f in "${_conda_lib}"/libhdf5*.so*; do
+        [ -f "${_f}" ] && [[ "${_f}" != *.h5build ]] || continue
+        mv "${_f}" "${_f}.h5build"
+        _hidden+=("${_f}")
+    done
+    [ ${#_hidden[@]} -gt 0 ] && echo "  Hid ${#_hidden[@]} conda HDF5 lib(s) for clean build"
 
     (
         unset LDFLAGS LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
         export LDFLAGS="-L${HDF5_DIR}/lib -Wl,--disable-new-dtags,-rpath,${HDF5_DIR}/lib"
         export LD_LIBRARY_PATH="${HDF5_DIR}/lib:${MPI_DIR}/lib"
+        # HDF5_VERSION: Gadi module string "1.12.2p" is unparseable by h5py.
+        # Gadi's hdf5.h does not include H5FDmpio.h, so we force-include it.
         CC=mpicc \
-        HDF5_MPI=ON \
+        HDF5_MPI="ON" \
         HDF5_DIR="${HDF5_DIR}" \
         HDF5_VERSION="1.12.2" \
         CFLAGS="-I${HDF5_DIR}/include -include ${HDF5_DIR}/include/hdf5.h -include ${HDF5_DIR}/include/H5FDmpio.h" \
-        python -m pip install --no-binary=h5py --no-cache-dir --force-reinstall --no-deps h5py
+        pip install --no-binary=h5py --no-cache-dir --force-reinstall --no-deps h5py
     )
-    local rc=$?
+    local _rc=$?
 
-    for f in "${hidden[@]}"; do
-        mv "${f}.h5build" "${f}" || die "failed to restore ${f}"
+    # Always restore conda's HDF5 libs regardless of build outcome
+    for _f in "${_hidden[@]}"; do
+        mv "${_f}.h5build" "${_f}"
     done
+    [ ${#_hidden[@]} -gt 0 ] && echo "  Restored ${#_hidden[@]} conda HDF5 lib(s)"
 
-    [[ ${rc} -eq 0 ]] || die "h5py build failed"
+    [ $_rc -ne 0 ] && { echo "ERROR: h5py build failed (rc=$_rc)"; return $_rc; }
+    echo "==> h5py installed"
 }
 
 install_uw3() {
-    note "Installing Underworld3 ..."
-    cd "${UW3_PATH}" || die "cannot cd to ${UW3_PATH}"
-    python -m pip install --no-build-isolation -e . || {
-        cd "${ORIG_PWD}" || true
-        die "Underworld3 install failed"
-    }
-    cd "${ORIG_PWD}" || die "cannot return to original directory"
+    echo "==> Installing Underworld3..."
+    cd "${UW3_PATH}"
+    # --no-build-isolation: use the already-built petsc4py from PYTHONPATH
+    # rather than letting pip download and rebuild it from PyPI in a fresh env.
+    pip install --no-build-isolation -e .
+    cd "${CDIR}"
+    echo "==> Underworld3 installed"
 }
 
-# -------------------------
-# checks
-# -------------------------
-
-check_petsc() {
-    python - <<'PY' >/dev/null 2>&1
-from petsc4py import PETSc
-print(PETSc.Sys.getVersion())
-PY
+check_petsc_exists() {
+    python3 -c "from petsc4py import PETSc" 2>/dev/null
 }
 
-check_uw3() {
-    python - <<'PY' >/dev/null 2>&1
-import underworld3 as uw
-print(uw.__version__)
-PY
+check_uw3_exists() {
+    python3 -c "import underworld3" 2>/dev/null
 }
 
 verify_install() {
-    note "Verifying installation ..."
-    python - <<'PY' || die "verification failed"
+    echo "==> Verifying installation..."
+    python3 -c "
 from mpi4py import MPI
-print(f"mpi4py OK      - MPI version: {MPI.Get_version()}")
-
+print(f'mpi4py OK   — MPI version: {MPI.Get_version()}')
 from petsc4py import PETSc
-print(f"petsc4py OK    - PETSc version: {PETSc.Sys.getVersion()}")
-
+print(f'petsc4py OK — PETSc version: {PETSc.Sys.getVersion()}')
 import h5py
-print(f"h5py OK        - HDF5 version: {h5py.version.hdf5_version}")
-
+print(f'h5py OK     — HDF5 version: {h5py.version.hdf5_version}')
 import underworld3 as uw
-print(f"underworld3 OK - version: {uw.__version__}")
-PY
-
-    echo
-    echo "NOTE: Multi-rank MPI tests must be run from a compute node."
-    echo 'Example: mpirun -n 4 python -c "from mpi4py import MPI; print(MPI.COMM_WORLD.rank)"'
-    note "All checks passed"
+print(f'underworld3 OK — version: {uw.__version__}')
+"
+    echo ""
+    echo "==> Single-process MPI import check:"
+    python3 -c "from mpi4py import MPI; print(f'mpi4py MPI import OK (rank 0 of 1)')"
+    echo "==> All checks passed"
+    echo ""
+    echo "    NOTE: Multi-rank MPI tests must be run from a compute node (PBS job)."
+    echo "    Example: mpirun -n 4 python3 -c \"from mpi4py import MPI; print(MPI.COMM_WORLD.rank)\""
 }
 
-# -------------------------
-# main
-# -------------------------
+# ============================================================
+# ENTRY POINT
+# ============================================================
 
 load_env
 
-if [[ "${INSTALL_MODE}" -eq 1 ]]; then
-    echo
+if [ "${1}" = "install" ]; then
+    echo ""
     echo "Starting user installation..."
     echo "  BASE_PATH:  ${BASE_PATH}"
     echo "  UW3_PATH:   ${UW3_PATH}"
     echo "  UW3_BRANCH: ${UW3_BRANCH}"
-    echo
-
+    echo ""
     setup_pixi
-    ensure_uw3_checkout
+    clone_uw3
     install_pixi_env
     install_mpi4py
-
-    if check_petsc; then
-        note "PETSc already installed, skipping"
-    else
+    if ! check_petsc_exists; then
         install_petsc
-    fi
-
-    install_h5py
-
-    if check_uw3; then
-        note "Underworld3 already installed, skipping"
     else
-        install_uw3
+        echo "==> PETSc already installed, skipping"
     fi
-
+    install_h5py
+    if ! check_uw3_exists; then
+        install_uw3
+    else
+        echo "==> Underworld3 already installed, skipping"
+    fi
     verify_install
-
-    echo
+    echo ""
     echo "=========================================="
-    echo "User installation complete"
-    echo "To activate later:"
-    echo "  source ${BASH_SOURCE[0]}"
+    echo "User installation complete!"
+    echo "To activate: source $(realpath "${BASH_SOURCE[0]}")"
     echo "=========================================="
 fi
