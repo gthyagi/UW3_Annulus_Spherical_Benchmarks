@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Underworld3 per-user install script for NCI Gadi (pixi-based)
+# Underworld3 per-user install script for NCI Gadi (pixi-based) - modified by TG
 #
 # Installs UW3 to /g/data/n69/$USER/uw3-pixi/ using pixi for Python
 # package management. Each user manages their own install.
