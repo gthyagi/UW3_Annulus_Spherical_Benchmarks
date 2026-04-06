@@ -65,7 +65,7 @@ run_sweep() {
         read -r l m <<< "${lm}"
         for cellsize in "${cellsizes[@]}"; do
             run_case \
-                -run_on_gadi True \
+                -uw_run_on_gadi True \
                 -uw_case "${case_name}" \
                 -uw_l "${l}" \
                 -uw_m "${m}" \

@@ -111,10 +111,15 @@ params = uw.Params(
         type=uw.ParamType.STRING,
         description="Free-slip method: penalty or nitsche",
     ),
-    run_on_gadi=uw.Param(
+    uw_run_on_gadi=uw.Param(
         False,
         type=uw.ParamType.BOOLEAN,
         description="Use Gadi scratch paths for benchmark output",
+    ),
+    uw_gadi_mesh_dir=uw.Param(
+        "/g/data/m18/tg7098/Spherical_Mesh_Gmsh/kramer",
+        type=uw.ParamType.STRING,
+        description="Directory for spherical .msh and .msh.h5 files",
     ),
 )
 
@@ -209,17 +214,13 @@ else:
     repo_root = os.getcwd()
 
 # --- output location (runtime dependent) ---
-if params.run_on_gadi:
+if params.uw_run_on_gadi:
     output_base = "/scratch/m18/tg7098"
 else:
     output_base = repo_root
 
 output_root = os.path.join(output_base, "output", "spherical", "kramer", "latest")
 metrics_filename = "benchmark_metrics.h5"
-gadi_mesh_dir = os.environ.get(
-    "UW_GADI_SPHERICAL_MESH_DIR",
-    "/g/data/m18/tg7098/Spherical_Mesh_Gmsh",
-)
 
 case_id = make_case_id(
     case=params.uw_case,
@@ -241,59 +242,61 @@ output_dir = os.path.join(output_root, case_id)
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
 
-
-def spherical_mesh_path(
-    *, radius_outer, radius_inner, cellsize, radius_internal=None, mesh_dir=gadi_mesh_dir
+# %%
+def load_spherical_mesh(
+    *,
+    mesh_dir,
+    radius_outer,
+    radius_inner,
+    cellsize,
+    qdegree,
+    radius_internal=None,
 ):
-    inv_lc = int(round(1.0 / float(cellsize)))
-    ro = np.format_float_positional(float(radius_outer), unique=True, trim="-")
-    ri = np.format_float_positional(float(radius_inner), unique=True, trim="-")
-    if radius_internal is None:
-        stem = f"uw_spherical_shell_ro{ro}_ri{ri}_res{inv_lc}.msh.h5"
-    else:
-        rint = np.format_float_positional(float(radius_internal), unique=True, trim="-")
-        stem = f"uw_spherical_shell_ro{ro}_rint{rint}_ri{ri}_res{inv_lc}.msh.h5"
-    return os.path.join(mesh_dir, stem)
-
-
-def load_cached_spherical_mesh(*, radius_outer, radius_inner, cellsize, qdegree, radius_internal=None):
-    msh_h5_file = spherical_mesh_path(
-        radius_outer=radius_outer,
-        radius_inner=radius_inner,
-        radius_internal=radius_internal,
-        cellsize=cellsize,
-    )
-    if not os.path.exists(msh_h5_file):
-        if uw.mpi.rank == 0:
-            print(f"Missing cached spherical mesh: {msh_h5_file}")
-            print("Run benchmarks/spherical/create_spherical_mesh.py first.")
-            print("Edit its parameter cell to match this benchmark mesh, then run it in serial.")
-        raise SystemExit(1)
+    inv_cellsize = int(round(1.0 / cellsize))
 
     if radius_internal is not None:
-        class boundaries(Enum):
+        msh_h5_file = os.path.join(
+            mesh_dir,
+            f"uw_spherical_shell_ro{radius_outer:g}_rint{float(radius_internal):g}"
+            f"_ri{radius_inner:g}_inv_cellsize{inv_cellsize}.msh",
+        )
+
+        class Boundaries(Enum):
             Centre = 1
             Lower = 11
             Internal = 12
             Upper = 13
             All_Boundaries = 1001
 
-        class boundary_normals(Enum):
+        class BoundaryNormals(Enum):
             Centre = 1
             Lower = 11
             Internal = 12
             Upper = 13
+
     else:
-        class boundaries(Enum):
+        msh_h5_file = os.path.join(
+            mesh_dir,
+            f"uw_spherical_shell_ro{radius_outer:g}_ri{radius_inner:g}"
+            f"_inv_cellsize{inv_cellsize}.msh.h5",
+        )
+
+        class Boundaries(Enum):
             Centre = 1
             Lower = 11
             Upper = 12
             All_Boundaries = 1001
 
-        class boundary_normals(Enum):
+        class BoundaryNormals(Enum):
             Centre = 1
             Lower = 11
             Upper = 12
+
+    if not os.path.exists(msh_h5_file):
+        if uw.mpi.rank == 0:
+            print(f"Mesh file not found: {msh_h5_file}")
+            print("Run benchmarks/spherical/create_spherical_mesh.py first.")
+        raise SystemExit(1)
 
     return uw.discretisation.Mesh(
         msh_h5_file,
@@ -303,8 +306,8 @@ def load_cached_spherical_mesh(*, radius_outer, radius_inner, cellsize, qdegree,
         useMultipleTags=True,
         useRegions=True,
         markVertices=True,
-        boundaries=boundaries,
-        boundary_normals=boundary_normals,
+        boundaries=Boundaries,
+        boundary_normals=BoundaryNormals,
         refinement=None,
         verbose=False,
     )
@@ -483,40 +486,35 @@ elif zeroslip and smooth:
 # ### Create Mesh
 
 # %%
-if delta_fn:
-    if params.run_on_gadi:
-        mesh = load_cached_spherical_mesh(
-            radius_outer=params.uw_radius_outer,
-            radius_internal=params.uw_radius_internal,
-            radius_inner=params.uw_radius_inner,
-            cellsize=params.uw_cellsize,
-            qdegree=max(params.uw_pdegree, params.uw_vdegree),
-        )
-    else:
+qdegree = max(params.uw_pdegree, params.uw_vdegree)
+
+if params.uw_run_on_gadi:
+    mesh = load_spherical_mesh(
+        mesh_dir=params.uw_gadi_mesh_dir,
+        radius_outer=params.uw_radius_outer,
+        radius_inner=params.uw_radius_inner,
+        radius_internal=params.uw_radius_internal if delta_fn else None,
+        cellsize=params.uw_cellsize,
+        qdegree=qdegree,
+    )
+else:
+    if delta_fn:
         mesh = uw.meshing.SphericalShellInternalBoundary(
             radiusOuter=params.uw_radius_outer,
             radiusInternal=params.uw_radius_internal,
             radiusInner=params.uw_radius_inner,
             cellSize=params.uw_cellsize,
-            qdegree=max(params.uw_pdegree, params.uw_vdegree),
+            qdegree=qdegree,
             degree=1,
             filename=f"{output_dir}/mesh.msh",
             refinement=None,
-        )
-else:
-    if params.run_on_gadi:
-        mesh = load_cached_spherical_mesh(
-            radius_outer=params.uw_radius_outer,
-            radius_inner=params.uw_radius_inner,
-            cellsize=params.uw_cellsize,
-            qdegree=max(params.uw_pdegree, params.uw_vdegree),
         )
     else:
         mesh = uw.meshing.SphericalShell(
             radiusOuter=params.uw_radius_outer,
             radiusInner=params.uw_radius_inner,
             cellSize=params.uw_cellsize,
-            qdegree=max(params.uw_pdegree, params.uw_vdegree),
+            qdegree=qdegree,
             degree=1,
             filename=f"{output_dir}/mesh.msh",
             refinement=None,

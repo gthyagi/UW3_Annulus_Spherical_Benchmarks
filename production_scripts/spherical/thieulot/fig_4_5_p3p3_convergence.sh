@@ -36,7 +36,7 @@ ms=(-1 3)
 cellsizes=("1/8" "1/16" "1/32" "1/64" "1/128")
 
 common_args=(
-    -run_on_gadi True
+    -uw_run_on_gadi True
     -uw_vdegree 3
     -uw_pdegree 3
     -uw_pcont True

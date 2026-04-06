@@ -45,10 +45,10 @@ params = uw.Params(
         type=uw.ParamType.STRING,
         description="Target spherical-shell mesh cell size",
     ),
-    uw_mesh_dir=uw.Param(
+    uw_gadi_mesh_dir=uw.Param(
         "/g/data/m18/tg7098/Spherical_Mesh_Gmsh",
         type=uw.ParamType.STRING,
-        description="Directory for cached spherical .msh and .msh.h5 files",
+        description="Directory for spherical .msh and .msh.h5 files",
     ),
 )
 
@@ -66,21 +66,30 @@ if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
 
 # %%
 params.uw_cellsize = float(Fraction(str(params.uw_cellsize).replace(" ", "")))
-filename = (
-    f"uw_spherical_shell_ro{params.uw_radius_outer:g}_ri{params.uw_radius_inner:g}_inv_cellsize{int(round(1.0 / params.uw_cellsize))}.msh"
-    if params.uw_radius_internal is None
-    else f"uw_spherical_shell_ro{params.uw_radius_outer:g}_rint{float(params.uw_radius_internal):g}_ri{params.uw_radius_inner:g}_inv_cellsize{int(round(1.0 / params.uw_cellsize))}.msh"
-)
+has_internal_boundary = str(params.uw_radius_internal).strip().lower() not in ("", "none")
+if not has_internal_boundary:
+    filename = (
+        f"uw_spherical_shell_ro{params.uw_radius_outer:g}_ri{params.uw_radius_inner:g}"
+        f"_inv_cellsize{int(round(1.0 / params.uw_cellsize))}.msh"
+    )
+    params.uw_gadi_mesh_dir = os.path.join(params.uw_gadi_mesh_dir, "thieulot")
+else:
+    filename = (
+        f"uw_spherical_shell_ro{params.uw_radius_outer:g}_rint{float(params.uw_radius_internal):g}"
+        f"_ri{params.uw_radius_inner:g}"
+        f"_inv_cellsize{int(round(1.0 / params.uw_cellsize))}.msh"
+    )
+    params.uw_gadi_mesh_dir = os.path.join(params.uw_gadi_mesh_dir, "kramer")
 
-os.makedirs(params.uw_mesh_dir, exist_ok=True)
-mesh_path = os.path.join(params.uw_mesh_dir, filename)
+os.makedirs(params.uw_gadi_mesh_dir, exist_ok=True)
+mesh_path = os.path.join(params.uw_gadi_mesh_dir, filename)
 
 # %%
 gmsh.initialize()
 gmsh.option.setNumber("General.Verbosity", 0)
 
 try:
-    if params.uw_radius_internal is None:
+    if not has_internal_boundary:
         gmsh.model.add("Sphere")
         gmsh.model.geo.add_point(0.0, 0.0, 0.0, meshSize=params.uw_cellsize)
         outer = gmsh.model.occ.addSphere(0, 0, 0, params.uw_radius_outer)
