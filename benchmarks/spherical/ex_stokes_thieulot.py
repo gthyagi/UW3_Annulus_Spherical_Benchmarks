@@ -49,6 +49,7 @@
 import os
 import subprocess
 import sys
+from enum import Enum
 from fractions import Fraction
 import h5py
 from mpi4py import MPI
@@ -153,6 +154,11 @@ if uw.mpi.rank == 0 and params.uw_pdegree == 0 and params.uw_pcont:
 if params.uw_m == -4:
     raise ValueError("The Thieulot spherical benchmark is undefined for m = -4.")
 
+# %%
+# set uw_vel_penalty to None for essential BCs
+if params.uw_bc_type == "essential":
+    params.uw_vel_penalty = None
+
 # %% [markdown]
 # ### Output Directory
 
@@ -186,6 +192,10 @@ else:
 
 output_root = os.path.join(output_base, "output", "spherical", "thieulot", "latest")
 metrics_filename = "benchmark_metrics.h5"
+gadi_mesh_dir = os.environ.get(
+    "UW_GADI_SPHERICAL_MESH_DIR",
+    "/g/data/m18/tg7098/Spherical_Mesh_Gmsh",
+)
 
 case_id = make_case_id(
     case="case",
@@ -203,6 +213,52 @@ case_id = make_case_id(
 output_dir = os.path.join(output_root, case_id)
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
+
+
+def spherical_mesh_path(*, radius_outer, radius_inner, cellsize, mesh_dir=gadi_mesh_dir):
+    inv_lc = int(round(1.0 / float(cellsize)))
+    ro = np.format_float_positional(float(radius_outer), unique=True, trim="-")
+    ri = np.format_float_positional(float(radius_inner), unique=True, trim="-")
+    return os.path.join(mesh_dir, f"uw_spherical_shell_ro{ro}_ri{ri}_res{inv_lc}.msh.h5")
+
+
+def load_cached_spherical_mesh(*, radius_outer, radius_inner, cellsize, qdegree):
+    msh_h5_file = spherical_mesh_path(
+        radius_outer=radius_outer,
+        radius_inner=radius_inner,
+        cellsize=cellsize,
+    )
+    if not os.path.exists(msh_h5_file):
+        if uw.mpi.rank == 0:
+            print(f"Missing cached spherical mesh: {msh_h5_file}")
+            print("Run benchmarks/spherical/create_spherical_mesh.py first.")
+            print("Edit its parameter cell to match this benchmark mesh, then run it in serial.")
+        raise SystemExit(1)
+
+    class boundaries(Enum):
+        Centre = 1
+        Lower = 11
+        Upper = 12
+        All_Boundaries = 1001
+
+    class boundary_normals(Enum):
+        Centre = 1
+        Lower = 11
+        Upper = 12
+
+    return uw.discretisation.Mesh(
+        msh_h5_file,
+        degree=1,
+        qdegree=qdegree,
+        coordinate_system_type=uw.coordinates.CoordinateSystemType.SPHERICAL,
+        useMultipleTags=True,
+        useRegions=True,
+        markVertices=True,
+        boundaries=boundaries,
+        boundary_normals=boundary_normals,
+        refinement=None,
+        verbose=False,
+    )
 
 # %% [markdown]
 # ### Analytical Solution Helpers
@@ -303,18 +359,70 @@ def analytic_solution(
     return v_expr, p_expr, rho_expr, rho_bodyforce_expr, mu_expr
 
 
+def analytic_radial_stress(
+    mesh,
+    r_i,
+    r_o,
+    m,
+    gamma=1.0,
+    mu_0=1.0,
+):
+    """Return the analytical radial stress sigma_rr from Thieulot (2017), Sec. 4.6."""
+
+    r = mesh.CoordinateSystem.xR[0]
+    theta = mesh.CoordinateSystem.xR[1]
+    mu_expr = mu_0 * (r ** (m + 1))
+
+    if m == -1:
+        alpha = -gamma * (
+            (r_o**3 - r_i**3)
+            / ((r_o**3) * np.log(r_i) - (r_i**3) * np.log(r_o))
+        )
+        beta = -3.0 * gamma * (
+            (np.log(r_o) - np.log(r_i))
+            / ((r_i**3) * np.log(r_o) - (r_o**3) * np.log(r_i))
+        )
+        f = alpha * (r ** -(m + 3)) + beta * r
+        g = (-2.0 / (r**2)) * (alpha * sp.log(r) + (beta / 3.0) * (r**3) + gamma)
+    else:
+        alpha = gamma * (m + 1) * (
+            (r_i**-3 - r_o**-3) / ((r_i ** -(m + 4)) - (r_o ** -(m + 4)))
+        )
+        beta = -3.0 * gamma * (
+            ((r_i ** (m + 1)) - (r_o ** (m + 1)))
+            / ((r_i ** (m + 4)) - (r_o ** (m + 4)))
+        )
+        f = alpha * (r ** -(m + 3)) + beta * r
+        g = (-2.0 / (r**2)) * (
+            (-alpha / (m + 1)) * r ** (-(m + 1))
+            + (beta / 3.0) * (r**3)
+            + gamma
+        )
+
+    sigma_rr_expr = (mu_expr / r) * (-((m + 7) * g + 4.0 * f) * sp.cos(theta))
+    return sp.simplify(sigma_rr_expr)
+
+
 # %% [markdown]
 # ### Create Mesh
 
 # %%
-mesh = uw.meshing.SphericalShell(
-    radiusInner=params.uw_r_i,
-    radiusOuter=params.uw_r_o,
-    cellSize=params.uw_cellsize,
-    qdegree=max(params.uw_pdegree, params.uw_vdegree),
-    degree=1,
-    filename=os.path.join(output_dir, "mesh.msh"),
-)
+if params.run_on_gadi:
+    mesh = load_cached_spherical_mesh(
+        radius_outer=params.uw_r_o,
+        radius_inner=params.uw_r_i,
+        cellsize=params.uw_cellsize,
+        qdegree=max(params.uw_pdegree, params.uw_vdegree),
+    )
+else:
+    mesh = uw.meshing.SphericalShell(
+        radiusInner=params.uw_r_i,
+        radiusOuter=params.uw_r_o,
+        cellSize=params.uw_cellsize,
+        qdegree=max(params.uw_pdegree, params.uw_vdegree),
+        degree=1,
+        filename=os.path.join(output_dir, "mesh.msh"),
+    )
 
 if is_serial:
     mesh.dm.view()
@@ -346,6 +454,12 @@ p_soln = uw.discretisation.MeshVariable(
 
 # %%
 v_ana_expr, p_ana_expr, rho_ana_expr, rho_bodyforce_expr, mu_expr = analytic_solution(
+    mesh,
+    params.uw_r_i,
+    params.uw_r_o,
+    params.uw_m,
+)
+sigma_rr_ana_expr = analytic_radial_stress(
     mesh,
     params.uw_r_i,
     params.uw_r_o,
@@ -575,6 +689,7 @@ def subtract_pressure_mean(mesh, pressure_var):
 
     pressure_var.data[:, 0] -= p_int / volume
 
+# %%
 def subtract_surface_pressure_mean(
     mesh,
     pressure_var,
@@ -600,6 +715,13 @@ def subtract_surface_pressure_mean(
 
 # %%
 subtract_pressure_mean(mesh, p_soln)
+
+# %%
+n_vec = sp.Matrix([unit_rvec[i] for i in range(mesh.dim)])
+sigma_soln_expr = sp.Matrix(stokes.stress)
+sigma_rr_soln_expr = (n_vec.T * sigma_soln_expr * n_vec)[0]
+sigma_rr_err_expr = sigma_rr_soln_expr - sigma_rr_ana_expr
+
 # %% [markdown]
 # ### Relative Error Norms
 
@@ -609,7 +731,7 @@ def _squared_norm(expr):
     expr = expr.sym if hasattr(expr, "sym") else expr
     return expr.dot(expr) if isinstance(expr, sp.MatrixBase) else expr**2
 
-
+# %%
 def relative_l2_error(mesh, err, ana, boundary=None):
     """Compute relative L2 error over domain or specified boundary."""
     err_fn = _squared_norm(err)
@@ -624,7 +746,7 @@ def relative_l2_error(mesh, err, ana, boundary=None):
 
     return np.sqrt(err_I.evaluate() / ana_I.evaluate())
 
-
+# %%
 def absolute_l2_error(mesh, err, boundary=None):
     """Compute absolute L2 error over domain or specified boundary."""
 
@@ -635,9 +757,18 @@ def absolute_l2_error(mesh, err, boundary=None):
         err_I = uw.maths.BdIntegral(mesh=mesh, fn=err_fn, boundary=boundary)
     return np.sqrt(err_I.evaluate())
 
-
-def gather_run_metadata(mesh, velocity_var, pressure_var):
-    """Return machine-readable solver and mesh metadata for the current run."""
+# %%
+def gather_run_metadata(
+    mesh,
+    velocity_var,
+    pressure_var,
+    snes_reason,
+    ksp_reason,
+    snes_iterations,
+    ksp_iterations,
+):
+    """Return solver, mesh, and per-rank partition metadata for this run."""
+    comm = MPI.COMM_WORLD
 
     v_start, v_end = mesh.dm.getDepthStratum(0)
     c_start, c_end = mesh.dm.getHeightStratum(0)
@@ -647,24 +778,50 @@ def gather_run_metadata(mesh, velocity_var, pressure_var):
     local_velocity_dofs = int(velocity_var.data.size)
     local_pressure_dofs = int(pressure_var.data.size)
 
-    return {
+    vertices_by_rank = comm.gather(local_vertices, root=0)
+    cells_by_rank = comm.gather(local_cells, root=0)
+    velocity_dofs_by_rank = comm.gather(local_velocity_dofs, root=0)
+    pressure_dofs_by_rank = comm.gather(local_pressure_dofs, root=0)
+
+    metadata = {
         "mpi_size": int(uw.mpi.size),
         "mesh_dim": int(mesh.dim),
-        "local_vertices": local_vertices,
-        "global_vertices": int(MPI.COMM_WORLD.allreduce(local_vertices, op=MPI.SUM)),
-        "local_cells": local_cells,
-        "global_cells": int(MPI.COMM_WORLD.allreduce(local_cells, op=MPI.SUM)),
-        "local_velocity_dofs": local_velocity_dofs,
-        "global_velocity_dofs": int(MPI.COMM_WORLD.allreduce(local_velocity_dofs, op=MPI.SUM)),
-        "local_pressure_dofs": local_pressure_dofs,
-        "global_pressure_dofs": int(MPI.COMM_WORLD.allreduce(local_pressure_dofs, op=MPI.SUM)),
-        "snes_converged_reason": snes_reason,
-        "ksp_converged_reason": ksp_reason,
-        "snes_iterations": snes_iterations,
-        "ksp_iterations": ksp_iterations,
+        "global_vertices": int(comm.allreduce(local_vertices, op=MPI.SUM)),
+        "global_cells": int(comm.allreduce(local_cells, op=MPI.SUM)),
+        "global_velocity_dofs": int(comm.allreduce(local_velocity_dofs, op=MPI.SUM)),
+        "global_pressure_dofs": int(comm.allreduce(local_pressure_dofs, op=MPI.SUM)),
+        "snes_converged_reason": int(snes_reason),
+        "ksp_converged_reason": int(ksp_reason),
+        "snes_iterations": int(snes_iterations),
+        "ksp_iterations": int(ksp_iterations),
     }
 
+    if uw.mpi.rank == 0:
+        vertices_by_rank = np.asarray(vertices_by_rank, dtype=np.int64)
+        cells_by_rank = np.asarray(cells_by_rank, dtype=np.int64)
+        velocity_dofs_by_rank = np.asarray(velocity_dofs_by_rank, dtype=np.int64)
+        pressure_dofs_by_rank = np.asarray(pressure_dofs_by_rank, dtype=np.int64)
 
+        metadata.update(
+            {
+                "local_vertices_by_rank": vertices_by_rank,
+                "local_cells_by_rank": cells_by_rank,
+                "local_velocity_dofs_by_rank": velocity_dofs_by_rank,
+                "local_pressure_dofs_by_rank": pressure_dofs_by_rank,
+                "cell_imbalance_ratio": float(cells_by_rank.max() / cells_by_rank.mean()),
+                "velocity_dof_imbalance_ratio": float(
+                    velocity_dofs_by_rank.max() / velocity_dofs_by_rank.mean()
+                ),
+                "pressure_dof_imbalance_ratio": float(
+                    pressure_dofs_by_rank.max() / pressure_dofs_by_rank.mean()
+                ),
+                "rank_index_note": np.bytes_("array index corresponds to MPI rank"),
+            }
+        )
+
+    return metadata
+
+# %%
 def current_git_sha(repo_path):
     """Return current git SHA, or 'unknown' if unavailable."""
     try:
@@ -680,47 +837,64 @@ def current_git_sha(repo_path):
 
 # %%
 v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
+p_err_l2_abs = absolute_l2_error(mesh, p_err_expr)
 p_err_l2 = relative_l2_error(mesh, p_err_expr, p_ana_expr)
 v_err_l2_lower = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=lower)
 v_err_l2_upper = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=upper)
-p_err_l2_lower = relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=lower)
-p_err_l2_upper = relative_l2_error(mesh, p_err_expr, p_ana_expr, boundary=upper)
+p_err_l2_lower_abs = absolute_l2_error(mesh, p_err_expr, boundary=lower)
+p_err_l2_upper_abs = absolute_l2_error(mesh, p_err_expr, boundary=upper)
+p_err_l2_lower = np.nan
+p_err_l2_upper = np.nan
+sigma_rr_err_l2_lower = relative_l2_error(mesh, sigma_rr_err_expr, sigma_rr_ana_expr, boundary=lower)
+sigma_rr_err_l2_upper = relative_l2_error(mesh, sigma_rr_err_expr, sigma_rr_ana_expr, boundary=upper)
 u_dot_n_l2_lower_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=lower)
 u_dot_n_l2_upper_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=upper)
-run_metadata = gather_run_metadata(mesh, v_soln, p_soln)
+run_metadata = gather_run_metadata(
+    mesh,
+    v_soln,
+    p_soln,
+    snes_reason,
+    ksp_reason,
+    snes_iterations,
+    ksp_iterations,
+)
 git_sha = current_git_sha(repo_root)
 cli_args = " ".join(sys.argv)
 
+metrics = {
+    "m": params.uw_m,
+    "cellsize": params.uw_cellsize,
+    "v_l2_norm": v_err_l2,
+    "p_l2_norm": p_err_l2,
+    "p_l2_norm_abs": p_err_l2_abs,
+    "v_l2_norm_lower": v_err_l2_lower,
+    "v_l2_norm_upper": v_err_l2_upper,
+    "p_l2_norm_lower": p_err_l2_lower,
+    "p_l2_norm_upper": p_err_l2_upper,
+    "p_l2_norm_lower_abs": p_err_l2_lower_abs,
+    "p_l2_norm_upper_abs": p_err_l2_upper_abs,
+    "sigma_rr_l2_norm_lower": sigma_rr_err_l2_lower,
+    "sigma_rr_l2_norm_upper": sigma_rr_err_l2_upper,
+    "u_dot_n_l2_norm_lower_abs": u_dot_n_l2_lower_abs,
+    "u_dot_n_l2_norm_upper_abs": u_dot_n_l2_upper_abs,
+}
+
 if uw.mpi.rank == 0:
-    print("=== Relative L2 Errors ===")
-    print(f"Velocity (domain): {v_err_l2}")
-    print(f"Pressure (domain): {p_err_l2}")
-    print(f"Velocity (lower):  {v_err_l2_lower}")
-    print(f"Velocity (upper):  {v_err_l2_upper}")
-    print(f"Pressure (lower):  {p_err_l2_lower}")
-    print(f"Pressure (upper):  {p_err_l2_upper}")
-    print(f"u.n abs (lower): {u_dot_n_l2_lower_abs}")
-    print(f"u.n abs (upper): {u_dot_n_l2_upper_abs}")
+    print("=== L2 Error Metrics ===")
+    for key, value in metrics.items():
+        print(f"{key}: {value}")
 
 # %% [markdown]
 # ### Save Outputs
 
 # %%
 if uw.mpi.rank == 0:
-    err_h5 = os.path.join(output_dir, metrics_filename)
-    if os.path.isfile(err_h5):
-        os.remove(err_h5)
-    with h5py.File(err_h5, "w") as f_h5:
-        f_h5.create_dataset("m", data=params.uw_m)
-        f_h5.create_dataset("cellsize", data=params.uw_cellsize)
-        f_h5.create_dataset("v_l2_norm", data=v_err_l2)
-        f_h5.create_dataset("p_l2_norm", data=p_err_l2)
-        f_h5.create_dataset("v_l2_norm_lower", data=v_err_l2_lower)
-        f_h5.create_dataset("v_l2_norm_upper", data=v_err_l2_upper)
-        f_h5.create_dataset("p_l2_norm_lower", data=p_err_l2_lower)
-        f_h5.create_dataset("p_l2_norm_upper", data=p_err_l2_upper)
-        f_h5.create_dataset("u_dot_n_l2_norm_lower_abs", data=u_dot_n_l2_lower_abs)
-        f_h5.create_dataset("u_dot_n_l2_norm_upper_abs", data=u_dot_n_l2_upper_abs)
+    metrics_h5 = os.path.join(output_dir, metrics_filename)
+    if os.path.isfile(metrics_h5):
+        os.remove(metrics_h5)
+    with h5py.File(metrics_h5, "w") as f_h5:
+        for key, value in metrics.items():
+            f_h5.create_dataset(key, data=value)
         f_h5.create_dataset("git_sha", data=np.bytes_(git_sha))
         f_h5.create_dataset("command", data=np.bytes_(cli_args))
         for key, value in run_metadata.items():
