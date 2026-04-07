@@ -8,3 +8,7 @@ __pycache__/
 .meshes/
 .ipynb_checkpoints/
 .aider*
+
+# PBS output files
+*.o*
+*.e*
