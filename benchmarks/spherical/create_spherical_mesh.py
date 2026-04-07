@@ -50,6 +50,11 @@ params = uw.Params(
         type=uw.ParamType.STRING,
         description="Directory for spherical .msh and .msh.h5 files",
     ),
+    uw_benchmark=uw.Param(
+        "kramer",
+        type=uw.ParamType.STRING,
+        description="kramer or thieulot benchmark",
+    ),
 )
 
 
@@ -67,19 +72,27 @@ if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
 # %%
 params.uw_cellsize = float(Fraction(str(params.uw_cellsize).replace(" ", "")))
 has_internal_boundary = str(params.uw_radius_internal).strip().lower() not in ("", "none")
-if not has_internal_boundary:
+
+if params.uw_benchmark == "thieulot":
     filename = (
         f"uw_spherical_shell_ro{params.uw_radius_outer:g}_ri{params.uw_radius_inner:g}"
         f"_inv_cellsize{int(round(1.0 / params.uw_cellsize))}.msh"
     )
     params.uw_gadi_mesh_dir = os.path.join(params.uw_gadi_mesh_dir, "thieulot")
-else:
+elif params.uw_benchmark == "kramer" and not has_internal_boundary:
+    params.uw_gadi_mesh_dir = os.path.join(params.uw_gadi_mesh_dir, "kramer")
     filename = (
-        f"uw_spherical_shell_ro{params.uw_radius_outer:g}_rint{float(params.uw_radius_internal):g}"
-        f"_ri{params.uw_radius_inner:g}"
+        f"uw_spherical_shell_ro{params.uw_radius_outer:g}_ri{params.uw_radius_inner:g}"
         f"_inv_cellsize{int(round(1.0 / params.uw_cellsize))}.msh"
     )
+elif params.uw_benchmark == "kramer":
     params.uw_gadi_mesh_dir = os.path.join(params.uw_gadi_mesh_dir, "kramer")
+    filename = (
+        f"uw_spherical_shell_ro{params.uw_radius_outer:g}_rint{float(params.uw_radius_internal):g}"
+        f"_ri{params.uw_radius_inner:g}_inv_cellsize{int(round(1.0 / params.uw_cellsize))}.msh"
+    )
+else:
+    raise ValueError(f"Unknown benchmark: {params.uw_benchmark}")
 
 os.makedirs(params.uw_gadi_mesh_dir, exist_ok=True)
 mesh_path = os.path.join(params.uw_gadi_mesh_dir, filename)
@@ -89,7 +102,9 @@ gmsh.initialize()
 gmsh.option.setNumber("General.Verbosity", 0)
 
 try:
-    if not has_internal_boundary:
+    if params.uw_benchmark == "thieulot" or (
+        params.uw_benchmark == "kramer" and not has_internal_boundary
+    ):
         gmsh.model.add("Sphere")
         gmsh.model.geo.add_point(0.0, 0.0, 0.0, meshSize=params.uw_cellsize)
         outer = gmsh.model.occ.addSphere(0, 0, 0, params.uw_radius_outer)
