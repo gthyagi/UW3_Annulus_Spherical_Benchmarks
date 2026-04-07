@@ -16,7 +16,7 @@
 #PBS -l wd
 #PBS -l storage=scratch/m18+gdata/m18+scratch/n69+gdata/n69
 
-set -euo pipefail
+set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
