@@ -24,6 +24,8 @@ from underworld3.discretisation import _from_gmsh
 # ## Parameters
 
 # %%
+uw.parse_cmd_line_options()
+
 params = uw.Params(
     uw_radius_inner=uw.Param(
         1.22,
@@ -56,7 +58,6 @@ params = uw.Params(
         description="kramer or thieulot benchmark",
     ),
 )
-
 
 # %% [markdown]
 # ## Build Mesh

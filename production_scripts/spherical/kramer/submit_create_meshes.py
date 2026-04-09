@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 import subprocess
 
-CELL_SIZES = ["1/8", "1/16", "1/32", "1/64", "1/128"]
+# CELL_SIZES = ["1/8", "1/16", "1/32", "1/64", "1/128"]
+CELL_SIZES = ["1/32"]
 CASES = [
     {"name": "smooth", "radius_inner": "1.22", "radius_internal": "None", "radius_outer": "2.22"},
     {"name": "delta", "radius_inner": "1.22", "radius_internal": "2.0", "radius_outer": "2.22"},
@@ -52,7 +53,7 @@ def submit_job(common_pbs: Path, mesh_script: Path, case: dict[str, str], cellsi
         f"SCRIPT={mesh_script},ARGS_JSON_B64={args_json_b64}",
         str(common_pbs),
     ]
-
+    
     print("Submitting:", " ".join(cmd))
     subprocess.run(cmd, check=True)
 
