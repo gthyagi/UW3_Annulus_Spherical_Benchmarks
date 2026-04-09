@@ -34,6 +34,9 @@ is_serial = (uw.mpi.size == 1)
 # ### Convection Parameters
 
 # %%
+# Ensure CLI arguments are parsed into PETSc options so uw.Params picks them up reliably across environments
+uw.parse_cmd_line_options()
+
 params = uw.Params(
     uw_case=uw.Param(
         "case2",

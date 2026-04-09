@@ -67,6 +67,9 @@ is_serial = (uw.mpi.size == 1)
 # ### Mesh Parameters
 
 # %%
+
+uw.parse_cmd_line_options()
+
 params = uw.Params(
     uw_cellsize=uw.Param(
         1.0 / 8.0,

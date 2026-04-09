@@ -61,6 +61,9 @@ is_serial = (uw.mpi.size == 1)
 # ### Mesh Parameters
 
 # %%
+# Ensure CLI arguments are parsed into PETSc options so uw.Params picks them up reliably across environments
+uw.parse_cmd_line_options()
+
 params = uw.Params(
     uw_cellsize=uw.Param(
         "1.0 / 64.0",
