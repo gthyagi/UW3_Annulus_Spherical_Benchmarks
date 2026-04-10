@@ -16,7 +16,7 @@ For parity checks, compare latest-branch benchmark outputs against legacy-branch
 ## Local Underworld3 Paths (Debugging Reference)
 
 - Latest UW3 checkout:
-  - `/Users/tgol0006/uw_folder/uw3_git_gthyagi_openmpi/worktrees/underworld3-feature-boundary-integrals/`
+  - `/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest/underworld3`
 - Legacy UW3 checkout:
   - `/Users/tgol0006/uw_folder/uw3_git_gthyagi/underworld3`
 
