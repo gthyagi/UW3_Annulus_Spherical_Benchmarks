@@ -210,6 +210,12 @@ output_dir = os.path.join(output_root, case_id)
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True,)
 
+uw.timing.start()
+mesh_stage_event = uw.timing.create_event("Benchmark.MeshCreation")
+stokes_stage_event = uw.timing.create_event("Benchmark.StokesSolve")
+h5_stage_event = uw.timing.create_event("Benchmark.H5Write")
+integrals_stage_event = uw.timing.create_event("Benchmark.Integrals")
+
 
 # %% [markdown]
 # ### Analytical Solution Helpers
@@ -267,6 +273,7 @@ def analytic_solution(
 # %%
 uw.pprint("Stage start: mesh creation/loading")
 
+mesh_stage_event.begin()
 mesh = uw.meshing.Annulus(
     radiusOuter=params.uw_r_o,
     radiusInner=params.uw_r_i,
@@ -278,9 +285,11 @@ mesh = uw.meshing.Annulus(
 
 if is_serial:
     mesh.dm.view()
+mesh_stage_event.end()
 
 # %%
 uw.pprint("Stage complete: mesh creation/loading")
+uw.timing.print_table(filename=os.path.join(output_dir, "mesh_timing.txt"))
 
 x, y = mesh.CoordinateSystem.X
 r, th = mesh.CoordinateSystem.xR
@@ -500,10 +509,9 @@ else:
 # %%
 uw.pprint("Stage start: stokes solve")
 
-uw.timing.reset()
-uw.timing.start()
+stokes_stage_event.begin()
 stokes.solve()
-uw.timing.stop()
+stokes_stage_event.end()
 uw.timing.print_table(filename=os.path.join(output_dir, "stokes_timing.txt"),)
 
 snes_reason = int(stokes.snes.getConvergedReason())
@@ -545,14 +553,17 @@ subtract_pressure_mean(mesh, p_soln)
 # %%
 uw.pprint("Stage start: saving h5 output")
 
+h5_stage_event.begin()
 mesh.write_timestep(
     "output",
     index=0,
     meshVars=[v_soln, p_soln],
     outputPath=str(output_dir),
 )
+h5_stage_event.end()
 
 uw.pprint("Stage complete: saving h5 output")
+uw.timing.print_table(filename=os.path.join(output_dir, "h5_timing.txt"))
 
 # %% [markdown]
 # ### Relative Error Norms
@@ -668,6 +679,7 @@ def current_git_sha(repo_path):
 
 
 # %%
+integrals_stage_event.begin()
 v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
 p_err_l2_abs = absolute_l2_error(mesh, p_err_expr)
 p_err_l2 = np.nan if params.uw_k == 0 else relative_l2_error(mesh, p_err_expr, p_ana_expr)
@@ -724,6 +736,8 @@ if uw.mpi.rank == 0:
     print("=== L2 Error Metrics ===")
     for key, value in metrics.items():
         print(f"{key}: {value}")
+integrals_stage_event.end()
+uw.timing.print_table(filename=os.path.join(output_dir, "integrals_timing.txt"))
 
 # %% [markdown]
 # ### Save Outputs
