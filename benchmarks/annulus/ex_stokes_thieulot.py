@@ -115,7 +115,7 @@ params = uw.Params(
         type=uw.ParamType.STRING,
         description="Boundary-condition mode: natural or essential",
     ),
-    run_on_gadi=uw.Param(
+    uw_run_on_gadi=uw.Param(
         False,
         type=uw.ParamType.BOOLEAN,
         description="Use Gadi scratch paths for benchmark output",
@@ -185,7 +185,7 @@ else:
     repo_root = os.getcwd()
 
 # --- output location (runtime dependent) ---
-if params.run_on_gadi:
+if params.uw_run_on_gadi:
     output_base = "/scratch/m18/tg7098"
 else:
     output_base = repo_root

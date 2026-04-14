@@ -56,7 +56,7 @@ def main() -> None:
 
     for k in KS:
         args = [
-            "-run_on_gadi",
+            "-uw_run_on_gadi",
             "True",
             "-uw_vdegree",
             "2",
