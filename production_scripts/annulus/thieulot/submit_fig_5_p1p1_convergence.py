@@ -9,6 +9,15 @@ import subprocess
 
 KS = [1, 4, 8]
 CELL_SIZES = ["1/8", "1/16", "1/32", "1/64", "1/128", "1/256", "1/512"]
+NCPUS_BY_CELLSIZE = {
+    "1/8": 2,
+    "1/16": 2,
+    "1/32": 2,
+    "1/64": 8,
+    "1/128": 8,
+    "1/256": 16,
+    "1/512": 16,
+}
 
 
 def slug(value: str) -> str:
@@ -56,6 +65,7 @@ def main() -> None:
 
     for k in KS:
         for cellsize in CELL_SIZES:
+            ncpus = NCPUS_BY_CELLSIZE[cellsize]
             args = [
                 "-uw_run_on_gadi",
                 "True",
@@ -79,8 +89,8 @@ def main() -> None:
                 script=bench_script,
                 job_name=f"th_a_p1p1_k{k}_cs{slug(cellsize)}",
                 args=args,
-                walltime="12:00:00",
-                ncpus=16,
+                walltime="06:00:00",
+                ncpus=ncpus,
                 mem="64gb",
             )
 

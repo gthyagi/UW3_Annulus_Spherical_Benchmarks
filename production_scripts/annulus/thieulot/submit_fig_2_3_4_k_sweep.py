@@ -9,6 +9,15 @@ import subprocess
 
 KS = [2, 3]
 CELLSIZE = "1/128"
+NCPUS_BY_CELLSIZE = {
+    "1/8": 2,
+    "1/16": 2,
+    "1/32": 2,
+    "1/64": 8,
+    "1/128": 8,
+    "1/256": 16,
+    "1/512": 16,
+}
 
 
 def slug(value: str) -> str:
@@ -53,6 +62,7 @@ def main() -> None:
     repo_root = Path(__file__).resolve().parents[3]
     common_pbs = repo_root / "production_scripts" / "gadi_pbs_job.sh"
     bench_script = repo_root / "benchmarks" / "annulus" / "ex_stokes_thieulot.py"
+    ncpus = NCPUS_BY_CELLSIZE[CELLSIZE]
 
     for k in KS:
         args = [
@@ -78,8 +88,8 @@ def main() -> None:
             script=bench_script,
             job_name=f"th_a_f234_k{k}_cs{slug(CELLSIZE)}",
             args=args,
-            walltime="08:00:00",
-            ncpus=16,
+            walltime="06:00:00",
+            ncpus=ncpus,
             mem="64gb",
         )
 
