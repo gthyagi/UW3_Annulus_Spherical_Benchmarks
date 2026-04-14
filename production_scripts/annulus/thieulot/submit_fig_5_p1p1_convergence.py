@@ -1,27 +1,63 @@
 #!/usr/bin/env python3
 """Submit annulus supplemental P1/P1 convergence jobs."""
 
+import base64
+import json
 from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-from submit_utils import repo_root_from, slug, submit_job  # noqa: E402
+import subprocess
 
 
 KS = [1, 4, 8]
 CELL_SIZES = ["1/8", "1/16", "1/32", "1/64", "1/128", "1/256", "1/512"]
 
 
+def slug(value: str) -> str:
+    return value.replace("/", "_")
+
+
+def submit_job(
+    common_pbs: Path,
+    script: Path,
+    job_name: str,
+    args: list[str],
+    walltime: str,
+    ncpus: int,
+    mem: str,
+) -> None:
+    args_json_b64 = base64.b64encode(json.dumps(args).encode()).decode()
+
+    cmd = [
+        "qsub",
+        "-P",
+        "m18",
+        "-N",
+        job_name,
+        "-q",
+        "normal",
+        "-l",
+        f"walltime={walltime}",
+        "-l",
+        f"ncpus={ncpus}",
+        "-l",
+        f"mem={mem}",
+        "-v",
+        f"SCRIPT={script},ARGS_JSON_B64={args_json_b64}",
+        str(common_pbs),
+    ]
+
+    print("Submitting:", " ".join(cmd))
+    subprocess.run(cmd, check=True)
+
+
 def main() -> None:
-    repo_root = repo_root_from(__file__)
+    repo_root = Path(__file__).resolve().parents[3]
     common_pbs = repo_root / "production_scripts" / "gadi_pbs_job.sh"
     bench_script = repo_root / "benchmarks" / "annulus" / "ex_stokes_thieulot.py"
 
     for k in KS:
         for cellsize in CELL_SIZES:
             args = [
-                "-run_on_gadi",
+                "-uw_run_on_gadi",
                 "True",
                 "-uw_vdegree",
                 "1",
