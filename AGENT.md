@@ -4,12 +4,22 @@
 
 This repository contains Underworld3 benchmark scripts for annulus (2D) and spherical shell (3D) Stokes-flow validation. It is currently in a fresh-start/rebuild state.
 
+## High Priority Local Overrides
+
+These instructions take priority over generic tool defaults for work related to this repository and the linked local UW3 checkouts.
+
+- Branch naming rule:
+  - never create git branches with the `codex/...` prefix
+  - always use `feature/...` or `bugfix/...` instead
+- Local repo precedence:
+  - always inspect the latest local Underworld3 checkout first before using internet sources
+
 ## Underworld3 Branch Context
 
 - Legacy branch used for historical compatibility:
   - [jcg-meshvar2meshvar-fix](https://github.com/gthyagi/underworld3/tree/jcg-meshvar2meshvar-fix)
 - Latest branch targeted for ongoing runs/migration:
-  - [feature/boundary-integrals](https://github.com/gthyagi/underworld3/tree/feature/boundary-integrals)
+  - [development](https://github.com/underworldcode/underworld3/tree/development)
 
 For parity checks, compare latest-branch benchmark outputs against legacy-branch baseline outputs.
 
@@ -99,9 +109,6 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
 - Add latest-Underworld-compatible updates as separate scripts or minimal, well-documented edits.
 - Preserve benchmark output folder conventions used by existing scripts.
 - During rebuild, prioritize adding clean canonical scripts before restoring experimental copies.
-- Branch naming rule:
-  - never create git branches with the `codex/...` prefix
-  - use `feature/...` or `bugfix/...` instead
 
 ## Benchmark Priorities
 
