@@ -85,7 +85,7 @@ def main() -> None:
                     script=bench_script,
                     job_name=f"kr_a_{case_name}_n{n}_cs{slug(cellsize)}",
                     args=args,
-                    walltime="24:00:00",
+                    walltime="12:00:00",
                     ncpus=16,
                     mem="64gb",
                 )
