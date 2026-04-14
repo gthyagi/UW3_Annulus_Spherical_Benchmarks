@@ -265,6 +265,8 @@ def analytic_solution(
 # ### Create Mesh
 
 # %%
+uw.pprint("Stage start: mesh creation/loading")
+
 mesh = uw.meshing.Annulus(
     radiusOuter=params.uw_r_o,
     radiusInner=params.uw_r_i,
@@ -278,6 +280,8 @@ if is_serial:
     mesh.dm.view()
 
 # %%
+uw.pprint("Stage complete: mesh creation/loading")
+
 x, y = mesh.CoordinateSystem.X
 r, th = mesh.CoordinateSystem.xR
 unit_rvec = mesh.CoordinateSystem.unit_e_0
@@ -494,6 +498,8 @@ else:
 # #### Solve Stokes
 
 # %%
+uw.pprint("Stage start: stokes solve")
+
 uw.timing.reset()
 uw.timing.start()
 stokes.solve()
@@ -508,6 +514,8 @@ ksp_iterations = int(stokes.snes.ksp.getIterationNumber())
 if uw.mpi.rank == 0:
     print(snes_reason)
     print(ksp_reason)
+
+uw.pprint("Stage complete: stokes solve")
 
 # %% [markdown]
 # ### Benchmark Calibrations
@@ -531,6 +539,20 @@ def subtract_pressure_mean(mesh, pressure_var):
 
 subtract_pressure_mean(mesh, p_soln)
 
+# %% [markdown]
+# ### Save h5 Output
+
+# %%
+uw.pprint("Stage start: saving h5 output")
+
+mesh.write_timestep(
+    "output",
+    index=0,
+    meshVars=[v_soln, p_soln],
+    outputPath=str(output_dir),
+)
+
+uw.pprint("Stage complete: saving h5 output")
 
 # %% [markdown]
 # ### Relative Error Norms
@@ -707,6 +729,8 @@ if uw.mpi.rank == 0:
 # ### Save Outputs
 
 # %%
+uw.pprint("Stage start: saving metric output")
+
 if uw.mpi.rank == 0:
     metrics_h5 = os.path.join(output_dir, metrics_filename)
     if os.path.isfile(metrics_h5):
@@ -722,13 +746,4 @@ if uw.mpi.rank == 0:
         for key, value in run_metadata.items():
             f_h5.create_dataset(key, data=value)
 
-# %%
-# Save solution checkpoint for post-processing script
-mesh.write_timestep(
-    "output",
-    index=0,
-    meshVars=[v_soln, p_soln],
-    outputPath=str(output_dir),
-)
-
-# %%
+uw.pprint("Stage complete: saving metric output")

@@ -489,6 +489,8 @@ elif zeroslip and smooth:
 # ### Create Mesh
 
 # %%
+uw.pprint("Stage start: mesh creation/loading")
+
 qdegree = max(params.uw_pdegree, params.uw_vdegree)
 
 if params.uw_run_on_gadi:
@@ -527,6 +529,8 @@ if is_serial:
     mesh.dm.view()
 
 # %%
+uw.pprint("Stage complete: mesh creation/loading")
+
 unit_rvec = mesh.CoordinateSystem.unit_e_0
 x_uw, y_uw, z_uw = mesh.X
 r_uw = mesh.CoordinateSystem.xR[0]
@@ -828,6 +832,8 @@ else:
 # #### Solve Stokes
 
 # %%
+uw.pprint("Stage start: stokes solve")
+
 uw.timing.reset()
 uw.timing.start()
 stokes.solve()
@@ -842,6 +848,8 @@ ksp_iterations = int(stokes.snes.ksp.getIterationNumber())
 if uw.mpi.rank == 0:
     print(snes_reason)
     print(ksp_reason)
+
+uw.pprint("Stage complete: stokes solve")
 
 # %% [markdown]
 # ### Benchmark Calibrations
@@ -891,6 +899,21 @@ subtract_pressure_mean(mesh, p_uw)
 
 if freeslip:
     subtract_rigid_rotations(mesh, v_uw, velocity_nullspace_basis)
+
+# %% [markdown]
+# ### Save h5 Output
+
+# %%
+uw.pprint("Stage start: saving h5 output")
+
+mesh.write_timestep(
+    "output",
+    index=0,
+    meshVars=[v_uw, p_uw],
+    outputPath=str(output_dir),
+)
+
+uw.pprint("Stage complete: saving h5 output")
 
 # %% [markdown]
 # ### Errors and L2 Norm
@@ -1072,9 +1095,11 @@ if uw.mpi.rank == 0:
         print(f"{key}: {value}")
 
 # %% [markdown]
-# ### Save Outputs
+# ### Save Metrics Output
 
 # %%
+uw.pprint("Stage start: saving metric output")
+
 if uw.mpi.rank == 0:
     metrics_h5 = os.path.join(output_dir, metrics_filename)
     if os.path.isfile(metrics_h5):
@@ -1090,10 +1115,5 @@ if uw.mpi.rank == 0:
         for key, value in run_metadata.items():
             f_h5.create_dataset(key, data=value)
 
-# %%
-mesh.write_timestep(
-    "output",
-    index=0,
-    meshVars=[v_uw, p_uw],
-    outputPath=str(output_dir),
-)
+uw.pprint("Stage complete: saving metric output")
+
