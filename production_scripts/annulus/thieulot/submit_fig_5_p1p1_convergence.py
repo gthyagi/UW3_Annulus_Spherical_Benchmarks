@@ -13,10 +13,19 @@ NCPUS_BY_CELLSIZE = {
     "1/8": 2,
     "1/16": 2,
     "1/32": 2,
-    "1/64": 8,
+    "1/64": 4,
     "1/128": 8,
-    "1/256": 16,
+    "1/256": 8,
     "1/512": 16,
+}
+MEM_BY_CELLSIZE = {
+    "1/8": "8gb",
+    "1/16": "8gb",
+    "1/32": "8gb",
+    "1/64": "16gb",
+    "1/128": "32gb",
+    "1/256": "32gb",
+    "1/512": "64gb",
 }
 
 
@@ -66,6 +75,7 @@ def main() -> None:
     for k in KS:
         for cellsize in CELL_SIZES:
             ncpus = NCPUS_BY_CELLSIZE[cellsize]
+            mem = MEM_BY_CELLSIZE[cellsize]
             args = [
                 "-uw_run_on_gadi",
                 "True",
@@ -91,7 +101,7 @@ def main() -> None:
                 args=args,
                 walltime="06:00:00",
                 ncpus=ncpus,
-                mem="64gb",
+                mem=mem,
             )
 
 
