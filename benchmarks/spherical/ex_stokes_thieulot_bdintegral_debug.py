@@ -116,10 +116,10 @@ params = uw.Params(
         type=uw.ParamType.FLOAT,
         description="Penalty for curved-boundary tangential flow",
     ),
-    uw_bdintegral_probe_repeats=uw.Param(
-        4,
-        type=uw.ParamType.INTEGER,
-        description="Number of repeated same-object BdIntegral evaluations for debug probing",
+    uw_metrics_from_checkpoint_only=uw.Param(
+        False,
+        type=uw.ParamType.BOOLEAN,
+        description="Reload saved Velocity/Pressure checkpoint fields and compute only benchmark_metrics.h5",
     ),
     uw_bc_type=uw.Param(
         "essential",
@@ -227,7 +227,6 @@ uw.timing.start()
 mesh_stage_event = uw.timing.create_event("Benchmark.MeshCreation")
 stokes_stage_event = uw.timing.create_event("Benchmark.StokesSolve")
 h5_stage_event = uw.timing.create_event("Benchmark.H5Write")
-bdintegral_probe_event = uw.timing.create_event("Benchmark.BdIntegralProbe")
 integrals_stage_event = uw.timing.create_event("Benchmark.Integrals")
 
 # %%
@@ -269,6 +268,25 @@ def load_spherical_mesh(*, mesh_dir, radius_outer, radius_inner, cellsize, qdegr
         refinement=None,
         verbose=False,
     )
+
+
+def checkpoint_field_path(output_path, field_name, index=0):
+    return os.path.join(output_path, f"output.mesh.{field_name}.{index:05}.h5")
+
+
+def require_checkpoint_fields(output_path, index=0):
+    required = {
+        "Velocity": checkpoint_field_path(output_path, "Velocity", index=index),
+        "Pressure": checkpoint_field_path(output_path, "Pressure", index=index),
+    }
+    missing = [path for path in required.values() if not os.path.isfile(path)]
+    if missing:
+        joined = "\n".join(missing)
+        raise FileNotFoundError(
+            "Checkpoint reload requested but required field files are missing:\n"
+            f"{joined}"
+        )
+    return required
 
 # %% [markdown]
 # ### Analytical Solution Helpers
@@ -664,23 +682,36 @@ else:
 # #### Solve Stokes
 
 # %%
-uw.pprint("Stage start: stokes solve")
+checkpoint_mode = bool(params.uw_metrics_from_checkpoint_only)
 
-stokes_stage_event.begin()
-stokes.solve()
-stokes_stage_event.end()
-uw.timing.print_table(filename=os.path.join(output_dir, "stokes_timing.txt"))
+if checkpoint_mode:
+    uw.pprint("Stage start: loading checkpoint fields")
+    require_checkpoint_fields(output_dir, index=0)
+    v_soln.read_timestep("output", "Velocity", 0, outputPath=str(output_dir))
+    p_soln.read_timestep("output", "Pressure", 0, outputPath=str(output_dir))
+    snes_reason = np.nan
+    ksp_reason = np.nan
+    snes_iterations = np.nan
+    ksp_iterations = np.nan
+    uw.pprint("Stage complete: loading checkpoint fields")
+else:
+    uw.pprint("Stage start: stokes solve")
 
-snes_reason = int(stokes.snes.getConvergedReason())
-ksp_reason = int(stokes.snes.ksp.getConvergedReason())
-snes_iterations = int(stokes.snes.getIterationNumber())
-ksp_iterations = int(stokes.snes.ksp.getIterationNumber())
+    stokes_stage_event.begin()
+    stokes.solve()
+    stokes_stage_event.end()
+    uw.timing.print_table(filename=os.path.join(output_dir, "stokes_timing.txt"))
 
-if uw.mpi.rank == 0:
-    print(snes_reason)
-    print(ksp_reason)
+    snes_reason = int(stokes.snes.getConvergedReason())
+    ksp_reason = int(stokes.snes.ksp.getConvergedReason())
+    snes_iterations = int(stokes.snes.getIterationNumber())
+    ksp_iterations = int(stokes.snes.ksp.getIterationNumber())
 
-uw.pprint("Stage complete: stokes solve")
+    if uw.mpi.rank == 0:
+        print(snes_reason)
+        print(ksp_reason)
+
+    uw.pprint("Stage complete: stokes solve")
 
 # %% [markdown]
 # ### Benchmark Calibrations
@@ -737,25 +768,27 @@ def subtract_surface_pressure_mean(
     pressure_var.data[:, 0] -= p_bd_int / bd_measure
 
 # %%
-subtract_pressure_mean(mesh, p_soln)
+if not checkpoint_mode:
+    subtract_pressure_mean(mesh, p_soln)
 
 # %% [markdown]
 # ### Save h5 Output
 
 # %%
-uw.pprint("Stage start: saving h5 output")
+if not checkpoint_mode:
+    uw.pprint("Stage start: saving h5 output")
 
-h5_stage_event.begin()
-mesh.write_timestep(
-    'output',
-    index=0,
-    meshVars=[v_soln, p_soln],
-    outputPath=str(output_dir),
-)
-h5_stage_event.end()
+    h5_stage_event.begin()
+    mesh.write_timestep(
+        'output',
+        index=0,
+        meshVars=[v_soln, p_soln],
+        outputPath=str(output_dir),
+    )
+    h5_stage_event.end()
 
-uw.pprint("Stage complete: saving h5 output")
-uw.timing.print_table(filename=os.path.join(output_dir, "h5_timing.txt"))
+    uw.pprint("Stage complete: saving h5 output")
+    uw.timing.print_table(filename=os.path.join(output_dir, "h5_timing.txt"))
 
 # %%
 n_vec = sp.Matrix([unit_rvec[i] for i in range(mesh.dim)])
@@ -773,7 +806,7 @@ def _squared_norm(expr):
     return expr.dot(expr) if isinstance(expr, sp.MatrixBase) else expr**2
 
 # %%
-def relative_l2_error(mesh, err, ana, boundary=None):
+def relative_l2_error(mesh, err, ana, boundary=None, label=None, diagnostics=None):
     """Compute relative L2 error over domain or specified boundary."""
     err_fn = _squared_norm(err)
     ana_fn = _squared_norm(ana)
@@ -785,10 +818,30 @@ def relative_l2_error(mesh, err, ana, boundary=None):
         err_I = uw.maths.BdIntegral(mesh=mesh, fn=err_fn, boundary=boundary)
         ana_I = uw.maths.BdIntegral(mesh=mesh, fn=ana_fn, boundary=boundary)
 
-    return np.sqrt(err_I.evaluate() / ana_I.evaluate())
+    if label is None:
+        label = "relative_l2_error"
+
+    if diagnostics is None:
+        err_value = err_I.evaluate()
+        ana_value = ana_I.evaluate()
+    else:
+        err_value = evaluate_integral_timed(
+            f"{label}.err_sq",
+            err_I,
+            diagnostics,
+            boundary=boundary,
+        )
+        ana_value = evaluate_integral_timed(
+            f"{label}.ana_sq",
+            ana_I,
+            diagnostics,
+            boundary=boundary,
+        )
+
+    return np.sqrt(err_value / ana_value)
 
 # %%
-def absolute_l2_error(mesh, err, boundary=None):
+def absolute_l2_error(mesh, err, boundary=None, label=None, diagnostics=None):
     """Compute absolute L2 error over domain or specified boundary."""
 
     err_fn = _squared_norm(err)
@@ -796,7 +849,21 @@ def absolute_l2_error(mesh, err, boundary=None):
         err_I = uw.maths.Integral(mesh, err_fn)
     else:
         err_I = uw.maths.BdIntegral(mesh=mesh, fn=err_fn, boundary=boundary)
-    return np.sqrt(err_I.evaluate())
+
+    if label is None:
+        label = "absolute_l2_error"
+
+    if diagnostics is None:
+        err_value = err_I.evaluate()
+    else:
+        err_value = evaluate_integral_timed(
+            f"{label}.err_sq",
+            err_I,
+            diagnostics,
+            boundary=boundary,
+        )
+
+    return np.sqrt(err_value)
 
 # %%
 def gather_run_metadata(
@@ -887,90 +954,184 @@ def _max_rank_walltime(callable_obj):
     return value, float(comm.allreduce(elapsed, op=MPI.MAX))
 
 
-def bdintegral_debug_probe(mesh, fn, boundary, repeats):
-    """
-    Compare fresh-object and reused-object BdIntegral evaluation cost.
-    """
-    repeats = max(2, int(repeats))
-    results = {"boundary": str(boundary), "repeats": repeats}
+def _integral_scope(boundary):
+    return "domain" if boundary is None else f"boundary:{boundary}"
 
-    value_1, time_1 = _max_rank_walltime(
-        lambda: uw.maths.BdIntegral(mesh=mesh, fn=fn, boundary=boundary).evaluate()
-    )
-    value_2, time_2 = _max_rank_walltime(
-        lambda: uw.maths.BdIntegral(mesh=mesh, fn=fn, boundary=boundary).evaluate()
-    )
 
-    shared_integral = uw.maths.BdIntegral(mesh=mesh, fn=fn, boundary=boundary)
-    value_reuse_1, time_reuse_1 = _max_rank_walltime(shared_integral.evaluate)
-
-    repeated_times = []
-    value_reuse_last = value_reuse_1
-    for _ in range(repeats - 1):
-        value_reuse_last, repeat_time = _max_rank_walltime(shared_integral.evaluate)
-        repeated_times.append(repeat_time)
-
-    results.update(
+def evaluate_integral_timed(label, integral_obj, diagnostics, boundary=None):
+    value, elapsed = _max_rank_walltime(integral_obj.evaluate)
+    diagnostics.append(
         {
-            "fresh_object_call_1_value": float(value_1),
-            "fresh_object_call_1_s": time_1,
-            "fresh_object_call_2_value": float(value_2),
-            "fresh_object_call_2_s": time_2,
-            "reused_object_call_1_value": float(value_reuse_1),
-            "reused_object_call_1_s": time_reuse_1,
-            "reused_object_last_value": float(value_reuse_last),
-            "reused_object_repeat_mean_s": float(np.mean(repeated_times)),
-            "reused_object_repeat_min_s": float(np.min(repeated_times)),
-            "reused_object_repeat_max_s": float(np.max(repeated_times)),
+            "label": label,
+            "scope": _integral_scope(boundary),
+            "integral_type": type(integral_obj).__name__,
+            "value": float(value),
+            "seconds": elapsed,
         }
     )
-    return results
+    return float(value)
+
+
+def run_timed_metric(label, metric_callable, metric_timings):
+    uw.pprint(f"Metric start: {label}")
+    value, elapsed = _max_rank_walltime(metric_callable)
+    metric_timings[label] = elapsed
+    uw.pprint(f"Metric complete: {label}")
+    return value
+
+
+def write_metric_diagnostics(output_path, metric_timings, integral_diagnostics):
+    if uw.mpi.rank != 0:
+        return
+
+    diagnostics_path = os.path.join(output_path, "metric_diagnostics.txt")
+    with open(diagnostics_path, "w", encoding="ascii") as f_diag:
+        f_diag.write("# Metric walltime diagnostics\n")
+        f_diag.write("# metric_name\tseconds\n")
+        for name, seconds in metric_timings.items():
+            f_diag.write(f"{name}\t{seconds:.12e}\n")
+
+        f_diag.write("\n# Underlying integral evaluations\n")
+        f_diag.write("# label\tscope\tintegral_type\tseconds\tvalue\n")
+        for entry in integral_diagnostics:
+            f_diag.write(
+                f"{entry['label']}\t{entry['scope']}\t{entry['integral_type']}\t"
+                f"{entry['seconds']:.12e}\t{entry['value']:.12e}\n"
+            )
 
 
 # %%
-probe_integrand = _squared_norm(v_err_expr)
-
-uw.pprint("Stage start: BdIntegral debug probe")
-bdintegral_probe_event.begin()
-bdintegral_probe_metrics = bdintegral_debug_probe(
-    mesh=mesh,
-    fn=probe_integrand,
-    boundary=lower,
-    repeats=params.uw_bdintegral_probe_repeats,
-)
-bdintegral_probe_event.end()
-
-if uw.mpi.rank == 0:
-    probe_txt = os.path.join(output_dir, "bdintegral_probe.txt")
-    with open(probe_txt, "w", encoding="ascii") as f_probe:
-        f_probe.write("# BdIntegral debug probe\n")
-        f_probe.write("# integrand: squared velocity error on lower boundary\n")
-        for key, value in bdintegral_probe_metrics.items():
-            f_probe.write(f"{key}: {value}\n")
-
-    print("=== BdIntegral Debug Probe ===")
-    for key, value in bdintegral_probe_metrics.items():
-        print(f"{key}: {value}")
-
-uw.pprint("Stage complete: BdIntegral debug probe")
-uw.timing.print_table(filename=os.path.join(output_dir, "bdintegral_probe_timing.txt"))
-
-
 # %%
+metric_timings = {}
+integral_diagnostics = []
+
 integrals_stage_event.begin()
-v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
-p_err_l2_abs = absolute_l2_error(mesh, p_err_expr)
-p_err_l2 = relative_l2_error(mesh, p_err_expr, p_ana_expr)
-v_err_l2_lower = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=lower)
-v_err_l2_upper = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=upper)
-p_err_l2_lower_abs = absolute_l2_error(mesh, p_err_expr, boundary=lower)
-p_err_l2_upper_abs = absolute_l2_error(mesh, p_err_expr, boundary=upper)
+v_err_l2 = run_timed_metric(
+    "v_l2_norm",
+    lambda: relative_l2_error(
+        mesh,
+        v_err_expr,
+        v_ana_expr,
+        label="v_l2_norm",
+        diagnostics=integral_diagnostics,
+    ),
+    metric_timings,
+)
+p_err_l2_abs = run_timed_metric(
+    "p_l2_norm_abs",
+    lambda: absolute_l2_error(
+        mesh,
+        p_err_expr,
+        label="p_l2_norm_abs",
+        diagnostics=integral_diagnostics,
+    ),
+    metric_timings,
+)
+p_err_l2 = run_timed_metric(
+    "p_l2_norm",
+    lambda: relative_l2_error(
+        mesh,
+        p_err_expr,
+        p_ana_expr,
+        label="p_l2_norm",
+        diagnostics=integral_diagnostics,
+    ),
+    metric_timings,
+)
+v_err_l2_lower = run_timed_metric(
+    "v_l2_norm_lower",
+    lambda: relative_l2_error(
+        mesh,
+        v_err_expr,
+        v_ana_expr,
+        boundary=lower,
+        label="v_l2_norm_lower",
+        diagnostics=integral_diagnostics,
+    ),
+    metric_timings,
+)
+v_err_l2_upper = run_timed_metric(
+    "v_l2_norm_upper",
+    lambda: relative_l2_error(
+        mesh,
+        v_err_expr,
+        v_ana_expr,
+        boundary=upper,
+        label="v_l2_norm_upper",
+        diagnostics=integral_diagnostics,
+    ),
+    metric_timings,
+)
+p_err_l2_lower_abs = run_timed_metric(
+    "p_l2_norm_lower_abs",
+    lambda: absolute_l2_error(
+        mesh,
+        p_err_expr,
+        boundary=lower,
+        label="p_l2_norm_lower_abs",
+        diagnostics=integral_diagnostics,
+    ),
+    metric_timings,
+)
+p_err_l2_upper_abs = run_timed_metric(
+    "p_l2_norm_upper_abs",
+    lambda: absolute_l2_error(
+        mesh,
+        p_err_expr,
+        boundary=upper,
+        label="p_l2_norm_upper_abs",
+        diagnostics=integral_diagnostics,
+    ),
+    metric_timings,
+)
 p_err_l2_lower = np.nan
 p_err_l2_upper = np.nan
-sigma_rr_err_l2_lower = relative_l2_error(mesh, sigma_rr_err_expr, sigma_rr_ana_expr, boundary=lower)
-sigma_rr_err_l2_upper = relative_l2_error(mesh, sigma_rr_err_expr, sigma_rr_ana_expr, boundary=upper)
-u_dot_n_l2_lower_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=lower)
-u_dot_n_l2_upper_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=upper)
+sigma_rr_err_l2_lower = run_timed_metric(
+    "sigma_rr_l2_norm_lower",
+    lambda: relative_l2_error(
+        mesh,
+        sigma_rr_err_expr,
+        sigma_rr_ana_expr,
+        boundary=lower,
+        label="sigma_rr_l2_norm_lower",
+        diagnostics=integral_diagnostics,
+    ),
+    metric_timings,
+)
+sigma_rr_err_l2_upper = run_timed_metric(
+    "sigma_rr_l2_norm_upper",
+    lambda: relative_l2_error(
+        mesh,
+        sigma_rr_err_expr,
+        sigma_rr_ana_expr,
+        boundary=upper,
+        label="sigma_rr_l2_norm_upper",
+        diagnostics=integral_diagnostics,
+    ),
+    metric_timings,
+)
+u_dot_n_l2_lower_abs = run_timed_metric(
+    "u_dot_n_l2_norm_lower_abs",
+    lambda: absolute_l2_error(
+        mesh,
+        unit_rvec.dot(v_soln.sym),
+        boundary=lower,
+        label="u_dot_n_l2_norm_lower_abs",
+        diagnostics=integral_diagnostics,
+    ),
+    metric_timings,
+)
+u_dot_n_l2_upper_abs = run_timed_metric(
+    "u_dot_n_l2_norm_upper_abs",
+    lambda: absolute_l2_error(
+        mesh,
+        unit_rvec.dot(v_soln.sym),
+        boundary=upper,
+        label="u_dot_n_l2_norm_upper_abs",
+        diagnostics=integral_diagnostics,
+    ),
+    metric_timings,
+)
 run_metadata = gather_run_metadata(
     mesh,
     v_soln,
@@ -1005,8 +1166,12 @@ if uw.mpi.rank == 0:
     print("=== L2 Error Metrics ===")
     for key, value in metrics.items():
         print(f"{key}: {value}")
+    print("=== Metric Walltime Diagnostics ===")
+    for key, value in metric_timings.items():
+        print(f"{key}: {value}")
 integrals_stage_event.end()
 uw.timing.print_table(filename=os.path.join(output_dir, "integrals_timing.txt"))
+write_metric_diagnostics(output_dir, metric_timings, integral_diagnostics)
 
 # %% [markdown]
 # ### Save Metrics Output
@@ -1021,8 +1186,11 @@ if uw.mpi.rank == 0:
     with h5py.File(metrics_h5, "w") as f_h5:
         for key, value in metrics.items():
             f_h5.create_dataset(key, data=value)
+        for key, value in metric_timings.items():
+            f_h5.create_dataset(f"debug_walltime_{key}", data=value)
         f_h5.create_dataset("git_sha", data=np.bytes_(git_sha))
         f_h5.create_dataset("command", data=np.bytes_(cli_args))
+        f_h5.create_dataset("metrics_from_checkpoint_only", data=int(checkpoint_mode))
         for key, value in run_metadata.items():
             f_h5.create_dataset(key, data=value)
 
