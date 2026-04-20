@@ -227,6 +227,7 @@ uw.timing.start()
 mesh_stage_event = uw.timing.create_event("Benchmark.MeshCreation")
 stokes_stage_event = uw.timing.create_event("Benchmark.StokesSolve")
 h5_stage_event = uw.timing.create_event("Benchmark.H5Write")
+stress_projection_event = uw.timing.create_event("Benchmark.StressProjection")
 integrals_stage_event = uw.timing.create_event("Benchmark.Integrals")
 
 # %%
@@ -791,9 +792,19 @@ if not checkpoint_mode:
     uw.timing.print_table(filename=os.path.join(output_dir, "h5_timing.txt"))
 
 # %%
+uw.pprint("Stage start: projecting deviatoric stress")
+
+stress_projection_event.begin()
+tau_soln = stokes.tau
+stress_projection_event.end()
+
+uw.pprint("Stage complete: projecting deviatoric stress")
+uw.timing.print_table(filename=os.path.join(output_dir, "stress_projection_timing.txt"))
+
 n_vec = sp.Matrix([unit_rvec[i] for i in range(mesh.dim)])
-sigma_soln_expr = sp.Matrix(stokes.stress)
-sigma_rr_soln_expr = (n_vec.T * sigma_soln_expr * n_vec)[0]
+tau_soln_expr = sp.Matrix(tau_soln.sym)
+tau_rr_soln_expr = (n_vec.T * tau_soln_expr * n_vec)[0]
+sigma_rr_soln_expr = tau_rr_soln_expr - p_soln.sym[0]
 sigma_rr_err_expr = sigma_rr_soln_expr - sigma_rr_ana_expr
 
 # %% [markdown]

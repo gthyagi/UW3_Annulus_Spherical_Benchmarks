@@ -935,8 +935,12 @@ p_err_sym = p_uw.sym[0] - p_ana_sym
 
 # %%
 n_vec = sp.Matrix([unit_rvec[i] for i in range(mesh.dim)])
-sigma_uw_sym = sp.Matrix(stokes.stress)
-sigma_rr_uw_sym = (n_vec.T * sigma_uw_sym * n_vec)[0]
+# Use the projected constitutive flux from the solved field. The raw symbolic
+# stokes.stress path can under-recover the viscous normal stress on boundaries,
+# which gives misleading sigma_rr norms for this benchmark.
+tau_uw = stokes.tau
+tau_uw_sym = sp.Matrix(tau_uw.sym)
+sigma_rr_uw_sym = (n_vec.T * tau_uw_sym * n_vec)[0] - p_uw.sym[0]
 sigma_rr_err_sym = sigma_rr_uw_sym - sigma_rr_ana_sym
 
 # %%
