@@ -689,10 +689,10 @@ if checkpoint_mode:
     require_checkpoint_fields(output_dir, index=0)
     v_soln.read_timestep("output", "Velocity", 0, outputPath=str(output_dir))
     p_soln.read_timestep("output", "Pressure", 0, outputPath=str(output_dir))
-    snes_reason = np.nan
-    ksp_reason = np.nan
-    snes_iterations = np.nan
-    ksp_iterations = np.nan
+    snes_reason = -1
+    ksp_reason = -1
+    snes_iterations = -1
+    ksp_iterations = -1
     uw.pprint("Stage complete: loading checkpoint fields")
 else:
     uw.pprint("Stage start: stokes solve")
