@@ -13,10 +13,19 @@ NCPUS_BY_CELLSIZE = {
     "1/8": 2,
     "1/16": 2,
     "1/32": 2,
-    "1/64": 8,
+    "1/64": 4,
     "1/128": 8,
     "1/256": 16,
-    "1/512": 16,
+    "1/512": 32,
+}
+MEM_BY_CELLSIZE = {
+    "1/8": "8gb",
+    "1/16": "8gb",
+    "1/32": "8gb",
+    "1/64": "16gb",
+    "1/128": "32gb",
+    "1/256": "64gb",
+    "1/512": "128gb",
 }
 
 
@@ -63,6 +72,7 @@ def main() -> None:
     common_pbs = repo_root / "production_scripts" / "gadi_pbs_job.sh"
     bench_script = repo_root / "benchmarks" / "annulus" / "ex_stokes_thieulot.py"
     ncpus = NCPUS_BY_CELLSIZE[CELLSIZE]
+    mem = MEM_BY_CELLSIZE[CELLSIZE]
 
     for k in KS:
         args = [
@@ -90,7 +100,7 @@ def main() -> None:
             args=args,
             walltime="06:00:00",
             ncpus=ncpus,
-            mem="64gb",
+            mem=mem,
         )
 
 
