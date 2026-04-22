@@ -11,11 +11,11 @@ import subprocess
 MS = [-1, 3]
 CELL_SIZES = ["1/8", "1/16", "1/32", "1/64", "1/128"]
 RESOURCES_BY_CELLSIZE = {
-    "1/8": {"ncpus": 1, "mem": "4gb", "walltime": "06:00:00"},
-    "1/16": {"ncpus": 2, "mem": "8gb", "walltime": "06:00:00"},
-    "1/32": {"ncpus": 16, "mem": "64gb", "walltime": "06:00:00"},
-    "1/64": {"ncpus": 144, "mem": "576gb", "walltime": "06:00:00"},
-    "1/128": {"ncpus": 1152, "mem": "4608gb", "walltime": "12:00:00"},
+    "1/8": {"ncpus": 1, "mem": "4gb", "walltime": "01:00:00"},
+    "1/16": {"ncpus": 2, "mem": "8gb", "walltime": "01:00:00"},
+    "1/32": {"ncpus": 16, "mem": "48gb", "walltime": "01:00:00"},
+    "1/64": {"ncpus": 144, "mem": "320gb", "walltime": "01:00:00"},
+    "1/128": {"ncpus": 1152, "mem": "2560gb", "walltime": "01:00:00"},
 }
 
 
