@@ -104,6 +104,11 @@ params = uw.Params(
         type=uw.ParamType.FLOAT,
         description="Penalty for natural-BC velocity matching",
     ),
+    uw_metrics_from_checkpoint_only=uw.Param(
+        False,
+        type=uw.ParamType.BOOLEAN,
+        description="Reload saved Velocity/Pressure checkpoint fields and compute only benchmark_metrics.h5",
+    ),
     uw_bc_type=uw.Param(
         None,
         type=uw.ParamType.STRING,
@@ -224,6 +229,7 @@ else:
 
 output_root = os.path.join(output_base, "output", "spherical", "kramer", "latest")
 metrics_filename = "benchmark_metrics.h5"
+solve_metadata_filename = "benchmark_solve_metadata.h5"
 
 case_id = make_case_id(
     case=params.uw_case,
@@ -320,6 +326,47 @@ def load_spherical_mesh(
         refinement=None,
         verbose=False,
     )
+
+
+def require_checkpoint_fields(output_dir, index=0):
+    expected_files = [
+        os.path.join(output_dir, f"output.mesh.Velocity.{index:05d}.h5"),
+        os.path.join(output_dir, f"output.mesh.Pressure.{index:05d}.h5"),
+        os.path.join(output_dir, solve_metadata_filename),
+    ]
+    missing_files = [path for path in expected_files if not os.path.exists(path)]
+    if missing_files:
+        missing_text = "\n".join(missing_files)
+        raise FileNotFoundError(
+            "Checkpoint-only metrics mode requires existing solve outputs:\n"
+            f"{missing_text}"
+        )
+
+
+def write_solve_metadata(output_dir, *, snes_reason, ksp_reason, snes_iterations, ksp_iterations):
+    if uw.mpi.rank != 0:
+        return
+
+    metadata_h5 = os.path.join(output_dir, solve_metadata_filename)
+    if os.path.isfile(metadata_h5):
+        os.remove(metadata_h5)
+
+    with h5py.File(metadata_h5, "w") as f_h5:
+        f_h5.create_dataset("snes_converged_reason", data=int(snes_reason))
+        f_h5.create_dataset("ksp_converged_reason", data=int(ksp_reason))
+        f_h5.create_dataset("snes_iterations", data=int(snes_iterations))
+        f_h5.create_dataset("ksp_iterations", data=int(ksp_iterations))
+
+
+def read_solve_metadata(output_dir):
+    metadata_h5 = os.path.join(output_dir, solve_metadata_filename)
+    with h5py.File(metadata_h5, "r") as f_h5:
+        return {
+            "snes_reason": int(f_h5["snes_converged_reason"][()]),
+            "ksp_reason": int(f_h5["ksp_converged_reason"][()]),
+            "snes_iterations": int(f_h5["snes_iterations"][()]),
+            "ksp_iterations": int(f_h5["ksp_iterations"][()]),
+        }
 
 # %% [markdown]
 # ### Analytical Solution Helpers
@@ -841,23 +888,37 @@ else:
 # #### Solve Stokes
 
 # %%
-uw.pprint("Stage start: stokes solve")
+checkpoint_mode = bool(params.uw_metrics_from_checkpoint_only)
 
-stokes_stage_event.begin()
-stokes.solve()
-stokes_stage_event.end()
-uw.timing.print_table(filename=f"{output_dir}/stokes_timing.txt")
+if checkpoint_mode:
+    uw.pprint("Stage start: loading checkpoint fields")
+    require_checkpoint_fields(output_dir, index=0)
+    v_uw.read_timestep("output", "Velocity", 0, outputPath=str(output_dir))
+    p_uw.read_timestep("output", "Pressure", 0, outputPath=str(output_dir))
+    solve_metadata = read_solve_metadata(output_dir)
+    snes_reason = solve_metadata["snes_reason"]
+    ksp_reason = solve_metadata["ksp_reason"]
+    snes_iterations = solve_metadata["snes_iterations"]
+    ksp_iterations = solve_metadata["ksp_iterations"]
+    uw.pprint("Stage complete: loading checkpoint fields")
+else:
+    uw.pprint("Stage start: stokes solve")
 
-snes_reason = int(stokes.snes.getConvergedReason())
-ksp_reason = int(stokes.snes.ksp.getConvergedReason())
-snes_iterations = int(stokes.snes.getIterationNumber())
-ksp_iterations = int(stokes.snes.ksp.getIterationNumber())
+    stokes_stage_event.begin()
+    stokes.solve()
+    stokes_stage_event.end()
+    uw.timing.print_table(filename=f"{output_dir}/stokes_timing.txt")
 
-if uw.mpi.rank == 0:
-    print(snes_reason)
-    print(ksp_reason)
+    snes_reason = int(stokes.snes.getConvergedReason())
+    ksp_reason = int(stokes.snes.ksp.getConvergedReason())
+    snes_iterations = int(stokes.snes.getIterationNumber())
+    ksp_iterations = int(stokes.snes.ksp.getIterationNumber())
 
-uw.pprint("Stage complete: stokes solve")
+    if uw.mpi.rank == 0:
+        print(snes_reason)
+        print(ksp_reason)
+
+    uw.pprint("Stage complete: stokes solve")
 
 # %% [markdown]
 # ### Benchmark Calibrations
@@ -903,28 +964,44 @@ def subtract_rigid_rotations(mesh, velocity_var, rotation_modes, passes=2):
             velocity_var.data[...] -= dv.reshape(velocity_var.data.shape)
 
 # %%
-subtract_pressure_mean(mesh, p_uw)
+if not checkpoint_mode:
+    subtract_pressure_mean(mesh, p_uw)
 
-if freeslip:
-    subtract_rigid_rotations(mesh, v_uw, velocity_nullspace_basis)
+    if freeslip:
+        subtract_rigid_rotations(mesh, v_uw, velocity_nullspace_basis)
 
 # %% [markdown]
 # ### Save h5 Output
 
 # %%
-uw.pprint("Stage start: saving h5 output")
+if not checkpoint_mode:
+    uw.pprint("Stage start: saving h5 output")
 
-h5_stage_event.begin()
-mesh.write_timestep(
-    "output",
-    index=0,
-    meshVars=[v_uw, p_uw],
-    outputPath=str(output_dir),
-)
-h5_stage_event.end()
+    h5_stage_event.begin()
+    mesh.write_timestep(
+        "output",
+        index=0,
+        meshVars=[v_uw, p_uw],
+        outputPath=str(output_dir),
+    )
+    h5_stage_event.end()
+    write_solve_metadata(
+        output_dir,
+        snes_reason=snes_reason,
+        ksp_reason=ksp_reason,
+        snes_iterations=snes_iterations,
+        ksp_iterations=ksp_iterations,
+    )
 
-uw.pprint("Stage complete: saving h5 output")
-uw.timing.print_table(filename=os.path.join(output_dir, "h5_timing.txt"))
+    uw.pprint("Stage complete: saving h5 output")
+    uw.timing.print_table(filename=os.path.join(output_dir, "h5_timing.txt"))
+
+    if uw.mpi.rank == 0:
+        print(
+            "Solve stage complete. Rerun with '-uw_metrics_from_checkpoint_only true' "
+            "to compute benchmark_metrics.h5 from the saved checkpoint."
+        )
+    raise SystemExit(0)
 
 # %% [markdown]
 # ### Errors and L2 Norm
