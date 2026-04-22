@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Submit spherical supplemental P3/P2 convergence jobs."""
 
+import argparse
 import base64
 import json
 from pathlib import Path
@@ -56,7 +57,24 @@ def submit_job(
     subprocess.run(cmd, check=True)
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Submit spherical supplemental P3/P2 convergence jobs."
+    )
+    parser.add_argument(
+        "--metrics-from-checkpoint-only",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help=(
+            "Pass -uw_metrics_from_checkpoint_only to the benchmark so jobs either "
+            "run the solve stage only (default) or reload checkpoints and compute metrics."
+        ),
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    cli_args = parse_args()
     repo_root = Path(__file__).resolve().parents[3]
     common_pbs = repo_root / "production_scripts" / "gadi_pbs_job.sh"
     bench_script = repo_root / "benchmarks" / "spherical" / "ex_stokes_thieulot.py"
@@ -81,6 +99,8 @@ def main() -> None:
                 str(m),
                 "-uw_cellsize",
                 cellsize,
+                "-uw_metrics_from_checkpoint_only",
+                str(cli_args.metrics_from_checkpoint_only),
             ]
             submit_job(
                 common_pbs=common_pbs,
