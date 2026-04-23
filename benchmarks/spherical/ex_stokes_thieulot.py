@@ -54,6 +54,7 @@ from fractions import Fraction
 import h5py
 from mpi4py import MPI
 import numpy as np
+from petsc4py import PETSc
 import sympy as sp
 import underworld3 as uw
 from underworld3.systems import Stokes
@@ -224,6 +225,8 @@ output_dir = os.path.join(output_root, case_id)
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
 
+checkpoint_mode = bool(params.uw_metrics_from_checkpoint_only)
+
 uw.timing.start()
 mesh_stage_event = uw.timing.create_event("Benchmark.MeshCreation")
 stokes_stage_event = uw.timing.create_event("Benchmark.StokesSolve")
@@ -231,13 +234,16 @@ h5_stage_event = uw.timing.create_event("Benchmark.H5Write")
 integrals_stage_event = uw.timing.create_event("Benchmark.Integrals")
 
 # %%
-def load_spherical_mesh(*, mesh_dir, radius_outer, radius_inner, cellsize, qdegree):
-    inv_cellsize = int(round(1.0 / cellsize))
-    msh_h5_file = os.path.join(
-        mesh_dir,
-        f"uw_spherical_shell_ro{radius_outer:g}_ri{radius_inner:g}"
-        f"_inv_cellsize{inv_cellsize}.msh.h5",
-    )
+def load_spherical_mesh(*, radius_outer, radius_inner, qdegree, mesh_file=None, mesh_dir=None, cellsize=None):
+    if mesh_file is None:
+        inv_cellsize = int(round(1.0 / cellsize))
+        msh_h5_file = os.path.join(
+            mesh_dir,
+            f"uw_spherical_shell_ro{radius_outer:g}_ri{radius_inner:g}"
+            f"_inv_cellsize{inv_cellsize}.msh.h5",
+        )
+    else:
+        msh_h5_file = mesh_file
 
     if not os.path.exists(msh_h5_file):
         if uw.mpi.rank == 0:
@@ -284,6 +290,27 @@ def require_checkpoint_fields(output_dir, index=0):
             "Checkpoint-only metrics mode requires existing solve outputs:\n"
             f"{missing_text}"
         )
+
+
+def load_from_timestep_field_file(mesh_var, filename, data_name, group="/fields"):
+    if mesh_var._lvec is None:
+        mesh_var._set_vec(available=True)
+
+    indexset, subdm = mesh_var.mesh.dm.createSubDM(mesh_var.field_id)
+    viewer = PETSc.ViewerHDF5().create(filename, "r", comm=PETSc.COMM_WORLD)
+    old_name = mesh_var._gvec.getName()
+
+    try:
+        viewer.pushGroup(group)
+        mesh_var._gvec.setName(data_name)
+        mesh_var._gvec.load(viewer)
+        subdm.globalToLocal(mesh_var._gvec, mesh_var._lvec, addv=False)
+    finally:
+        mesh_var._gvec.setName(old_name)
+        viewer.popGroup()
+        viewer.destroy()
+        indexset.destroy()
+        subdm.destroy()
 
 
 def write_solve_metadata(output_dir, *, snes_reason, ksp_reason, snes_iterations, ksp_iterations):
@@ -463,7 +490,14 @@ uw.pprint("Stage start: mesh creation/loading")
 mesh_stage_event.begin()
 qdegree = max(params.uw_pdegree, params.uw_vdegree)
 
-if params.uw_run_on_gadi:
+if checkpoint_mode:
+    mesh = load_spherical_mesh(
+        mesh_file=os.path.join(output_dir, "output.mesh.00000.h5"),
+        radius_outer=params.uw_r_o,
+        radius_inner=params.uw_r_i,
+        qdegree=qdegree,
+    )
+elif params.uw_run_on_gadi:
     mesh = load_spherical_mesh(
         mesh_dir=params.uw_gadi_mesh_dir,
         radius_outer=params.uw_r_o,
@@ -705,13 +739,19 @@ else:
 # #### Solve Stokes
 
 # %%
-checkpoint_mode = bool(params.uw_metrics_from_checkpoint_only)
-
 if checkpoint_mode:
     uw.pprint("Stage start: loading checkpoint fields")
     require_checkpoint_fields(output_dir, index=0)
-    v_soln.read_timestep("output", "Velocity", 0, outputPath=str(output_dir))
-    p_soln.read_timestep("output", "Pressure", 0, outputPath=str(output_dir))
+    load_from_timestep_field_file(
+        v_soln,
+        os.path.join(output_dir, "output.mesh.Velocity.00000.h5"),
+        "Velocity",
+    )
+    load_from_timestep_field_file(
+        p_soln,
+        os.path.join(output_dir, "output.mesh.Pressure.00000.h5"),
+        "Pressure",
+    )
     solve_metadata = read_solve_metadata(output_dir)
     snes_reason = solve_metadata["snes_reason"]
     ksp_reason = solve_metadata["ksp_reason"]
