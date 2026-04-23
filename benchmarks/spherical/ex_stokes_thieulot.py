@@ -742,17 +742,23 @@ else:
 if checkpoint_mode:
     uw.pprint("Stage start: loading checkpoint fields")
     require_checkpoint_fields(output_dir, index=0)
+    uw.pprint("Loading Velocity")
     load_from_timestep_field_file(
         v_soln,
         os.path.join(output_dir, "output.mesh.Velocity.00000.h5"),
         "Velocity",
     )
+    uw.pprint("Loaded Velocity")
+    uw.pprint("Loading Pressure")
     load_from_timestep_field_file(
         p_soln,
         os.path.join(output_dir, "output.mesh.Pressure.00000.h5"),
         "Pressure",
     )
+    uw.pprint("Loaded Pressure")
+    uw.pprint("Loading solve metadata")
     solve_metadata = read_solve_metadata(output_dir)
+    uw.pprint("Loaded solve metadata")
     snes_reason = solve_metadata["snes_reason"]
     ksp_reason = solve_metadata["ksp_reason"]
     snes_iterations = solve_metadata["snes_iterations"]
@@ -1041,7 +1047,7 @@ if uw.mpi.rank == 0:
     for key, value in metrics.items():
         print(f"{key}: {value}")
 integrals_stage_event.end()
-uw.timing.print_table(filename=os.path.join(output_dir, "integrals_timing.txt"))
+uw.timing.print_table(filename=os.path.join(output_dir, "integrals_timing.csv"), format="csv")
 
 # %% [markdown]
 # ### Save Metrics Output
