@@ -15,7 +15,7 @@ RESOURCES_BY_CELLSIZE = {
     "1/16": {"ncpus": 2, "mem": "8gb", "walltime": "06:00:00"},
     "1/32": {"ncpus": 16, "mem": "64gb", "walltime": "06:00:00"},
     "1/64": {"ncpus": 144, "mem": "576gb", "walltime": "06:00:00"},
-    "1/128": {"ncpus": 1152, "mem": "4608gb", "walltime": "12:00:00"},
+    "1/128": {"ncpus": 1152, "mem": "4608gb", "walltime": "06:00:00"},
 }
 
 
