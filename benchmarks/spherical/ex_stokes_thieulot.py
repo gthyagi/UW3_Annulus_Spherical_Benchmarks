@@ -206,7 +206,7 @@ else:
 output_root = os.path.join(output_base, "output", "spherical", "thieulot", "latest")
 metrics_filename = "benchmark_metrics.h5"
 solve_metadata_filename = "benchmark_solve_metadata.h5"
-restart_base_filename = "restart"
+checkout_base_filename = "checkout"
 
 case_id = make_case_id(
     case="case",
@@ -226,9 +226,10 @@ if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
 
 checkpoint_mode = bool(params.uw_metrics_from_checkpoint_only)
-restart_base = os.path.join(output_dir, restart_base_filename)
-restart_mesh_file = restart_base + ".mesh.0.h5"
-restart_checkpoint_file = restart_base + ".checkpoint.00000.h5"
+checkout_base = os.path.join(output_dir, checkout_base_filename)
+checkout_mesh_file = checkout_base + ".mesh.00000.h5"
+velocity_checkpoint_file = checkout_base + ".Velocity.00000.h5"
+pressure_checkpoint_file = checkout_base + ".Pressure.00000.h5"
 
 uw.timing.start()
 mesh_stage_event = uw.timing.create_event("Benchmark.MeshCreation")
@@ -282,8 +283,9 @@ def load_spherical_mesh(*, radius_outer, radius_inner, qdegree, mesh_file=None, 
 
 def require_checkpoint_fields(output_dir, index=0):
     expected_files = [
-        restart_mesh_file,
-        restart_checkpoint_file,
+        checkout_mesh_file,
+        velocity_checkpoint_file,
+        pressure_checkpoint_file,
         os.path.join(output_dir, solve_metadata_filename),
     ]
     missing_files = [path for path in expected_files if not os.path.exists(path)]
@@ -474,7 +476,7 @@ qdegree = max(params.uw_pdegree, params.uw_vdegree)
 
 if checkpoint_mode:
     mesh = load_spherical_mesh(
-        mesh_file=restart_mesh_file,
+        mesh_file=checkout_mesh_file,
         radius_outer=params.uw_r_o,
         radius_inner=params.uw_r_i,
         qdegree=qdegree,
@@ -725,10 +727,10 @@ if checkpoint_mode:
     uw.pprint("Stage start: loading checkpoint fields")
     require_checkpoint_fields(output_dir, index=0)
     uw.pprint("Loading Velocity")
-    v_soln.read_checkpoint(restart_checkpoint_file, data_name="Velocity")
+    v_soln.read_checkpoint(velocity_checkpoint_file, data_name="Velocity")
     uw.pprint("Loaded Velocity")
     uw.pprint("Loading Pressure")
-    p_soln.read_checkpoint(restart_checkpoint_file, data_name="Pressure")
+    p_soln.read_checkpoint(pressure_checkpoint_file, data_name="Pressure")
     uw.pprint("Loaded Pressure")
     uw.pprint("Loading solve metadata")
     solve_metadata = read_solve_metadata(output_dir)
@@ -830,7 +832,7 @@ if not checkpoint_mode:
         outputPath=str(output_dir),
     )
     mesh.write_checkpoint(
-        restart_base_filename,
+        checkout_base_filename,
         outputPath=str(output_dir),
         meshUpdates=False,
         meshVars=[v_soln, p_soln],
