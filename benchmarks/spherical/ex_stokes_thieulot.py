@@ -830,7 +830,8 @@ if not checkpoint_mode:
         outputPath=str(output_dir),
     )
     mesh.write_checkpoint(
-        restart_base,
+        restart_base_filename,
+        outputPath=str(output_dir),
         meshUpdates=False,
         meshVars=[v_soln, p_soln],
         index=0,
