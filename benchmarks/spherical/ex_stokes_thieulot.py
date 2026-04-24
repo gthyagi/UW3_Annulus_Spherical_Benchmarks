@@ -54,7 +54,6 @@ from fractions import Fraction
 import h5py
 from mpi4py import MPI
 import numpy as np
-from petsc4py import PETSc
 import sympy as sp
 import underworld3 as uw
 from underworld3.systems import Stokes
@@ -207,6 +206,7 @@ else:
 output_root = os.path.join(output_base, "output", "spherical", "thieulot", "latest")
 metrics_filename = "benchmark_metrics.h5"
 solve_metadata_filename = "benchmark_solve_metadata.h5"
+restart_base_filename = "restart"
 
 case_id = make_case_id(
     case="case",
@@ -226,6 +226,9 @@ if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
 
 checkpoint_mode = bool(params.uw_metrics_from_checkpoint_only)
+restart_base = os.path.join(output_dir, restart_base_filename)
+restart_mesh_file = restart_base + ".mesh.0.h5"
+restart_checkpoint_file = restart_base + ".checkpoint.00000.h5"
 
 uw.timing.start()
 mesh_stage_event = uw.timing.create_event("Benchmark.MeshCreation")
@@ -279,8 +282,8 @@ def load_spherical_mesh(*, radius_outer, radius_inner, qdegree, mesh_file=None, 
 
 def require_checkpoint_fields(output_dir, index=0):
     expected_files = [
-        os.path.join(output_dir, f"output.mesh.Velocity.{index:05d}.h5"),
-        os.path.join(output_dir, f"output.mesh.Pressure.{index:05d}.h5"),
+        restart_mesh_file,
+        restart_checkpoint_file,
         os.path.join(output_dir, solve_metadata_filename),
     ]
     missing_files = [path for path in expected_files if not os.path.exists(path)]
@@ -290,27 +293,6 @@ def require_checkpoint_fields(output_dir, index=0):
             "Checkpoint-only metrics mode requires existing solve outputs:\n"
             f"{missing_text}"
         )
-
-
-def load_from_timestep_field_file(mesh_var, filename, data_name, group="/fields"):
-    if mesh_var._lvec is None:
-        mesh_var._set_vec(available=True)
-
-    indexset, subdm = mesh_var.mesh.dm.createSubDM(mesh_var.field_id)
-    viewer = PETSc.ViewerHDF5().create(filename, "r", comm=PETSc.COMM_WORLD)
-    old_name = mesh_var._gvec.getName()
-
-    try:
-        viewer.pushGroup(group)
-        mesh_var._gvec.setName(data_name)
-        mesh_var._gvec.load(viewer)
-        subdm.globalToLocal(mesh_var._gvec, mesh_var._lvec, addv=False)
-    finally:
-        mesh_var._gvec.setName(old_name)
-        viewer.popGroup()
-        viewer.destroy()
-        indexset.destroy()
-        subdm.destroy()
 
 
 def write_solve_metadata(output_dir, *, snes_reason, ksp_reason, snes_iterations, ksp_iterations):
@@ -492,7 +474,7 @@ qdegree = max(params.uw_pdegree, params.uw_vdegree)
 
 if checkpoint_mode:
     mesh = load_spherical_mesh(
-        mesh_file=os.path.join(output_dir, "output.mesh.00000.h5"),
+        mesh_file=restart_mesh_file,
         radius_outer=params.uw_r_o,
         radius_inner=params.uw_r_i,
         qdegree=qdegree,
@@ -743,18 +725,10 @@ if checkpoint_mode:
     uw.pprint("Stage start: loading checkpoint fields")
     require_checkpoint_fields(output_dir, index=0)
     uw.pprint("Loading Velocity")
-    load_from_timestep_field_file(
-        v_soln,
-        os.path.join(output_dir, "output.mesh.Velocity.00000.h5"),
-        "Velocity",
-    )
+    v_soln.read_checkpoint(restart_checkpoint_file, data_name="Velocity")
     uw.pprint("Loaded Velocity")
     uw.pprint("Loading Pressure")
-    load_from_timestep_field_file(
-        p_soln,
-        os.path.join(output_dir, "output.mesh.Pressure.00000.h5"),
-        "Pressure",
-    )
+    p_soln.read_checkpoint(restart_checkpoint_file, data_name="Pressure")
     uw.pprint("Loaded Pressure")
     uw.pprint("Loading solve metadata")
     solve_metadata = read_solve_metadata(output_dir)
@@ -854,6 +828,12 @@ if not checkpoint_mode:
         index=0,
         meshVars=[v_soln, p_soln],
         outputPath=str(output_dir),
+    )
+    mesh.write_checkpoint(
+        restart_base,
+        meshUpdates=False,
+        meshVars=[v_soln, p_soln],
+        index=0,
     )
     h5_stage_event.end()
     write_solve_metadata(
