@@ -860,48 +860,63 @@ def project_tau_component(mesh, tau_expr, i, j, degree, tolerance):
         vtype=uw.VarType.SCALAR,
         varsymbol=rf"\tau_{{{i}{j}}}",
     )
-    tau_component_projector = uw.systems.Projection(
-        mesh,
-        tau_component,
-        degree=degree,
-    )
-    tau_component_projector.uw_function = tau_expr[i, j]
-    tau_component_projector.smoothing = 0.0
-    tau_component_projector.tolerance = tolerance
 
-    uw.pprint(f"Stage start: projecting tau_{i}{j}")
-    tau_component_projector.solve()
-    uw.pprint(f"Stage complete: projecting tau_{i}{j}")
+    projector = None
+    try:
+        projector = uw.systems.Projection(
+            mesh,
+            tau_component,
+            degree=degree,
+        )
+        projector.uw_function = tau_expr[i, j]
+        projector.smoothing = 0.0
+        projector.tolerance = tolerance
+
+        uw.pprint(f"Stage start: projecting tau_{i}{j}")
+        projector.solve()
+        uw.pprint(f"Stage complete: projecting tau_{i}{j}")
+    finally:
+        del projector
+        gc.collect()
 
     return tau_component
+
+# %%
+def project_symmetric_tau(mesh, tau_expr, degree, tolerance):
+    """
+    Project symmetric deviatoric-stress components and return their tensor expression.
+    """
+    tau_projected_components = {}
+
+    for i in range(mesh.dim):
+        for j in range(i, mesh.dim):
+            tau_projected_components[(i, j)] = project_tau_component(
+                mesh=mesh,
+                tau_expr=tau_expr,
+                i=i,
+                j=j,
+                degree=degree,
+                tolerance=tolerance,
+            )
+
+    tau_projected_expr = sp.Matrix(
+        mesh.dim,
+        mesh.dim,
+        lambda i, j: tau_projected_components[(min(i, j), max(i, j))].sym[0],
+    )
+
+    return tau_projected_expr, tau_projected_components
 
 # %%
 n_vec = sp.Matrix([unit_rvec[i] for i in range(mesh.dim)])
 # Project deviatoric-stress components first, then form sigma_rr. This matches
 # the original stokes.tau path while avoiding one large tensor projection solve.
-tau_raw_expr = sp.Matrix(stokes.stress_deviator)
-tau_projected_components = {}
-tau_component_indices = [
-    (i, j) for i in range(mesh.dim) for j in range(i, mesh.dim)
-]
-
-for i, j in tau_component_indices:
-    tau_projected_components[(i, j)] = project_tau_component(
-        mesh=mesh,
-        tau_expr=tau_raw_expr,
-        i=i,
-        j=j,
-        degree=params.uw_vdegree,
-        tolerance=params.uw_stokes_tol,
-    )
-    gc.collect()
-
-tau_projected_expr = sp.MutableDenseMatrix.zeros(mesh.dim, mesh.dim)
-for i in range(mesh.dim):
-    for j in range(mesh.dim):
-        tau_projected_expr[i, j] = tau_projected_components[
-            (min(i, j), max(i, j))
-        ].sym[0]
+tau_projected_expr, tau_projected_components = project_symmetric_tau(
+    mesh=mesh,
+    tau_expr=sp.Matrix(stokes.stress_deviator),
+    degree=params.uw_vdegree,
+    tolerance=params.uw_stokes_tol,
+)
 
 sigma_rr_soln_expr = (n_vec.T * tau_projected_expr * n_vec)[0] - p_soln.sym[0]
 sigma_rr_err_expr = sigma_rr_soln_expr - sigma_rr_ana_expr
