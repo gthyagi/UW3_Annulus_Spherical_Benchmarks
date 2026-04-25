@@ -859,15 +859,16 @@ if not checkpoint_mode:
 
 # %%
 n_vec = sp.Matrix([unit_rvec[i] for i in range(mesh.dim)])
-# Use the projected constitutive flux from the solved field. The raw symbolic
-# stokes.stress path can under-recover the viscous normal stress on boundaries,
-# which gives misleading sigma_rr norms for this benchmark.
-uw.pprint("Stage start: projecting tau")
-tau_soln = stokes.tau
-uw.pprint("Stage complete: projecting tau")
-tau_soln_expr = sp.Matrix(tau_soln.sym)
-sigma_rr_soln_expr = (n_vec.T * tau_soln_expr * n_vec)[0] - p_soln.sym[0]
-sigma_rr_err_expr = sigma_rr_soln_expr - sigma_rr_ana_expr
+# Temporarily skip stokes.tau projection for large Gadi checkpoint-metrics tests.
+# The checkpoint reload succeeds, but projecting the full 3D deviatoric stress
+# tensor can exceed memory before other metrics are written.
+# uw.pprint("Stage start: projecting tau")
+# tau_soln = stokes.tau
+# uw.pprint("Stage complete: projecting tau")
+# tau_soln_expr = sp.Matrix(tau_soln.sym)
+# sigma_rr_soln_expr = (n_vec.T * tau_soln_expr * n_vec)[0] - p_soln.sym[0]
+# sigma_rr_err_expr = sigma_rr_soln_expr - sigma_rr_ana_expr
+sigma_rr_err_expr = None
 
 # %% [markdown]
 # ### Relative Error Norms
@@ -993,8 +994,10 @@ p_err_l2_lower_abs = absolute_l2_error(mesh, p_err_expr, boundary=lower)
 p_err_l2_upper_abs = absolute_l2_error(mesh, p_err_expr, boundary=upper)
 p_err_l2_lower = np.nan
 p_err_l2_upper = np.nan
-sigma_rr_err_l2_lower = relative_l2_error(mesh, sigma_rr_err_expr, sigma_rr_ana_expr, boundary=lower)
-sigma_rr_err_l2_upper = relative_l2_error(mesh, sigma_rr_err_expr, sigma_rr_ana_expr, boundary=upper)
+# sigma_rr_err_l2_lower = relative_l2_error(mesh, sigma_rr_err_expr, sigma_rr_ana_expr, boundary=lower)
+# sigma_rr_err_l2_upper = relative_l2_error(mesh, sigma_rr_err_expr, sigma_rr_ana_expr, boundary=upper)
+sigma_rr_err_l2_lower = np.nan
+sigma_rr_err_l2_upper = np.nan
 u_dot_n_l2_lower_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=lower)
 u_dot_n_l2_upper_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=upper)
 run_metadata = gather_run_metadata(
