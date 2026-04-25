@@ -47,6 +47,7 @@
 
 # %%
 import os
+import gc
 import subprocess
 import sys
 from enum import Enum
@@ -726,15 +727,9 @@ else:
 if checkpoint_mode:
     uw.pprint("Stage start: loading checkpoint fields")
     require_checkpoint_fields(output_dir, index=0)
-    uw.pprint("Loading Velocity")
     v_soln.read_checkpoint(velocity_checkpoint_file, data_name="Velocity")
-    uw.pprint("Loaded Velocity")
-    uw.pprint("Loading Pressure")
     p_soln.read_checkpoint(pressure_checkpoint_file, data_name="Pressure")
-    uw.pprint("Loaded Pressure")
-    uw.pprint("Loading solve metadata")
     solve_metadata = read_solve_metadata(output_dir)
-    uw.pprint("Loaded solve metadata")
     snes_reason = solve_metadata["snes_reason"]
     ksp_reason = solve_metadata["ksp_reason"]
     snes_iterations = solve_metadata["snes_iterations"]
@@ -752,10 +747,6 @@ else:
     ksp_reason = int(stokes.snes.ksp.getConvergedReason())
     snes_iterations = int(stokes.snes.getIterationNumber())
     ksp_iterations = int(stokes.snes.ksp.getIterationNumber())
-
-    if uw.mpi.rank == 0:
-        print(snes_reason)
-        print(ksp_reason)
 
     uw.pprint("Stage complete: stokes solve")
 
@@ -858,30 +849,62 @@ if not checkpoint_mode:
     raise SystemExit(0)
 
 # %%
+def project_tau_component(mesh, tau_expr, i, j, degree, tolerance):
+    """
+    Project one deviatoric-stress component and keep projector lifetime local.
+    """
+    tau_component = uw.discretisation.MeshVariable(
+        varname=f"Tau{i}{j}",
+        mesh=mesh,
+        degree=degree,
+        vtype=uw.VarType.SCALAR,
+        varsymbol=rf"\tau_{{{i}{j}}}",
+    )
+    tau_component_projector = uw.systems.Projection(
+        mesh,
+        tau_component,
+        degree=degree,
+    )
+    tau_component_projector.uw_function = tau_expr[i, j]
+    tau_component_projector.smoothing = 0.0
+    tau_component_projector.tolerance = tolerance
+
+    uw.pprint(f"Stage start: projecting tau_{i}{j}")
+    tau_component_projector.solve()
+    uw.pprint(f"Stage complete: projecting tau_{i}{j}")
+
+    return tau_component
+
+# %%
 n_vec = sp.Matrix([unit_rvec[i] for i in range(mesh.dim)])
-# Project only the scalar radial normal stress needed by the benchmark. This
-# avoids the full 3D tensor projection performed by stokes.tau.
-sigma_rr_raw_expr = (n_vec.T * sp.Matrix(stokes.stress) * n_vec)[0]
-sigma_rr_proj = uw.discretisation.MeshVariable(
-    varname="SigmaRR",
-    mesh=mesh,
-    degree=params.uw_vdegree,
-    vtype=uw.VarType.SCALAR,
-    varsymbol=r"\sigma_{rr}",
-)
-sigma_rr_projector = uw.systems.Projection(
-    mesh,
-    sigma_rr_proj,
-    degree=params.uw_vdegree,
-)
-sigma_rr_projector.uw_function = sigma_rr_raw_expr
-sigma_rr_projector.smoothing = 1.0e-6
+# Project deviatoric-stress components first, then form sigma_rr. This matches
+# the original stokes.tau path while avoiding one large tensor projection solve.
+tau_raw_expr = sp.Matrix(stokes.stress_deviator)
+tau_projected_components = {}
+tau_component_indices = [
+    (i, j) for i in range(mesh.dim) for j in range(i, mesh.dim)
+]
 
-uw.pprint("Stage start: projecting sigma_rr")
-sigma_rr_projector.solve()
-uw.pprint("Stage complete: projecting sigma_rr")
+for i, j in tau_component_indices:
+    tau_projected_components[(i, j)] = project_tau_component(
+        mesh=mesh,
+        tau_expr=tau_raw_expr,
+        i=i,
+        j=j,
+        degree=params.uw_vdegree,
+        tolerance=params.uw_stokes_tol,
+    )
+    gc.collect()
 
-sigma_rr_err_expr = sigma_rr_proj.sym[0] - sigma_rr_ana_expr
+tau_projected_expr = sp.MutableDenseMatrix.zeros(mesh.dim, mesh.dim)
+for i in range(mesh.dim):
+    for j in range(mesh.dim):
+        tau_projected_expr[i, j] = tau_projected_components[
+            (min(i, j), max(i, j))
+        ].sym[0]
+
+sigma_rr_soln_expr = (n_vec.T * tau_projected_expr * n_vec)[0] - p_soln.sym[0]
+sigma_rr_err_expr = sigma_rr_soln_expr - sigma_rr_ana_expr
 
 # %% [markdown]
 # ### Relative Error Norms
