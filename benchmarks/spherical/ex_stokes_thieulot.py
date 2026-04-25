@@ -862,7 +862,9 @@ n_vec = sp.Matrix([unit_rvec[i] for i in range(mesh.dim)])
 # Use the projected constitutive flux from the solved field. The raw symbolic
 # stokes.stress path can under-recover the viscous normal stress on boundaries,
 # which gives misleading sigma_rr norms for this benchmark.
+uw.pprint("Stage start: projecting tau")
 tau_soln = stokes.tau
+uw.pprint("Stage complete: projecting tau")
 tau_soln_expr = sp.Matrix(tau_soln.sym)
 sigma_rr_soln_expr = (n_vec.T * tau_soln_expr * n_vec)[0] - p_soln.sym[0]
 sigma_rr_err_expr = sigma_rr_soln_expr - sigma_rr_ana_expr
