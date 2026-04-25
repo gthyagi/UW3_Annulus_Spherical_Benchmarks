@@ -14,6 +14,7 @@
 
 # %%
 import os
+import gc
 import subprocess
 import sys
 from enum import Enum
@@ -230,6 +231,7 @@ else:
 output_root = os.path.join(output_base, "output", "spherical", "kramer", "latest")
 metrics_filename = "benchmark_metrics.h5"
 solve_metadata_filename = "benchmark_solve_metadata.h5"
+checkout_base_filename = "checkout"
 
 case_id = make_case_id(
     case=params.uw_case,
@@ -247,6 +249,11 @@ case_id = make_case_id(
 )
 
 output_dir = os.path.join(output_root, case_id)
+checkpoint_mode = bool(params.uw_metrics_from_checkpoint_only)
+checkout_base = os.path.join(output_dir, checkout_base_filename)
+checkout_mesh_file = checkout_base + ".mesh.00000.h5"
+velocity_checkpoint_file = checkout_base + ".Velocity.00000.h5"
+pressure_checkpoint_file = checkout_base + ".Pressure.00000.h5"
 
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
@@ -260,21 +267,24 @@ integrals_stage_event = uw.timing.create_event("Benchmark.Integrals")
 # %%
 def load_spherical_mesh(
     *,
-    mesh_dir,
     radius_outer,
     radius_inner,
-    cellsize,
     qdegree,
+    mesh_file=None,
+    mesh_dir=None,
+    cellsize=None,
     radius_internal=None,
 ):
-    inv_cellsize = int(round(1.0 / cellsize))
-
     if radius_internal is not None:
-        msh_h5_file = os.path.join(
-            mesh_dir,
-            f"uw_spherical_shell_ro{radius_outer:g}_rint{float(radius_internal):g}"
-            f"_ri{radius_inner:g}_inv_cellsize{inv_cellsize}.msh",
-        )
+        if mesh_file is None:
+            inv_cellsize = int(round(1.0 / cellsize))
+            msh_h5_file = os.path.join(
+                mesh_dir,
+                f"uw_spherical_shell_ro{radius_outer:g}_rint{float(radius_internal):g}"
+                f"_ri{radius_inner:g}_inv_cellsize{inv_cellsize}.msh",
+            )
+        else:
+            msh_h5_file = mesh_file
 
         class Boundaries(Enum):
             Centre = 1
@@ -290,11 +300,15 @@ def load_spherical_mesh(
             Upper = 13
 
     else:
-        msh_h5_file = os.path.join(
-            mesh_dir,
-            f"uw_spherical_shell_ro{radius_outer:g}_ri{radius_inner:g}"
-            f"_inv_cellsize{inv_cellsize}.msh.h5",
-        )
+        if mesh_file is None:
+            inv_cellsize = int(round(1.0 / cellsize))
+            msh_h5_file = os.path.join(
+                mesh_dir,
+                f"uw_spherical_shell_ro{radius_outer:g}_ri{radius_inner:g}"
+                f"_inv_cellsize{inv_cellsize}.msh.h5",
+            )
+        else:
+            msh_h5_file = mesh_file
 
         class Boundaries(Enum):
             Centre = 1
@@ -330,8 +344,9 @@ def load_spherical_mesh(
 
 def require_checkpoint_fields(output_dir, index=0):
     expected_files = [
-        os.path.join(output_dir, f"output.mesh.Velocity.{index:05d}.h5"),
-        os.path.join(output_dir, f"output.mesh.Pressure.{index:05d}.h5"),
+        checkout_mesh_file,
+        velocity_checkpoint_file,
+        pressure_checkpoint_file,
         os.path.join(output_dir, solve_metadata_filename),
     ]
     missing_files = [path for path in expected_files if not os.path.exists(path)]
@@ -547,7 +562,15 @@ uw.pprint("Stage start: mesh creation/loading")
 mesh_stage_event.begin()
 qdegree = max(params.uw_pdegree, params.uw_vdegree)
 
-if params.uw_run_on_gadi:
+if checkpoint_mode:
+    mesh = load_spherical_mesh(
+        mesh_file=checkout_mesh_file,
+        radius_outer=params.uw_radius_outer,
+        radius_inner=params.uw_radius_inner,
+        radius_internal=params.uw_radius_internal if delta_fn else None,
+        qdegree=qdegree,
+    )
+elif params.uw_run_on_gadi:
     mesh = load_spherical_mesh(
         mesh_dir=params.uw_gadi_mesh_dir,
         radius_outer=params.uw_radius_outer,
@@ -685,19 +708,19 @@ sigma_rr_ana_sym = sp.Piecewise(
 # ### Create Mesh Variables
 
 # %%
-v_uw = uw.discretisation.MeshVariable(
-    varname="V_u",
+v_soln = uw.discretisation.MeshVariable(
+    varname="Velocity",
     mesh=mesh,
     degree=params.uw_vdegree,
     vtype=uw.VarType.VECTOR,
-    varsymbol=r"{V_u}",
+    varsymbol=r"V",
 )
-p_uw = uw.discretisation.MeshVariable(
-    varname="P_u",
+p_soln = uw.discretisation.MeshVariable(
+    varname="Pressure",
     mesh=mesh,
     degree=params.uw_pdegree,
     vtype=uw.VarType.SCALAR,
-    varsymbol=r"{P_u}",
+    varsymbol=r"P",
     continuous=params.uw_pcont,
 )
 
@@ -708,7 +731,7 @@ p_uw = uw.discretisation.MeshVariable(
 # #### Stokes Setup
 
 # %%
-stokes = Stokes(mesh, velocityField=v_uw, pressureField=p_uw)
+stokes = Stokes(mesh, velocityField=v_soln, pressureField=p_soln)
 stokes.constitutive_model = uw.constitutive_models.ViscousFlowModel
 stokes.constitutive_model.Parameters.viscosity = 1.0
 stokes.saddle_preconditioner = 1.0
@@ -782,8 +805,8 @@ if freeslip:
     if params.uw_freeslip_type == "penalty":
         # Free-slip through a penalty on the normal velocity component.
         Gamma_N = mesh.CoordinateSystem.unit_e_0
-        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, upper)
-        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_uw.sym) * Gamma_N, lower)
+        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_soln.sym) * Gamma_N, upper)
+        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_soln.sym) * Gamma_N, lower)
     elif params.uw_freeslip_type == "nitsche":
         # Nitsche's method is more robust than the penalty method for free-slip conditions, 
         # and it does not require tuning a penalty parameter.
@@ -887,14 +910,11 @@ else:
 # %% [markdown]
 # #### Solve Stokes
 
-# %%
-checkpoint_mode = bool(params.uw_metrics_from_checkpoint_only)
-
 if checkpoint_mode:
     uw.pprint("Stage start: loading checkpoint fields")
     require_checkpoint_fields(output_dir, index=0)
-    v_uw.read_timestep("output", "Velocity", 0, outputPath=str(output_dir))
-    p_uw.read_timestep("output", "Pressure", 0, outputPath=str(output_dir))
+    v_soln.read_checkpoint(velocity_checkpoint_file, data_name="Velocity")
+    p_soln.read_checkpoint(pressure_checkpoint_file, data_name="Pressure")
     solve_metadata = read_solve_metadata(output_dir)
     snes_reason = solve_metadata["snes_reason"]
     ksp_reason = solve_metadata["ksp_reason"]
@@ -913,10 +933,6 @@ else:
     ksp_reason = int(stokes.snes.ksp.getConvergedReason())
     snes_iterations = int(stokes.snes.getIterationNumber())
     ksp_iterations = int(stokes.snes.ksp.getIterationNumber())
-
-    if uw.mpi.rank == 0:
-        print(snes_reason)
-        print(ksp_reason)
 
     uw.pprint("Stage complete: stokes solve")
 
@@ -965,10 +981,10 @@ def subtract_rigid_rotations(mesh, velocity_var, rotation_modes, passes=2):
 
 # %%
 if not checkpoint_mode:
-    subtract_pressure_mean(mesh, p_uw)
+    subtract_pressure_mean(mesh, p_soln)
 
     if freeslip:
-        subtract_rigid_rotations(mesh, v_uw, velocity_nullspace_basis)
+        subtract_rigid_rotations(mesh, v_soln, velocity_nullspace_basis)
 
 # %% [markdown]
 # ### Save h5 Output
@@ -981,8 +997,15 @@ if not checkpoint_mode:
     mesh.write_timestep(
         "output",
         index=0,
-        meshVars=[v_uw, p_uw],
+        meshVars=[v_soln, p_soln],
         outputPath=str(output_dir),
+    )
+    mesh.write_checkpoint(
+        checkout_base_filename,
+        outputPath=str(output_dir),
+        meshUpdates=False,
+        meshVars=[v_soln, p_soln],
+        index=0,
     )
     h5_stage_event.end()
     write_solve_metadata(
@@ -1007,17 +1030,80 @@ if not checkpoint_mode:
 # ### Errors and L2 Norm
 
 # %%
-v_err_sym = v_uw.sym - v_ana_sym
-p_err_sym = p_uw.sym[0] - p_ana_sym
+v_err_sym = v_soln.sym - v_ana_sym
+p_err_sym = p_soln.sym[0] - p_ana_sym
 
 # %%
 n_vec = sp.Matrix([unit_rvec[i] for i in range(mesh.dim)])
-# Use the projected constitutive flux from the solved field. The raw symbolic
-# stokes.stress path can under-recover the viscous normal stress on boundaries,
-# which gives misleading sigma_rr norms for this benchmark.
-tau_uw = stokes.tau
-tau_uw_sym = sp.Matrix(tau_uw.sym)
-sigma_rr_uw_sym = (n_vec.T * tau_uw_sym * n_vec)[0] - p_uw.sym[0]
+# Project deviatoric-stress components first, then form sigma_rr. This matches
+# the original stokes.tau path while avoiding one large tensor projection solve.
+def project_tau_component(mesh, tau_expr, i, j, degree, tolerance):
+    """
+    Project one deviatoric-stress component and keep projector lifetime local.
+    """
+    tau_component = uw.discretisation.MeshVariable(
+        varname=f"Tau{i}{j}",
+        mesh=mesh,
+        degree=degree,
+        vtype=uw.VarType.SCALAR,
+        varsymbol=rf"\tau_{{{i}{j}}}",
+    )
+
+    projector = None
+    try:
+        projector = uw.systems.Projection(
+            mesh,
+            tau_component,
+            degree=degree,
+        )
+        projector.uw_function = tau_expr[i, j]
+        projector.smoothing = 0.0
+        projector.tolerance = tolerance
+
+        uw.pprint(f"Stage start: projecting tau_{i}{j}")
+        projector.solve()
+        uw.pprint(f"Stage complete: projecting tau_{i}{j}")
+    finally:
+        del projector
+        gc.collect()
+
+    return tau_component
+
+# %%
+def project_symmetric_tau(mesh, tau_expr, degree, tolerance):
+    """
+    Project symmetric deviatoric-stress components and return their tensor expression.
+    """
+    tau_projected_components = {}
+
+    for i in range(mesh.dim):
+        for j in range(i, mesh.dim):
+            tau_projected_components[(i, j)] = project_tau_component(
+                mesh=mesh,
+                tau_expr=tau_expr,
+                i=i,
+                j=j,
+                degree=degree,
+                tolerance=tolerance,
+            )
+
+    tau_projected_expr = sp.Matrix(
+        mesh.dim,
+        mesh.dim,
+        lambda i, j: tau_projected_components[(min(i, j), max(i, j))].sym[0],
+    )
+
+    return tau_projected_expr, tau_projected_components
+
+# %%
+tau_projected_expr, tau_projected_components = project_symmetric_tau(
+    mesh=mesh,
+    tau_expr=sp.Matrix(stokes.stress_deviator),
+    degree=params.uw_vdegree,
+    tolerance=params.uw_stokes_tol,
+)
+
+sigma_rr_uw_sym = (n_vec.T * tau_projected_expr * n_vec)[0] - p_soln.sym[0]
 sigma_rr_err_sym = sigma_rr_uw_sym - sigma_rr_ana_sym
 
 # %%
@@ -1148,12 +1234,12 @@ else:
     v_err_l2_lower = relative_l2_error(mesh, v_err_sym, v_ana_sym, boundary=lower)
     v_err_l2_upper = relative_l2_error(mesh, v_err_sym, v_ana_sym, boundary=upper)
 
-u_dot_n_l2_lower_abs = absolute_l2_error(mesh, unit_rvec.dot(v_uw.sym), boundary=lower)
-u_dot_n_l2_upper_abs = absolute_l2_error(mesh, unit_rvec.dot(v_uw.sym), boundary=upper)
+u_dot_n_l2_lower_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=lower)
+u_dot_n_l2_upper_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=upper)
 run_metadata = gather_run_metadata(
     mesh,
-    v_uw,
-    p_uw,
+    v_soln,
+    p_soln,
     snes_reason,
     ksp_reason,
     snes_iterations,
@@ -1187,7 +1273,7 @@ if uw.mpi.rank == 0:
     for key, value in metrics.items():
         print(f"{key}: {value}")
 integrals_stage_event.end()
-uw.timing.print_table(filename=os.path.join(output_dir, "integrals_timing.txt"))
+uw.timing.print_table(filename=os.path.join(output_dir, "integrals_timing.csv"), format="csv")
 
 # %% [markdown]
 # ### Save Metrics Output
