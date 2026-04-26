@@ -126,7 +126,7 @@ params = uw.Params(
         description="Use Gadi scratch paths for benchmark output",
     ),
     uw_gadi_mesh_dir=uw.Param(
-        "/g/data/m18/tg7098/Spherical_Mesh_Gmsh/kramer",
+        "/g/data/m18/tg7098/spherical_mesh_gmsh/kramer",
         type=uw.ParamType.STRING,
         description="Directory for spherical .msh and .msh.h5 files",
     ),

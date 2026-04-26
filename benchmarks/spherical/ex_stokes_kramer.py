@@ -126,7 +126,7 @@ params = uw.Params(
         description="Use Gadi scratch paths for benchmark output",
     ),
     uw_gadi_mesh_dir=uw.Param(
-        "/g/data/m18/tg7098/Spherical_Mesh_Gmsh/kramer",
+        "/g/data/m18/tg7098/spherical_mesh_gmsh/kramer",
         type=uw.ParamType.STRING,
         description="Directory for spherical .msh and .msh.h5 files",
     ),
@@ -281,7 +281,7 @@ def load_spherical_mesh(
             msh_h5_file = os.path.join(
                 mesh_dir,
                 f"uw_spherical_shell_ro{radius_outer:g}_rint{float(radius_internal):g}"
-                f"_ri{radius_inner:g}_inv_cellsize{inv_cellsize}.msh",
+                f"_ri{radius_inner:g}_inv_cellsize{inv_cellsize}.msh.h5",
             )
         else:
             msh_h5_file = mesh_file
@@ -382,6 +382,16 @@ def read_solve_metadata(output_dir):
             "snes_iterations": int(f_h5["snes_iterations"][()]),
             "ksp_iterations": int(f_h5["ksp_iterations"][()]),
         }
+
+
+def require_converged_solve(*, snes_reason, ksp_reason):
+    if snes_reason < 0 or ksp_reason < 0:
+        raise RuntimeError(
+            "Stokes solve did not converge; refusing to write or postprocess "
+            f"invalid benchmark output (SNES reason={snes_reason}, "
+            f"KSP reason={ksp_reason})."
+        )
+
 
 # %% [markdown]
 # ### Analytical Solution Helpers
@@ -935,6 +945,8 @@ else:
     ksp_iterations = int(stokes.snes.ksp.getIterationNumber())
 
     uw.pprint("Stage complete: stokes solve")
+
+require_converged_solve(snes_reason=snes_reason, ksp_reason=ksp_reason)
 
 # %% [markdown]
 # ### Benchmark Calibrations

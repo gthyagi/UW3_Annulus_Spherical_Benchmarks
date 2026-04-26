@@ -48,7 +48,7 @@ params = uw.Params(
         description="Target spherical-shell mesh cell size",
     ),
     uw_gadi_mesh_dir=uw.Param(
-        "/g/data/m18/tg7098/Spherical_Mesh_Gmsh",
+        "/g/data/m18/tg7098/spherical_mesh_gmsh",
         type=uw.ParamType.STRING,
         description="Directory for spherical .msh and .msh.h5 files",
     ),
