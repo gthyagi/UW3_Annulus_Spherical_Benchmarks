@@ -12,8 +12,8 @@ CELL_SIZES = ["1/8", "1/16", "1/32", "1/64", "1/96"]
 RESOURCES_BY_CELLSIZE = {
     "1/8": {"ncpus": 8, "mem": "32gb", "walltime": "01:00:00"},
     "1/16": {"ncpus": 32, "mem": "128gb", "walltime": "06:00:00"},
-    "1/32": {"ncpus": 144, "mem": "576gb", "walltime": "06:00:00"},
-    "1/64": {"ncpus": 1056, "mem": "4118gb", "walltime": "06:00:00"},
+    "1/32": {"ncpus": 192, "mem": "576gb", "walltime": "06:00:00"},
+    "1/64": {"ncpus": 1152, "mem": "4608gb", "walltime": "06:00:00"},
     "1/96": {"ncpus": 3840, "mem": "14976gb", "walltime": "05:00:00"},
 }
 LM_PAIRS = [(2, 1), (2, 2), (4, 2), (4, 4), (8, 4), (8, 8)]

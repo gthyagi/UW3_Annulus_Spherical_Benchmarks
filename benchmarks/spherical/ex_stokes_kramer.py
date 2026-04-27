@@ -959,6 +959,15 @@ else:
     uw.pprint("Stage complete: stokes solve")
 
 require_converged_solve(snes_reason=snes_reason, ksp_reason=ksp_reason)
+if not checkpoint_mode:
+    write_solve_metadata(
+        output_dir,
+        snes_reason=snes_reason,
+        ksp_reason=ksp_reason,
+        snes_iterations=snes_iterations,
+        ksp_iterations=ksp_iterations,
+    )
+    uw.mpi.comm.barrier()
 
 # %% [markdown]
 # ### Benchmark Calibrations
@@ -1015,15 +1024,9 @@ if not checkpoint_mode:
 
 # %%
 if not checkpoint_mode:
-    uw.pprint("Stage start: saving h5 output")
+    uw.pprint("Stage start: saving checkpoint output")
 
     h5_stage_event.begin()
-    mesh.write_timestep(
-        "output",
-        index=0,
-        meshVars=[v_soln, p_soln],
-        outputPath=str(output_dir),
-    )
     mesh.write_checkpoint(
         checkout_base_filename,
         outputPath=str(output_dir),
@@ -1032,15 +1035,8 @@ if not checkpoint_mode:
         index=0,
     )
     h5_stage_event.end()
-    write_solve_metadata(
-        output_dir,
-        snes_reason=snes_reason,
-        ksp_reason=ksp_reason,
-        snes_iterations=snes_iterations,
-        ksp_iterations=ksp_iterations,
-    )
 
-    uw.pprint("Stage complete: saving h5 output")
+    uw.pprint("Stage complete: saving checkpoint output")
     uw.timing.print_table(filename=os.path.join(output_dir, "h5_timing.txt"))
 
     if uw.mpi.rank == 0:
@@ -1049,6 +1045,18 @@ if not checkpoint_mode:
             "to compute benchmark_metrics.h5 from the saved checkpoint."
         )
     raise SystemExit(0)
+
+uw.pprint("Stage start: saving visualization h5 output")
+h5_stage_event.begin()
+mesh.write_timestep(
+    "output",
+    index=0,
+    meshVars=[v_soln, p_soln],
+    outputPath=str(output_dir),
+)
+h5_stage_event.end()
+uw.pprint("Stage complete: saving visualization h5 output")
+uw.timing.print_table(filename=os.path.join(output_dir, "h5_timing.txt"))
 
 # %% [markdown]
 # ### Errors and L2 Norm
