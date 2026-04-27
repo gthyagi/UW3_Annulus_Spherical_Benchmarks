@@ -140,6 +140,16 @@ params = uw.Params(
         type=uw.ParamType.BOOLEAN,
         description="Raise an error before writing output if the Stokes solve diverges",
     ),
+    uw_debug_fieldsplit_ksp_type=uw.Param(
+        "gmres",
+        type=uw.ParamType.STRING,
+        description="Debug fieldsplit sub-KSP type for velocity/pressure solves, e.g. gmres, fgmres, or fcg",
+    ),
+    uw_debug_fieldsplit_ksp_max_it=uw.Param(
+        200,
+        type=uw.ParamType.INTEGER,
+        description="Maximum iterations for debug fieldsplit sub-KSP solves",
+    ),
 )
 
 if any(arg in ("--help", "-h", "-help", "-uw_help") for arg in sys.argv[1:]):
@@ -918,14 +928,21 @@ else:
     stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_type", "kaskade")
     stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_cycle_type", "w")
     stokes.petsc_options["fieldsplit_velocity_mg_coarse_pc_type"] = "svd"
-    stokes.petsc_options["fieldsplit_velocity_ksp_type"] = "fcg"
+    stokes.petsc_options["fieldsplit_velocity_ksp_type"] = params.uw_debug_fieldsplit_ksp_type
+    stokes.petsc_options["fieldsplit_velocity_ksp_max_it"] = params.uw_debug_fieldsplit_ksp_max_it
     stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_type"] = "chebyshev"
     stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_max_it"] = 5
     stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_converged_maxits"] = None
 
     stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", "mg")
+    stokes.petsc_options["fieldsplit_pressure_ksp_type"] = params.uw_debug_fieldsplit_ksp_type
+    stokes.petsc_options["fieldsplit_pressure_ksp_max_it"] = params.uw_debug_fieldsplit_ksp_max_it
     stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative")
     stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
+
+    if params.uw_debug_fieldsplit_ksp_type in ("gmres", "fgmres"):
+        stokes.petsc_options["fieldsplit_velocity_ksp_pc_side"] = "right"
+        stokes.petsc_options["fieldsplit_pressure_ksp_pc_side"] = "right"
 
 # %% [markdown]
 # #### Solve Stokes
