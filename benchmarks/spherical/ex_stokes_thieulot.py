@@ -857,260 +857,260 @@ h5_stage_event.end()
 uw.pprint("Stage complete: saving visualization h5 output")
 uw.timing.print_table(filename=os.path.join(output_dir, "h5_timing.txt"))
 
-# # %%
-# def project_tau_component(mesh, tau_expr, i, j, degree, tolerance):
-#     """
-#     Project one deviatoric-stress component and keep projector lifetime local.
-#     """
-#     tau_component = uw.discretisation.MeshVariable(
-#         varname=f"Tau{i}{j}",
-#         mesh=mesh,
-#         degree=degree,
-#         vtype=uw.VarType.SCALAR,
-#         varsymbol=rf"\tau_{{{i}{j}}}",
-#     )
+# %%
+def project_tau_component(mesh, tau_expr, i, j, degree, tolerance):
+    """
+    Project one deviatoric-stress component and keep projector lifetime local.
+    """
+    tau_component = uw.discretisation.MeshVariable(
+        varname=f"Tau{i}{j}",
+        mesh=mesh,
+        degree=degree,
+        vtype=uw.VarType.SCALAR,
+        varsymbol=rf"\tau_{{{i}{j}}}",
+    )
 
-#     projector = None
-#     try:
-#         projector = uw.systems.Projection(
-#             mesh,
-#             tau_component,
-#             degree=degree,
-#         )
-#         projector.uw_function = tau_expr[i, j]
-#         projector.smoothing = 0.0
-#         projector.tolerance = tolerance
+    projector = None
+    try:
+        projector = uw.systems.Projection(
+            mesh,
+            tau_component,
+            degree=degree,
+        )
+        projector.uw_function = tau_expr[i, j]
+        projector.smoothing = 0.0
+        projector.tolerance = tolerance
 
-#         uw.pprint(f"Stage start: projecting tau_{i}{j}")
-#         projector.solve()
-#         uw.pprint(f"Stage complete: projecting tau_{i}{j}")
-#     finally:
-#         del projector
-#         gc.collect()
+        uw.pprint(f"Stage start: projecting tau_{i}{j}")
+        projector.solve()
+        uw.pprint(f"Stage complete: projecting tau_{i}{j}")
+    finally:
+        del projector
+        gc.collect()
 
-#     return tau_component
+    return tau_component
 
-# # %%
-# def project_symmetric_tau(mesh, tau_expr, degree, tolerance):
-#     """
-#     Project symmetric deviatoric-stress components and return their tensor expression.
-#     """
-#     tau_projected_components = {}
+# %%
+def project_symmetric_tau(mesh, tau_expr, degree, tolerance):
+    """
+    Project symmetric deviatoric-stress components and return their tensor expression.
+    """
+    tau_projected_components = {}
 
-#     for i in range(mesh.dim):
-#         for j in range(i, mesh.dim):
-#             tau_projected_components[(i, j)] = project_tau_component(
-#                 mesh=mesh,
-#                 tau_expr=tau_expr,
-#                 i=i,
-#                 j=j,
-#                 degree=degree,
-#                 tolerance=tolerance,
-#             )
+    for i in range(mesh.dim):
+        for j in range(i, mesh.dim):
+            tau_projected_components[(i, j)] = project_tau_component(
+                mesh=mesh,
+                tau_expr=tau_expr,
+                i=i,
+                j=j,
+                degree=degree,
+                tolerance=tolerance,
+            )
 
-#     tau_projected_expr = sp.Matrix(
-#         mesh.dim,
-#         mesh.dim,
-#         lambda i, j: tau_projected_components[(min(i, j), max(i, j))].sym[0],
-#     )
+    tau_projected_expr = sp.Matrix(
+        mesh.dim,
+        mesh.dim,
+        lambda i, j: tau_projected_components[(min(i, j), max(i, j))].sym[0],
+    )
 
-#     return tau_projected_expr, tau_projected_components
+    return tau_projected_expr, tau_projected_components
 
-# # %%
-# n_vec = sp.Matrix([unit_rvec[i] for i in range(mesh.dim)])
-# # Project deviatoric-stress components first, then form sigma_rr. This matches
-# # the original stokes.tau path while avoiding one large tensor projection solve.
-# tau_projected_expr, tau_projected_components = project_symmetric_tau(
-#     mesh=mesh,
-#     tau_expr=sp.Matrix(stokes.stress_deviator),
-#     degree=params.uw_vdegree,
-#     tolerance=params.uw_stokes_tol,
-# )
+# %%
+n_vec = sp.Matrix([unit_rvec[i] for i in range(mesh.dim)])
+# Project deviatoric-stress components first, then form sigma_rr. This matches
+# the original stokes.tau path while avoiding one large tensor projection solve.
+tau_projected_expr, tau_projected_components = project_symmetric_tau(
+    mesh=mesh,
+    tau_expr=sp.Matrix(stokes.stress_deviator),
+    degree=params.uw_vdegree,
+    tolerance=params.uw_stokes_tol,
+)
 
-# sigma_rr_soln_expr = (n_vec.T * tau_projected_expr * n_vec)[0] - p_soln.sym[0]
-# sigma_rr_err_expr = sigma_rr_soln_expr - sigma_rr_ana_expr
+sigma_rr_soln_expr = (n_vec.T * tau_projected_expr * n_vec)[0] - p_soln.sym[0]
+sigma_rr_err_expr = sigma_rr_soln_expr - sigma_rr_ana_expr
 
-# # %% [markdown]
-# # ### Relative Error Norms
+# %% [markdown]
+# ### Relative Error Norms
 
-# # %%
-# def _squared_norm(expr):
-#     """Return squared magnitude of scalar/vector expression."""
-#     expr = expr.sym if hasattr(expr, "sym") else expr
-#     return expr.dot(expr) if isinstance(expr, sp.MatrixBase) else expr**2
+# %%
+def _squared_norm(expr):
+    """Return squared magnitude of scalar/vector expression."""
+    expr = expr.sym if hasattr(expr, "sym") else expr
+    return expr.dot(expr) if isinstance(expr, sp.MatrixBase) else expr**2
 
-# # %%
-# def relative_l2_error(mesh, err, ana, boundary=None):
-#     """Compute relative L2 error over domain or specified boundary."""
-#     err_fn = _squared_norm(err)
-#     ana_fn = _squared_norm(ana)
+# %%
+def relative_l2_error(mesh, err, ana, boundary=None):
+    """Compute relative L2 error over domain or specified boundary."""
+    err_fn = _squared_norm(err)
+    ana_fn = _squared_norm(ana)
 
-#     if boundary is None:
-#         err_I = uw.maths.Integral(mesh, err_fn)
-#         ana_I = uw.maths.Integral(mesh, ana_fn)
-#     else:
-#         err_I = uw.maths.BdIntegral(mesh=mesh, fn=err_fn, boundary=boundary)
-#         ana_I = uw.maths.BdIntegral(mesh=mesh, fn=ana_fn, boundary=boundary)
+    if boundary is None:
+        err_I = uw.maths.Integral(mesh, err_fn)
+        ana_I = uw.maths.Integral(mesh, ana_fn)
+    else:
+        err_I = uw.maths.BdIntegral(mesh=mesh, fn=err_fn, boundary=boundary)
+        ana_I = uw.maths.BdIntegral(mesh=mesh, fn=ana_fn, boundary=boundary)
 
-#     return np.sqrt(err_I.evaluate() / ana_I.evaluate())
+    return np.sqrt(err_I.evaluate() / ana_I.evaluate())
 
-# # %%
-# def absolute_l2_error(mesh, err, boundary=None):
-#     """Compute absolute L2 error over domain or specified boundary."""
+# %%
+def absolute_l2_error(mesh, err, boundary=None):
+    """Compute absolute L2 error over domain or specified boundary."""
 
-#     err_fn = _squared_norm(err)
-#     if boundary is None:
-#         err_I = uw.maths.Integral(mesh, err_fn)
-#     else:
-#         err_I = uw.maths.BdIntegral(mesh=mesh, fn=err_fn, boundary=boundary)
-#     return np.sqrt(err_I.evaluate())
+    err_fn = _squared_norm(err)
+    if boundary is None:
+        err_I = uw.maths.Integral(mesh, err_fn)
+    else:
+        err_I = uw.maths.BdIntegral(mesh=mesh, fn=err_fn, boundary=boundary)
+    return np.sqrt(err_I.evaluate())
 
-# # %%
-# def gather_run_metadata(
-#     mesh,
-#     velocity_var,
-#     pressure_var,
-#     snes_reason,
-#     ksp_reason,
-#     snes_iterations,
-#     ksp_iterations,
-# ):
-#     """Return solver, mesh, and per-rank partition metadata for this run."""
-#     comm = MPI.COMM_WORLD
+# %%
+def gather_run_metadata(
+    mesh,
+    velocity_var,
+    pressure_var,
+    snes_reason,
+    ksp_reason,
+    snes_iterations,
+    ksp_iterations,
+):
+    """Return solver, mesh, and per-rank partition metadata for this run."""
+    comm = MPI.COMM_WORLD
 
-#     v_start, v_end = mesh.dm.getDepthStratum(0)
-#     c_start, c_end = mesh.dm.getHeightStratum(0)
+    v_start, v_end = mesh.dm.getDepthStratum(0)
+    c_start, c_end = mesh.dm.getHeightStratum(0)
 
-#     local_vertices = int(v_end - v_start)
-#     local_cells = int(c_end - c_start)
-#     local_velocity_dofs = int(velocity_var.data.size)
-#     local_pressure_dofs = int(pressure_var.data.size)
+    local_vertices = int(v_end - v_start)
+    local_cells = int(c_end - c_start)
+    local_velocity_dofs = int(velocity_var.data.size)
+    local_pressure_dofs = int(pressure_var.data.size)
 
-#     vertices_by_rank = comm.gather(local_vertices, root=0)
-#     cells_by_rank = comm.gather(local_cells, root=0)
-#     velocity_dofs_by_rank = comm.gather(local_velocity_dofs, root=0)
-#     pressure_dofs_by_rank = comm.gather(local_pressure_dofs, root=0)
+    vertices_by_rank = comm.gather(local_vertices, root=0)
+    cells_by_rank = comm.gather(local_cells, root=0)
+    velocity_dofs_by_rank = comm.gather(local_velocity_dofs, root=0)
+    pressure_dofs_by_rank = comm.gather(local_pressure_dofs, root=0)
 
-#     metadata = {
-#         "mpi_size": int(uw.mpi.size),
-#         "mesh_dim": int(mesh.dim),
-#         "global_vertices": int(comm.allreduce(local_vertices, op=MPI.SUM)),
-#         "global_cells": int(comm.allreduce(local_cells, op=MPI.SUM)),
-#         "global_velocity_dofs": int(comm.allreduce(local_velocity_dofs, op=MPI.SUM)),
-#         "global_pressure_dofs": int(comm.allreduce(local_pressure_dofs, op=MPI.SUM)),
-#         "snes_converged_reason": int(snes_reason),
-#         "ksp_converged_reason": int(ksp_reason),
-#         "snes_iterations": int(snes_iterations),
-#         "ksp_iterations": int(ksp_iterations),
-#     }
+    metadata = {
+        "mpi_size": int(uw.mpi.size),
+        "mesh_dim": int(mesh.dim),
+        "global_vertices": int(comm.allreduce(local_vertices, op=MPI.SUM)),
+        "global_cells": int(comm.allreduce(local_cells, op=MPI.SUM)),
+        "global_velocity_dofs": int(comm.allreduce(local_velocity_dofs, op=MPI.SUM)),
+        "global_pressure_dofs": int(comm.allreduce(local_pressure_dofs, op=MPI.SUM)),
+        "snes_converged_reason": int(snes_reason),
+        "ksp_converged_reason": int(ksp_reason),
+        "snes_iterations": int(snes_iterations),
+        "ksp_iterations": int(ksp_iterations),
+    }
 
-#     if uw.mpi.rank == 0:
-#         vertices_by_rank = np.asarray(vertices_by_rank, dtype=np.int64)
-#         cells_by_rank = np.asarray(cells_by_rank, dtype=np.int64)
-#         velocity_dofs_by_rank = np.asarray(velocity_dofs_by_rank, dtype=np.int64)
-#         pressure_dofs_by_rank = np.asarray(pressure_dofs_by_rank, dtype=np.int64)
+    if uw.mpi.rank == 0:
+        vertices_by_rank = np.asarray(vertices_by_rank, dtype=np.int64)
+        cells_by_rank = np.asarray(cells_by_rank, dtype=np.int64)
+        velocity_dofs_by_rank = np.asarray(velocity_dofs_by_rank, dtype=np.int64)
+        pressure_dofs_by_rank = np.asarray(pressure_dofs_by_rank, dtype=np.int64)
 
-#         metadata.update(
-#             {
-#                 "local_vertices_by_rank": vertices_by_rank,
-#                 "local_cells_by_rank": cells_by_rank,
-#                 "local_velocity_dofs_by_rank": velocity_dofs_by_rank,
-#                 "local_pressure_dofs_by_rank": pressure_dofs_by_rank,
-#                 "cell_imbalance_ratio": float(cells_by_rank.max() / cells_by_rank.mean()),
-#                 "velocity_dof_imbalance_ratio": float(
-#                     velocity_dofs_by_rank.max() / velocity_dofs_by_rank.mean()
-#                 ),
-#                 "pressure_dof_imbalance_ratio": float(
-#                     pressure_dofs_by_rank.max() / pressure_dofs_by_rank.mean()
-#                 ),
-#                 "rank_index_note": np.bytes_("array index corresponds to MPI rank"),
-#             }
-#         )
+        metadata.update(
+            {
+                "local_vertices_by_rank": vertices_by_rank,
+                "local_cells_by_rank": cells_by_rank,
+                "local_velocity_dofs_by_rank": velocity_dofs_by_rank,
+                "local_pressure_dofs_by_rank": pressure_dofs_by_rank,
+                "cell_imbalance_ratio": float(cells_by_rank.max() / cells_by_rank.mean()),
+                "velocity_dof_imbalance_ratio": float(
+                    velocity_dofs_by_rank.max() / velocity_dofs_by_rank.mean()
+                ),
+                "pressure_dof_imbalance_ratio": float(
+                    pressure_dofs_by_rank.max() / pressure_dofs_by_rank.mean()
+                ),
+                "rank_index_note": np.bytes_("array index corresponds to MPI rank"),
+            }
+        )
 
-#     return metadata
+    return metadata
 
-# # %%
-# def current_git_sha(repo_path):
-#     """Return current git SHA, or 'unknown' if unavailable."""
-#     try:
-#         return subprocess.check_output(
-#             ["git", "rev-parse", "HEAD"],
-#             cwd=repo_path,
-#             stderr=subprocess.DEVNULL,
-#             text=True,
-#         ).strip()
-#     except Exception:
-#         return "unknown"
+# %%
+def current_git_sha(repo_path):
+    """Return current git SHA, or 'unknown' if unavailable."""
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_path,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except Exception:
+        return "unknown"
 
 
-# # %%
-# integrals_stage_event.begin()
-# v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
-# p_err_l2_abs = absolute_l2_error(mesh, p_err_expr)
-# p_err_l2 = relative_l2_error(mesh, p_err_expr, p_ana_expr)
-# v_err_l2_lower = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=lower)
-# v_err_l2_upper = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=upper)
-# p_err_l2_lower_abs = absolute_l2_error(mesh, p_err_expr, boundary=lower)
-# p_err_l2_upper_abs = absolute_l2_error(mesh, p_err_expr, boundary=upper)
-# p_err_l2_lower = np.nan
-# p_err_l2_upper = np.nan
-# sigma_rr_err_l2_lower = relative_l2_error(mesh, sigma_rr_err_expr, sigma_rr_ana_expr, boundary=lower)
-# sigma_rr_err_l2_upper = relative_l2_error(mesh, sigma_rr_err_expr, sigma_rr_ana_expr, boundary=upper)
-# u_dot_n_l2_lower_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=lower)
-# u_dot_n_l2_upper_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=upper)
-# run_metadata = gather_run_metadata(
-#     mesh,
-#     v_soln,
-#     p_soln,
-#     snes_reason,
-#     ksp_reason,
-#     snes_iterations,
-#     ksp_iterations,
-# )
-# git_sha = current_git_sha(repo_root)
-# cli_args = " ".join(sys.argv)
+# %%
+integrals_stage_event.begin()
+v_err_l2 = relative_l2_error(mesh, v_err_expr, v_ana_expr)
+p_err_l2_abs = absolute_l2_error(mesh, p_err_expr)
+p_err_l2 = relative_l2_error(mesh, p_err_expr, p_ana_expr)
+v_err_l2_lower = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=lower)
+v_err_l2_upper = relative_l2_error(mesh, v_err_expr, v_ana_expr, boundary=upper)
+p_err_l2_lower_abs = absolute_l2_error(mesh, p_err_expr, boundary=lower)
+p_err_l2_upper_abs = absolute_l2_error(mesh, p_err_expr, boundary=upper)
+p_err_l2_lower = np.nan
+p_err_l2_upper = np.nan
+sigma_rr_err_l2_lower = relative_l2_error(mesh, sigma_rr_err_expr, sigma_rr_ana_expr, boundary=lower)
+sigma_rr_err_l2_upper = relative_l2_error(mesh, sigma_rr_err_expr, sigma_rr_ana_expr, boundary=upper)
+u_dot_n_l2_lower_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=lower)
+u_dot_n_l2_upper_abs = absolute_l2_error(mesh, unit_rvec.dot(v_soln.sym), boundary=upper)
+run_metadata = gather_run_metadata(
+    mesh,
+    v_soln,
+    p_soln,
+    snes_reason,
+    ksp_reason,
+    snes_iterations,
+    ksp_iterations,
+)
+git_sha = current_git_sha(repo_root)
+cli_args = " ".join(sys.argv)
 
-# metrics = {
-#     "m": params.uw_m,
-#     "cellsize": params.uw_cellsize,
-#     "v_l2_norm": v_err_l2,
-#     "p_l2_norm": p_err_l2,
-#     "p_l2_norm_abs": p_err_l2_abs,
-#     "v_l2_norm_lower": v_err_l2_lower,
-#     "v_l2_norm_upper": v_err_l2_upper,
-#     "p_l2_norm_lower": p_err_l2_lower,
-#     "p_l2_norm_upper": p_err_l2_upper,
-#     "p_l2_norm_lower_abs": p_err_l2_lower_abs,
-#     "p_l2_norm_upper_abs": p_err_l2_upper_abs,
-#     "sigma_rr_l2_norm_lower": sigma_rr_err_l2_lower,
-#     "sigma_rr_l2_norm_upper": sigma_rr_err_l2_upper,
-#     "u_dot_n_l2_norm_lower_abs": u_dot_n_l2_lower_abs,
-#     "u_dot_n_l2_norm_upper_abs": u_dot_n_l2_upper_abs,
-# }
+metrics = {
+    "m": params.uw_m,
+    "cellsize": params.uw_cellsize,
+    "v_l2_norm": v_err_l2,
+    "p_l2_norm": p_err_l2,
+    "p_l2_norm_abs": p_err_l2_abs,
+    "v_l2_norm_lower": v_err_l2_lower,
+    "v_l2_norm_upper": v_err_l2_upper,
+    "p_l2_norm_lower": p_err_l2_lower,
+    "p_l2_norm_upper": p_err_l2_upper,
+    "p_l2_norm_lower_abs": p_err_l2_lower_abs,
+    "p_l2_norm_upper_abs": p_err_l2_upper_abs,
+    "sigma_rr_l2_norm_lower": sigma_rr_err_l2_lower,
+    "sigma_rr_l2_norm_upper": sigma_rr_err_l2_upper,
+    "u_dot_n_l2_norm_lower_abs": u_dot_n_l2_lower_abs,
+    "u_dot_n_l2_norm_upper_abs": u_dot_n_l2_upper_abs,
+}
 
-# if uw.mpi.rank == 0:
-#     print("=== L2 Error Metrics ===")
-#     for key, value in metrics.items():
-#         print(f"{key}: {value}")
-# integrals_stage_event.end()
-# uw.timing.print_table(filename=os.path.join(output_dir, "integrals_timing.csv"), format="csv")
+if uw.mpi.rank == 0:
+    print("=== L2 Error Metrics ===")
+    for key, value in metrics.items():
+        print(f"{key}: {value}")
+integrals_stage_event.end()
+uw.timing.print_table(filename=os.path.join(output_dir, "integrals_timing.csv"), format="csv")
 
-# # %% [markdown]
-# # ### Save Metrics Output
+# %% [markdown]
+# ### Save Metrics Output
 
-# # %%
-# uw.pprint("Stage start: saving metric output")
+# %%
+uw.pprint("Stage start: saving metric output")
 
-# if uw.mpi.rank == 0:
-#     metrics_h5 = os.path.join(output_dir, metrics_filename)
-#     if os.path.isfile(metrics_h5):
-#         os.remove(metrics_h5)
-#     with h5py.File(metrics_h5, "w") as f_h5:
-#         for key, value in metrics.items():
-#             f_h5.create_dataset(key, data=value)
-#         f_h5.create_dataset("git_sha", data=np.bytes_(git_sha))
-#         f_h5.create_dataset("command", data=np.bytes_(cli_args))
-#         for key, value in run_metadata.items():
-#             f_h5.create_dataset(key, data=value)
+if uw.mpi.rank == 0:
+    metrics_h5 = os.path.join(output_dir, metrics_filename)
+    if os.path.isfile(metrics_h5):
+        os.remove(metrics_h5)
+    with h5py.File(metrics_h5, "w") as f_h5:
+        for key, value in metrics.items():
+            f_h5.create_dataset(key, data=value)
+        f_h5.create_dataset("git_sha", data=np.bytes_(git_sha))
+        f_h5.create_dataset("command", data=np.bytes_(cli_args))
+        for key, value in run_metadata.items():
+            f_h5.create_dataset(key, data=value)
 
-# uw.pprint("Stage complete: saving metric output")
+uw.pprint("Stage complete: saving metric output")
