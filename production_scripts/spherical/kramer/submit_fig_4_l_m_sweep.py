@@ -5,12 +5,22 @@ import base64
 import json
 from pathlib import Path
 import subprocess
+import argparse
 
+parser = argparse.ArgumentParser()
+
+parser.add_argument(
+    "--metrics-from-checkpoint-only",
+    help="Run only metrics from checkpoint. python submit_fig_4_l_m_sweep.py --metrics-from-checkpoint-only",
+    default=False,
+    action="store_true",
+)
+args = parser.parse_args()
 
 CELL_SIZES = ["1/8", "1/16", "1/32", "1/64"]  # "1/96"
 LM_PAIRS = [(2, 1), (2, 2), (4, 2), (4, 4), (8, 4), (8, 8)]
 CASES = ["case1", "case2", "case3", "case4"]
-METRICS_FROM_CHECKPOINT_ONLY = False
+METRICS_FROM_CHECKPOINT_ONLY = args.metrics_from_checkpoint_only
 
 RESOURCES_BY_CELLSIZE = {
     "1/8": {"ncpus": 8, "mem": "32gb", "walltime": "01:00:00"},

@@ -908,7 +908,7 @@ else:
     stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_type", "kaskade")
     stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_cycle_type", "w")
     stokes.petsc_options["fieldsplit_velocity_mg_coarse_pc_type"] = "svd"
-    if freeslip and params.uw_freeslip_type == "nitsche":
+    if params.uw_case in ("case1", "case2"):
         # Nitsche free-slip plus the internal Kramer forcing is sensitive to
         # non-flexible fieldsplit subsolves on Gadi; FGMRES avoids the FCG
         # indefinite-matrix and GMRES residual-recursion failures seen there.
@@ -922,7 +922,7 @@ else:
     stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_converged_maxits"] = None
 
     stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", "mg")
-    if freeslip and params.uw_freeslip_type == "nitsche":
+    if params.uw_case in ("case1", "case2"):
         stokes.petsc_options["fieldsplit_pressure_ksp_type"] = "fgmres"
         stokes.petsc_options["fieldsplit_pressure_ksp_max_it"] = 200
         stokes.petsc_options["fieldsplit_pressure_ksp_pc_side"] = "right"
