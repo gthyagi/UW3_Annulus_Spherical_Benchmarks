@@ -880,6 +880,10 @@ def project_tau_component(mesh, tau_expr, i, j, degree, tolerance):
         projector.uw_function = tau_expr[i, j]
         projector.smoothing = 0.0
         projector.tolerance = tolerance
+        projector.petsc_options["snes_type"] = "ksponly"
+        projector.petsc_options["ksp_type"] = "cg"
+        projector.petsc_options["pc_type"] = "bjacobi"
+        projector.petsc_options["ksp_rtol"] = tolerance
 
         uw.pprint(f"Stage start: projecting tau_{i}{j}")
         projector.solve()
