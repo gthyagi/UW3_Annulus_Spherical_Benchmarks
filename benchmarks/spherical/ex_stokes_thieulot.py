@@ -711,12 +711,25 @@ else:
     stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_type", "kaskade")
     stokes.petsc_options.setValue("fieldsplit_velocity_pc_mg_cycle_type", "w")
     stokes.petsc_options["fieldsplit_velocity_mg_coarse_pc_type"] = "svd"
-    stokes.petsc_options["fieldsplit_velocity_ksp_type"] = "fcg"
+
+    # Previous code:
+    # stokes.petsc_options["fieldsplit_velocity_ksp_type"] = "fcg"
+
+    stokes.petsc_options["fieldsplit_velocity_ksp_type"] = "fgmres"
+    stokes.petsc_options["fieldsplit_velocity_ksp_max_it"] = 200
+    stokes.petsc_options["fieldsplit_velocity_ksp_pc_side"] = "right"
     stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_type"] = "chebyshev"
     stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_max_it"] = 5
     stokes.petsc_options["fieldsplit_velocity_mg_levels_ksp_converged_maxits"] = None
 
     stokes.petsc_options.setValue("fieldsplit_pressure_pc_type", "mg")
+
+    # Previous code:
+    # No explicit fieldsplit pressure KSP override was set.
+
+    stokes.petsc_options["fieldsplit_pressure_ksp_type"] = "fgmres"
+    stokes.petsc_options["fieldsplit_pressure_ksp_max_it"] = 200
+    stokes.petsc_options["fieldsplit_pressure_ksp_pc_side"] = "right"
     stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_type", "multiplicative")
     stokes.petsc_options.setValue("fieldsplit_pressure_pc_mg_cycle_type", "v")
 
