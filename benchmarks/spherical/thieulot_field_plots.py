@@ -39,10 +39,11 @@ if IS_INTERACTIVE:
 # ### Parameters And Paths
 
 # %%
-dirname = "case_inv_lc_16_m_-1_vdeg_2_pdeg_1_pcont_true_vel_penalty_1e+08_stokes_tol_1e-05_ncpus_8_bc_essential_p_bc_false"
+dirname = "case_inv_lc_64_m_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_144_bc_essential"
 
 # %%
-output_dir = os.path.join("../../output/spherical/thieulot/latest/", f"{dirname}/")
+# output_dir = os.path.join("../../output/spherical/thieulot/latest/", f"{dirname}/")
+output_dir = os.path.join("/Volumes/seagate4_1/output/spherical/thieulot/latest/", f"{dirname}/")
 
 # %%
 pattern = (
