@@ -197,9 +197,16 @@ def analytical_solution(
         ) * np.cos(theta)
     else:
         rho = (
-            2.0 * alpha * radius ** (-(m + 4)) * ((m + 3) / (m + 1)) * (m - 1)
-            - (2.0 * beta / 3.0) * (m - 1) * (m + 3)
-            - m * (m + 5) * (2.0 * gamma / radius**3)
+            radius**m
+            * (
+                2.0
+                * alpha
+                * radius ** (-(m + 4))
+                * ((m + 3) / (m + 1))
+                * (m - 1)
+                - (2.0 * beta / 3.0) * (m - 1) * (m + 3)
+                - m * (m + 5) * (2.0 * gamma / radius**3)
+            )
         ) * np.cos(theta)
 
     p_ana = h * np.cos(theta)
@@ -308,7 +315,7 @@ reference_limits = {
     3: {
         "velocity": [0.0, 20.0],
         "pressure": [-4.0, 4.0],
-        "rho": [-35.0, 35.0],
+        "rho": [-60.0, 60.0],
         "velocity_error": [0.0, 4.0],
         "pressure_error": [-0.5, 0.5],
     },
