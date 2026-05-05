@@ -1,0 +1,52 @@
+\documentclass[11pt]{article}
+
+\usepackage[
+  paperwidth=6.in,
+  paperheight=4.7in,
+  margin=0.05in
+]{geometry}
+\usepackage{graphicx}
+\usepackage[percent]{overpic}
+\usepackage{caption}
+\usepackage{newtxtext,newtxmath}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\abovecaptionskip}{0.2em}
+\setlength{\belowcaptionskip}{0pt}
+
+\graphicspath{{/Volumes/seagate4_1/output/spherical/thieulot/latest/}}
+
+\newcommand{\caseMminusOne}{case_inv_lc_64_m_-1_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_144_bc_essential}
+\newcommand{\caseMthree}{case_inv_lc_64_m_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_144_bc_essential}
+
+\newcommand{\fieldpanel}[4]{%
+  \begin{minipage}[t]{0.315\linewidth}
+    \centering
+    \begin{overpic}[width=0.90\linewidth]{#1/#2}
+      \put(7,88){\large\bfseries #4)}
+    \end{overpic}
+    \vspace{-0.55em}
+    \includegraphics[width=1.00\linewidth]{#1/#3}
+  \end{minipage}
+}
+
+\begin{document}
+
+\centering
+  \fieldpanel{\caseMminusOne}{rho_ana.png}{rho_ana_cbhorz.pdf}{a}
+  \hfill
+  \fieldpanel{\caseMminusOne}{vel_ana.png}{v_ana_cbhorz.pdf}{b}
+  \hfill
+  \fieldpanel{\caseMminusOne}{p_ana.png}{p_ana_cbhorz.pdf}{c}
+  \par
+
+  \vspace{1.65em}
+  \fieldpanel{\caseMthree}{rho_ana.png}{rho_ana_cbhorz.pdf}{d}
+  \hfill
+  \fieldpanel{\caseMthree}{vel_ana.png}{v_ana_cbhorz.pdf}{e}
+  \hfill
+  \fieldpanel{\caseMthree}{p_ana.png}{p_ana_cbhorz.pdf}{f}
+  \par
+
+\end{document}

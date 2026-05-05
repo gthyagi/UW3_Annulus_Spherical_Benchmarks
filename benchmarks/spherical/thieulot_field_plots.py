@@ -14,6 +14,8 @@ nest_asyncio.apply()
 import os
 import re
 import sys
+import gc
+import atexit
 
 import cmcrameri.cm as cmc
 import h5py
@@ -34,6 +36,21 @@ JUPYTER_BACKEND = "html"
 
 if IS_INTERACTIVE:
     pv.global_theme.jupyter_backend = JUPYTER_BACKEND
+
+
+def close_pyvista_plotters(_pv=pv):
+    """Close PyVista plotters before VTK objects are torn down at interpreter exit."""
+
+    try:
+        _pv.close_all()
+    except AttributeError:
+        # PyVista/VTK can raise during Python shutdown if module globals are
+        # already partially cleared. The explicit call below avoids normal runs
+        # reaching that path; this guard keeps interpreter exit quiet.
+        pass
+
+
+atexit.register(close_pyvista_plotters)
 
 # %% [markdown]
 # ### Parameters And Paths
@@ -310,14 +327,14 @@ reference_limits = {
         "pressure": [-2.5, 2.5],
         "rho": [-110.0, 110.0],
         "velocity_error": [0.0, 0.05],
-        "pressure_error": [-0.5, 0.5],
+        "pressure_error": [-0.1, 0.1],
     },
     3: {
         "velocity": [0.0, 20.0],
         "pressure": [-4.0, 4.0],
-        "rho": [-60.0, 60.0],
-        "velocity_error": [0.0, 4.0],
-        "pressure_error": [-0.5, 0.5],
+        "rho": [-35.0, 35.0],
+        "velocity_error": [0.0, 0.05],
+        "pressure_error": [-0.1, 0.1],
     },
 }
 
@@ -366,24 +383,24 @@ def clip_grid(grid, clip_angle, crinkle=False):
     return [clip_1, clip_2]
 
 
-def save_colorbar(colormap, clim, label, fname, label_y):
+def save_colorbar(colormap, clim, label, fname, label_y, fontsize=18):
     """Save a horizontal colorbar using the benchmark layout."""
 
     fig = plt.figure(figsize=(5, 5))
-    plt.rc("font", size=18)
+    plt.rc("font", size=24)
     image = plt.imshow(np.array([[clim[0], clim[1]]]), cmap=colormap)
     plt.gca().set_visible(False)
 
-    cax = plt.axes([0.1, 0.2, 1.15, 0.06])
+    cax = plt.axes([0.1, 0.2, 0.6, 0.04])
     cb = plt.colorbar(image, orientation="horizontal", cax=cax)
     cb.locator = ticker.MaxNLocator(nbins=5, min_n_ticks=3)
     formatter = ticker.ScalarFormatter(useMathText=True)
     formatter.set_powerlimits((-2, 2))
     cb.formatter = formatter
     cb.update_ticks()
-    cb.ax.tick_params(labelsize=16)
-    cb.ax.xaxis.get_offset_text().set_size(16)
-    cb.ax.set_title(label, fontsize=18, x=0.5, y=label_y)
+    cb.ax.tick_params(labelsize=fontsize)
+    cb.ax.xaxis.get_offset_text().set_size(fontsize)
+    cb.ax.set_title(label, fontsize=fontsize, x=0.5, y=label_y-1.3)
 
     fig.savefig(
         os.path.join(output_dir, f"{fname}_cbhorz.pdf"),
@@ -403,7 +420,8 @@ def save_vertical_colorbar(
     vmin,
     vmax,
     figsize_cb=(4, 2.25),
-    primary_fs=18,
+    primary_fs=36,
+    tick_fs=32,
     cb_label_xpos=3.7,
     cb_label_ypos=0.3,
 ):
@@ -414,15 +432,17 @@ def save_vertical_colorbar(
     image = plt.imshow(np.array([[vmin, vmax]]), cmap=colormap)
     plt.gca().set_visible(False)
 
-    cax = plt.axes([0.1, 0.2, 0.06, 1.15])
+    # Keep the PDF canvas fixed so downstream LaTeX/image scaling does not
+    # cancel the font-size increase; only shrink the actual colorbar by 20%.
+    cax = plt.axes([0.1, 0.2, 0.048, 0.92])
     cb = plt.colorbar(image, orientation="vertical", cax=cax)
     cb.locator = ticker.MaxNLocator(nbins=5, min_n_ticks=3)
     formatter = ticker.ScalarFormatter(useMathText=True)
     formatter.set_powerlimits((-2, 2))
     cb.formatter = formatter
     cb.update_ticks()
-    cb.ax.tick_params(labelsize=max(primary_fs - 2, 10))
-    cb.ax.yaxis.get_offset_text().set_size(max(primary_fs - 2, 10))
+    cb.ax.tick_params(axis="y", labelsize=tick_fs)
+    cb.ax.yaxis.get_offset_text().set_size(tick_fs)
     cb.ax.set_title(
         cb_axis_label,
         fontsize=primary_fs,
@@ -519,10 +539,14 @@ def save_field_plot(
         off_screen=True,
         window_size=SCREENSHOT_WINDOW_SIZE,
     )
-    add_field_meshes(save_plotter, work, scalars, colormap, clim)
-    configure_camera(save_plotter)
-    save_plotter.screenshot(os.path.join(output_dir, png_name))
-    save_plotter.close()
+    try:
+        add_field_meshes(save_plotter, work, scalars, colormap, clim)
+        configure_camera(save_plotter)
+        save_plotter.screenshot(os.path.join(output_dir, png_name))
+    finally:
+        save_plotter.close()
+        del save_plotter
+        gc.collect()
 
     save_colorbar(colormap, clim, cb_label, cb_name, label_y)
     save_vertical_colorbar(colormap, output_dir, cb_name, cb_label, clim[0], clim[1])
@@ -567,10 +591,14 @@ mesh_save_plotter = make_plotter(
     off_screen=True,
     window_size=SCREENSHOT_WINDOW_SIZE,
 )
-add_mesh_scene(mesh_save_plotter)
-configure_camera(mesh_save_plotter)
-mesh_save_plotter.screenshot(os.path.join(output_dir, "mesh.png"))
-mesh_save_plotter.close()
+try:
+    add_mesh_scene(mesh_save_plotter)
+    configure_camera(mesh_save_plotter)
+    mesh_save_plotter.screenshot(os.path.join(output_dir, "mesh.png"))
+finally:
+    mesh_save_plotter.close()
+    del mesh_save_plotter
+    gc.collect()
 
 # %% [markdown]
 # ### Analytical Velocity
@@ -620,3 +648,7 @@ save_field_plot("Pressure", "p_uw.png", cmc.vik.resampled(41), limits["pressure"
 # %%
 print("Plotting: absolute pressure error")
 save_field_plot("P_e", "p_abs_err.png", cmc.vik.resampled(41), limits["pressure_error"], "Pressure Error (absolute)", "p_err_abs", -2.0)
+
+close_pyvista_plotters()
+globals().pop("mesh_display_plotter", None)
+gc.collect()
