@@ -53,19 +53,19 @@ Figure~\ref{fig:thieulot_analytical_fields} shows the analytical density, veloci
 
 The measured convergence is consistent with the expected behaviour of Taylor--Hood elements for smooth Stokes solutions. For a \(P_2P_1\) discretisation, the expected minimum rates are third order for the velocity in the \(L_2\) norm and second order for the pressure in the \(L_2\) norm, provided the solution is sufficiently regular \citep[e.g.][]{girault1986,boffi2013}. These rates are also consistent with the spherical-shell results reported by \citet{thieulot2017} and with later analytical verification studies in curved shell geometries \citep{kramer2021,davies2022}. In the present calculations, the velocity error approaches \(O(h^3)\) for both \(m=-1\) and \(m=3\), while the pressure error approaches \(O(h^2)\) at the finest resolutions. The rates on the coarser meshes are less regular, particularly for pressure, reflecting pre-asymptotic behaviour and the larger error constants associated with curved geometry and radial viscosity variation.
 
-\section{Boundary radial-stress convergence}
+\section{Boundary metric convergence}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.68\linewidth]{sigma_rr_boundary_convergence.pdf}
-    \caption{Convergence of the radial normal-stress error, \(\sigma_{rr}\), on the inner and outer spherical boundaries. Solid lines denote the inner boundary and dashed lines denote the outer boundary.}
+    \includegraphics[width=0.98\linewidth]{boundary_metric_convergence.pdf}
+    \caption{Convergence of boundary radial normal-stress and pressure errors. Solid lines denote the inner boundary and dashed lines denote the outer boundary.}
     \label{fig:thieulot_sigma_rr_convergence}
 \end{figure}
 
 \begin{table}[H]
     \centering
-    \includegraphics[width=0.98\linewidth]{table_sigma_rr_boundary_convergence.pdf}
-    \caption{Boundary \(\sigma_{rr}\) \(L_2\)-norm errors and observed convergence rates for the inner and outer spherical surfaces.}
+    \includegraphics[width=0.98\linewidth]{table_boundary_metric_convergence.pdf}
+    \caption{Boundary \(\sigma_{rr}\) and pressure \(L_2\)-norm errors with observed convergence rates for the inner and outer spherical surfaces.}
     \label{tab:thieulot_sigma_rr_rates}
 \end{table}
 

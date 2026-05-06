@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plot spherical Thieulot sigma_rr boundary L2 convergence."""
+"""Plot spherical Thieulot boundary L2 convergence metrics."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from matplotlib.ticker import FixedFormatter, FixedLocator, NullFormatter
 
 OUTPUT_ROOT = Path("/Volumes/seagate4_1/output/spherical/thieulot/latest")
 SCRIPT_DIR = Path(__file__).resolve().parent
-OUTFILE = SCRIPT_DIR / "sigma_rr_boundary_convergence.pdf"
+OUTFILE = SCRIPT_DIR / "boundary_metric_convergence.pdf"
 
 X_TICKS = [1.0 / value for value in (128, 64, 32, 16, 8)]
 X_TICK_LABELS = [r"$1/128$", r"$1/64$", r"$1/32$", r"$1/16$", r"$1/8$"]
@@ -35,8 +35,8 @@ def read_metric(dataset: h5py.File, name: str) -> float:
     return float(value.item() if hasattr(value, "item") else value)
 
 
-def load_sigma_rr_data(output_root: Path) -> dict[int, list[dict[str, float]]]:
-    """Load sigma_rr boundary errors for m=-1 and m=3."""
+def load_boundary_data(output_root: Path) -> dict[int, list[dict[str, float]]]:
+    """Load boundary stress and pressure errors for m=-1 and m=3."""
 
     data: dict[int, list[dict[str, float]]] = {-1: [], 3: []}
 
@@ -62,6 +62,8 @@ def load_sigma_rr_data(output_root: Path) -> dict[int, list[dict[str, float]]]:
                     "sigma_rr_l2_norm_upper": read_metric(
                         h5, "sigma_rr_l2_norm_upper"
                     ),
+                    "p_l2_norm_lower_abs": read_metric(h5, "p_l2_norm_lower_abs"),
+                    "p_l2_norm_upper_abs": read_metric(h5, "p_l2_norm_upper_abs"),
                 }
             )
 
@@ -74,18 +76,17 @@ def load_sigma_rr_data(output_root: Path) -> dict[int, list[dict[str, float]]]:
 def plot_boundary_metrics(
     ax: plt.Axes,
     data: dict[int, list[dict[str, float]]],
+    boundaries: dict[str, dict[str, str]],
+    ylabel: str,
+    legend_loc: str,
+    show_legend: bool,
 ) -> None:
-    """Plot inner and outer sigma_rr boundary metrics together."""
+    """Plot inner and outer boundary metrics together."""
 
     styles = {
-        -1: {"marker": "o", "color": "tab:blue", "label": r"$m=-1$"},
-        3: {"marker": "^", "color": "tab:orange", "label": r"$m=3$"},
+        -1: {"marker": "o", "color": "#008080", "label": r"$m=-1$"},
+        3: {"marker": "^", "color": "#D55E00", "label": r"$m=3$"},
     }
-    boundaries = {
-        "sigma_rr_l2_norm_lower": {"linestyle": "-", "label": "inner"},
-        "sigma_rr_l2_norm_upper": {"linestyle": "--", "label": "outer"},
-    }
-
     for m, rows in data.items():
         if not rows:
             continue
@@ -105,14 +106,22 @@ def plot_boundary_metrics(
             )
 
     ax.set_xlabel(r"$h$")
-    ax.set_ylabel(r"$|\sigma_{rr} - \sigma_{rr}^{ana}|_2$")
+    ax.set_ylabel(ylabel)
     ax.set_xlim(1.0 / 160.0, 1.0 / 6.0)
     ax.xaxis.set_major_locator(FixedLocator(X_TICKS))
     ax.xaxis.set_major_formatter(FixedFormatter(X_TICK_LABELS))
     ax.xaxis.set_minor_formatter(NullFormatter())
     ax.grid(True, which="major", color="0.72", linewidth=0.7)
     ax.grid(True, which="minor", color="0.88", linewidth=0.45)
-    ax.legend(frameon=False, fontsize=10, loc="lower right")
+    if show_legend:
+        ax.legend(
+            frameon=True,
+            framealpha=0.95,
+            facecolor="white",
+            edgecolor="none",
+            fontsize=10,
+            loc=legend_loc,
+        )
 
 
 def add_reference_slope(
@@ -130,28 +139,64 @@ def add_reference_slope(
     ax.text(x1 * 1.05, y1, label, fontsize=12, va="center")
 
 
+def add_panel_label(ax: plt.Axes, label: str) -> None:
+    """Add a panel label without interfering with the legend."""
+
+    ax.text(
+        -0.07,
+        0.99,
+        label,
+        transform=ax.transAxes,
+        fontsize=14,
+        fontweight="bold",
+        va="top",
+        ha="left",
+        bbox={
+            "boxstyle": "round,pad=0.16",
+            "facecolor": "white",
+            "edgecolor": "none",
+            "alpha": 0.90,
+        },
+    )
+
+
 def main() -> None:
-    data = load_sigma_rr_data(OUTPUT_ROOT)
+    data = load_boundary_data(OUTPUT_ROOT)
 
     missing = [m for m, rows in data.items() if not rows]
     if missing:
-        raise RuntimeError(f"Missing sigma_rr metrics for m values: {missing}")
+        raise RuntimeError(f"Missing boundary metrics for m values: {missing}")
 
-    fig, ax = plt.subplots(1, 1, figsize=(5.6, 4.4), constrained_layout=True)
+    fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.3), constrained_layout=True)
 
-    plot_boundary_metrics(ax, data)
-    add_reference_slope(ax, 1.0, H_MIN, 7.0e-3, H_MAX, r"$h$")
-    add_reference_slope(ax, 2.0, H_MIN, 2.0e-4, H_MAX, r"$h^2$")
-    # ax.text(
-    #     -0.07,
-    #     0.99,
-    #     "a)",
-    #     transform=ax.transAxes,
-    #     fontsize=14,
-    #     fontweight="bold",
-    #     va="top",
-    #     ha="left",
-    # )
+    plot_boundary_metrics(
+        axes[0],
+        data,
+        boundaries={
+            "sigma_rr_l2_norm_lower": {"linestyle": "-", "label": "inner"},
+            "sigma_rr_l2_norm_upper": {"linestyle": "--", "label": "outer"},
+        },
+        ylabel=r"$|\sigma_{rr} - \sigma_{rr}^{ana}|_2$",
+        legend_loc="lower right",
+        show_legend=False,
+    )
+    add_reference_slope(axes[0], 1.0, H_MIN, 7.0e-3, H_MAX, r"$h$")
+    add_reference_slope(axes[0], 2.0, H_MIN, 2.0e-4, H_MAX, r"$h^2$")
+    add_panel_label(axes[0], "a)")
+
+    plot_boundary_metrics(
+        axes[1],
+        data,
+        boundaries={
+            "p_l2_norm_lower_abs": {"linestyle": "-", "label": "inner"},
+            "p_l2_norm_upper_abs": {"linestyle": "--", "label": "outer"},
+        },
+        ylabel=r"$|p - p^{ana}|_2$",
+        legend_loc="lower right",
+        show_legend=True,
+    )
+    add_reference_slope(axes[1], 2.0, H_MIN, 2.0e-3, H_MAX, r"$h^2$")
+    add_panel_label(axes[1], "b)")
 
     fig.savefig(OUTFILE, bbox_inches="tight")
     print(f"Wrote {OUTFILE}")

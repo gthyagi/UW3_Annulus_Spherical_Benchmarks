@@ -83,17 +83,39 @@ def add_reference_slope(
     ax.text(x1 * 1.05, y1, label, fontsize=12, va="center")
 
 
+def add_panel_label(ax: plt.Axes, label: str) -> None:
+    """Add a panel label without interfering with the legend."""
+
+    ax.text(
+        -0.07,
+        0.99,
+        label,
+        transform=ax.transAxes,
+        fontsize=14,
+        fontweight="bold",
+        va="top",
+        ha="left",
+        bbox={
+            "boxstyle": "round,pad=0.16",
+            "facecolor": "white",
+            "edgecolor": "none",
+            "alpha": 0.90,
+        },
+    )
+
+
 def plot_metric(
     ax: plt.Axes,
     data: dict[int, list[dict[str, float]]],
     metric_name: str,
     ylabel: str,
+    show_legend: bool,
 ) -> None:
     """Plot one convergence metric for m=-1 and m=3."""
 
     styles = {
-        -1: {"marker": "o", "label": r"$P_2P_1$, $m=-1$"},
-        3: {"marker": "^", "label": r"$P_2P_1$, $m=3$"},
+        -1: {"marker": "o", "color": "#008080", "label": r"$P_2P_1$, $m=-1$"},
+        3: {"marker": "^", "color": "#D55E00", "label": r"$P_2P_1$, $m=3$"},
     }
 
     for m, rows in data.items():
@@ -105,6 +127,7 @@ def plot_metric(
         ax.loglog(
             h_values,
             metric_values,
+            color=styles[m]["color"],
             marker=styles[m]["marker"],
             linewidth=1.3,
             markersize=5.0,
@@ -119,7 +142,15 @@ def plot_metric(
     ax.xaxis.set_minor_formatter(NullFormatter())
     ax.grid(True, which="major", color="0.72", linewidth=0.7)
     ax.grid(True, which="minor", color="0.88", linewidth=0.45)
-    ax.legend(frameon=False, fontsize=10, loc="lower right")
+    if show_legend:
+        ax.legend(
+            frameon=True,
+            framealpha=0.95,
+            facecolor="white",
+            edgecolor="none",
+            fontsize=10,
+            loc="lower right",
+        )
 
 
 def main() -> None:
@@ -136,39 +167,23 @@ def main() -> None:
         data,
         "v_l2_norm",
         r"$e_u$ ($L_2$ error)",
-    )
-    axes[0].text(
-        -0.07,
-        0.99,
-        "a)",
-        transform=axes[0].transAxes,
-        fontsize=14,
-        fontweight="bold",
-        va="top",
-        ha="left",
+        show_legend=False,
     )
     # axes[0].set_title("Velocity error")
     # add_reference_slope(axes[0], 2.0, H_MIN, 2.0e-5, H_MAX, r"$h^2$")
     add_reference_slope(axes[0], 3.0, H_MIN, 3.5e-6, H_MAX, r"$h^3$")
+    add_panel_label(axes[0], "a)")
 
     plot_metric(
         axes[1],
         data,
         "p_l2_norm",
         r"$e_p$ ($L_2$ error)",
-    )
-    axes[1].text(
-        -0.07,
-        0.99,
-        "b)",
-        transform=axes[1].transAxes,
-        fontsize=14,
-        fontweight="bold",
-        va="top",
-        ha="left",
+        show_legend=True,
     )
     # axes[1].set_title("Pressure error")
     add_reference_slope(axes[1], 2.0, H_MIN, 6.0e-4, H_MAX, r"$h^2$")
+    add_panel_label(axes[1], "b)")
 
     fig.savefig(OUTFILE, bbox_inches="tight")
     print(f"Wrote {OUTFILE}")

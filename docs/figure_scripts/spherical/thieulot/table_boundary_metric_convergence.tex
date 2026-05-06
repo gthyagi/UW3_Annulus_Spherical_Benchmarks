@@ -48,4 +48,35 @@ $1/128$ & \num{1.1256362820338847e-03} & 1.96 & \num{3.8111414588032756e-05} & 2
 \end{tabular}
 \end{table}
 
+\begin{table}[htbp]
+\centering
+\caption{Spherical Thieulot benchmark convergence for absolute boundary pressure errors.}
+\small
+\setlength{\tabcolsep}{3.0pt}
+\begin{tabular}{ccccccccc}
+\toprule
+\multirow{2}{*}{$h$} &
+\multicolumn{4}{c}{$m=-1$} &
+\multicolumn{4}{c}{$m=3$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+&
+$|p^{err}|_{2,\mathrm{inner}}$ &
+\makecell{inner\\rate} &
+$|p^{err}|_{2,\mathrm{outer}}$ &
+\makecell{outer\\rate} &
+$|p^{err}|_{2,\mathrm{inner}}$ &
+\makecell{inner\\rate} &
+$|p^{err}|_{2,\mathrm{outer}}$ &
+\makecell{outer\\rate} \\
+\midrule
+$1/8$   & \num{2.3509292741512575e+00} & --   & \num{2.8704915770409678e-01} & --   & \num{2.7392137411636748e+00} & --   & \num{2.1922259927244507e+00} & -- \\
+$1/16$  & \num{7.6830450831833164e-01} & 1.61 & \num{2.7117974646388810e-02} & 3.40 & \num{5.7563047852552651e-01} & 2.25 & \num{2.7658810007376800e-01} & 2.99 \\
+$1/32$  & \num{2.2063064326330345e-01} & 1.80 & \num{5.0823620087995913e-03} & 2.42 & \num{1.4027859700275236e-01} & 2.04 & \num{4.4551954990879578e-02} & 2.63 \\
+$1/64$  & \num{5.9331601790497970e-02} & 1.89 & \num{1.2730689132741608e-03} & 2.00 & \num{3.5046322674073337e-02} & 2.00 & \num{9.4559353977826371e-03} & 2.24 \\
+$1/128$ & \num{1.5281493022983254e-02} & 1.96 & \num{3.1622283183306164e-04} & 2.01 & \num{8.7574631809891144e-03} & 2.00 & \num{2.2665732926097281e-03} & 2.06 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \end{document}
