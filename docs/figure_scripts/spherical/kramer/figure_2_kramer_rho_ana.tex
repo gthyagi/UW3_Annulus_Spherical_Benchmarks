@@ -1,0 +1,36 @@
+\documentclass{standalone}
+
+\usepackage{graphicx}
+\usepackage[export]{adjustbox}
+\usepackage{tikz}
+
+\newcommand{\panel}[3]{%
+  \begin{tikzpicture}
+    \node[inner sep=0pt] (img) {%
+      \includegraphics[width=0.315\textwidth]{#1}%
+    };
+    \node[
+      anchor=north west,
+      fill=white,
+      fill opacity=0.85,
+      text opacity=1,
+      inner sep=2pt,
+      font=\small
+    ] at ([xshift=0.04cm,yshift=-0.04cm]img.north west) {#2};
+    \node[
+      anchor=north,
+      font=\small
+    ] at ([yshift=-0.04cm]img.south) {#3};
+  \end{tikzpicture}%
+}
+
+\begin{document}
+\begin{tabular}{@{}ccc@{}}
+\panel{/Volumes/seagate4_1/output/spherical/kramer/latest/case2_inv_lc_32_l_2_m_1_k_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(a)}{$l=2,\ m=1,\ k=3$} &
+\panel{/Volumes/seagate4_1/output/spherical/kramer/latest/case2_inv_lc_32_l_4_m_2_k_5_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(b)}{$l=4,\ m=2,\ k=5$} &
+\panel{/Volumes/seagate4_1/output/spherical/kramer/latest/case2_inv_lc_32_l_8_m_4_k_9_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(c)}{$l=8,\ m=4,\ k=9$} \\
+\panel{/Volumes/seagate4_1/output/spherical/kramer/latest/case1_inv_lc_32_l_2_m_1_k_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(d)}{$l=2,\ m=1,\ k=3$} &
+\panel{/Volumes/seagate4_1/output/spherical/kramer/latest/case1_inv_lc_32_l_4_m_2_k_5_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(e)}{$l=4,\ m=2,\ k=5$} &
+\panel{/Volumes/seagate4_1/output/spherical/kramer/latest/case1_inv_lc_32_l_8_m_4_k_9_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(f)}{$l=8,\ m=4,\ k=9$}
+\end{tabular}
+\end{document}

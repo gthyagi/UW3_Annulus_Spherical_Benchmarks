@@ -6,6 +6,8 @@
 
 # %%
 # to fix trame issue
+import string
+
 import nest_asyncio
 
 nest_asyncio.apply()
@@ -15,6 +17,7 @@ import os
 import re
 import sys
 import gc
+import argparse
 from math import factorial
 from types import SimpleNamespace
 
@@ -43,7 +46,11 @@ if IS_INTERACTIVE:
 # ### Parameters And Paths
 
 # %%
-dirname = "case2_inv_lc_32_l_2_m_1_k_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche"
+DEFAULT_DIRNAME = "case1_inv_lc_32_l_4_m_2_k_5_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche"
+parser = argparse.ArgumentParser()
+parser.add_argument("-dirname", type=str, default=DEFAULT_DIRNAME, help='directory name')
+args, _ = parser.parse_known_args()
+dirname = os.path.basename(os.path.normpath(args.dirname))
 
 # %%
 # output_dir = os.path.join("../../output/spherical/kramer/latest/", f"{dirname}/")
@@ -723,15 +730,18 @@ def configure_camera(plotter):
 
 def add_field_meshes(plotter, work, scalars, colormap, clim):
     for clipped in clip_grid(work, clip_angle):
-        plotter.add_mesh(
-            clipped,
-            scalars=scalars,
-            cmap=colormap,
-            clim=clim,
-            edge_color="k",
-            show_edges=False,
-            show_scalar_bar=False,
-        )
+        try:
+            plotter.add_mesh(
+                clipped,
+                scalars=scalars,
+                cmap=colormap,
+                clim=clim,
+                edge_color="k",
+                show_edges=False,
+                show_scalar_bar=False,
+            )
+        finally:
+            del clipped
 
 
 def add_internal_interface_overlay(plotter):
@@ -739,24 +749,30 @@ def add_internal_interface_overlay(plotter):
         return
 
     for clipped in clip_grid(interface_surface, clip_angle):
-        plotter.add_mesh(
-            clipped,
-            color="#222222",
-            opacity=0.08,
-            smooth_shading=False,
-            show_scalar_bar=False,
-        )
+        try:
+            plotter.add_mesh(
+                clipped,
+                color="#222222",
+                opacity=0.08,
+                smooth_shading=False,
+                show_scalar_bar=False,
+            )
+        finally:
+            del clipped
 
 
 def add_mesh_scene(plotter):
     for clipped in clip_grid(grid, clip_angle, crinkle=True):
-        plotter.add_mesh(
-            clipped,
-            color="white",
-            edge_color="black",
-            show_edges=True,
-            show_scalar_bar=False,
-        )
+        try:
+            plotter.add_mesh(
+                clipped,
+                color="white",
+                edge_color="black",
+                show_edges=True,
+                show_scalar_bar=False,
+            )
+        finally:
+            del clipped
 
 
 def save_exact_interface_density_plot(
@@ -789,30 +805,39 @@ def save_exact_interface_density_plot(
 
     def add_scene(plotter):
         for clipped in clip_grid(outer_context, clip_angle):
-            plotter.add_mesh(
-                clipped,
-                color="#d9d7cf",
-                opacity=0.18,
-                smooth_shading=False,
-                show_scalar_bar=False,
-            )
+            try:
+                plotter.add_mesh(
+                    clipped,
+                    color="#d9d7cf",
+                    opacity=0.18,
+                    smooth_shading=False,
+                    show_scalar_bar=False,
+                )
+            finally:
+                del clipped
         for clipped in clip_grid(inner_context, clip_angle):
-            plotter.add_mesh(
-                clipped,
-                color="#cfcbbf",
-                opacity=0.12,
-                smooth_shading=False,
-                show_scalar_bar=False,
-            )
+            try:
+                plotter.add_mesh(
+                    clipped,
+                    color="#cfcbbf",
+                    opacity=0.12,
+                    smooth_shading=False,
+                    show_scalar_bar=False,
+                )
+            finally:
+                del clipped
         for clipped in clip_grid(interface_grid, clip_angle):
-            plotter.add_mesh(
-                clipped,
-                scalars="rho_interface",
-                cmap=colormap,
-                clim=clim,
-                show_edges=False,
-                show_scalar_bar=False,
-            )
+            try:
+                plotter.add_mesh(
+                    clipped,
+                    scalars="rho_interface",
+                    cmap=colormap,
+                    clim=clim,
+                    show_edges=False,
+                    show_scalar_bar=False,
+                )
+            finally:
+                del clipped
 
     if IS_INTERACTIVE:
         display_plotter = make_plotter(off_screen=False)
@@ -831,6 +856,9 @@ def save_exact_interface_density_plot(
     finally:
         save_plotter.close()
         del save_plotter
+        del outer_context
+        del inner_context
+        del interface_grid
         gc.collect()
 
     save_colorbar(colormap, clim, cb_label, cb_name, label_y)
@@ -868,6 +896,7 @@ def save_field_plot(field_name, png_name, colormap, clim, cb_label, cb_name, lab
     finally:
         save_plotter.close()
         del save_plotter
+        del work
         gc.collect()
 
     save_colorbar(colormap, clim, cb_label, cb_name, label_y)
@@ -955,3 +984,8 @@ save_field_plot("P_u", "p_uw.png", cmc.vik.resampled(41), limits["pressure"], "P
 # %%
 print("Plotting: absolute pressure error")
 save_field_plot("P_e", "p_abs_err.png", cmc.vik.resampled(41), limits["pressure_error"], "Pressure Error (absolute)", "p_err_abs", -2.0, show_interface=delta_fn)
+
+if interface_surface is not None:
+    del interface_surface
+del grid
+gc.collect()
