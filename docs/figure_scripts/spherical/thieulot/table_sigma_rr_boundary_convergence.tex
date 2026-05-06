@@ -1,0 +1,51 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=0.8in]{geometry}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{newtxtext,newtxmath}
+\usepackage{makecell}
+\usepackage{multirow}
+
+\pagestyle{empty}
+
+\sisetup{
+  scientific-notation = true,
+  round-mode = places,
+  round-precision = 3,
+}
+
+\begin{document}
+
+\begin{table}[htbp]
+\centering
+\caption{Spherical Thieulot benchmark convergence for boundary $\sigma_{rr}$ errors.}
+\small
+\setlength{\tabcolsep}{3.0pt}
+\begin{tabular}{ccccccccc}
+\toprule
+\multirow{2}{*}{$h$} &
+\multicolumn{4}{c}{$m=-1$} &
+\multicolumn{4}{c}{$m=3$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+&
+$|\sigma_{rr}^{err}|_{2,\mathrm{inner}}$ &
+\makecell{inner\\rate} &
+$|\sigma_{rr}^{err}|_{2,\mathrm{outer}}$ &
+\makecell{outer\\rate} &
+$|\sigma_{rr}^{err}|_{2,\mathrm{inner}}$ &
+\makecell{inner\\rate} &
+$|\sigma_{rr}^{err}|_{2,\mathrm{outer}}$ &
+\makecell{outer\\rate} \\
+\midrule
+$1/8$   & \num{1.8357529232837497e-01} & --   & \num{3.3433237520665557e-02} & --   & \num{5.5779763898849255e-01} & --   & \num{9.7552973870023499e-02} & -- \\
+$1/16$  & \num{5.7315023422082022e-02} & 1.68 & \num{4.2332984248014197e-03} & 2.98 & \num{1.4503485548443534e-01} & 1.94 & \num{1.1624836542355734e-02} & 3.07 \\
+$1/32$  & \num{1.6435019569860435e-02} & 1.80 & \num{7.3467190043240518e-04} & 2.53 & \num{3.9406814409714032e-02} & 1.88 & \num{1.7297918622580150e-03} & 2.75 \\
+$1/64$  & \num{4.3819089655436037e-03} & 1.91 & \num{1.6047310456041518e-04} & 2.19 & \num{1.0440284376321517e-02} & 1.92 & \num{3.5564084535959651e-04} & 2.28 \\
+$1/128$ & \num{1.1256362820338847e-03} & 1.96 & \num{3.8111414588032756e-05} & 2.07 & \num{2.6838062132693683e-03} & 1.96 & \num{8.4345285735075960e-05} & 2.08 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
