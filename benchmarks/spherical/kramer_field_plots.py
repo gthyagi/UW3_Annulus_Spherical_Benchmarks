@@ -14,6 +14,7 @@ nest_asyncio.apply()
 import os
 import re
 import sys
+import gc
 from math import factorial
 from types import SimpleNamespace
 
@@ -42,10 +43,11 @@ if IS_INTERACTIVE:
 # ### Parameters And Paths
 
 # %%
-dirname = "case2_inv_lc_8_l_2_m_1_k_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-05_ncpus_8_bc_natural_nitsche"
+dirname = "case2_inv_lc_32_l_2_m_1_k_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche"
 
 # %%
-output_dir = os.path.join("../../output/spherical/kramer/latest/", f"{dirname}/")
+# output_dir = os.path.join("../../output/spherical/kramer/latest/", f"{dirname}/")
+output_dir = os.path.join("/Volumes/seagate4_1/output/spherical/kramer/latest/", f"{dirname}/")
 
 # %%
 pattern = (
@@ -453,13 +455,28 @@ def read_field(h5f, field_name, n_points):
     return arr
 
 
-def read_split_field(mesh_h5_file, field_name, n_points):
-    split_file = mesh_h5_file.replace(".00000.h5", f".{field_name}.00000.h5")
-    if not os.path.isfile(split_file):
-        raise FileNotFoundError(f"Missing split field file: {split_file}")
+def read_split_field(mesh_h5_file, field_names, n_points):
+    """Read a split timestep field, accepting legacy and current field names."""
 
-    with h5py.File(split_file, "r") as h5f:
-        return read_field(h5f, field_name, n_points)
+    if isinstance(field_names, str):
+        field_names = (field_names,)
+
+    missing_files = []
+    field_errors = []
+    for field_name in field_names:
+        split_file = mesh_h5_file.replace(".00000.h5", f".{field_name}.00000.h5")
+        if not os.path.isfile(split_file):
+            missing_files.append(split_file)
+            continue
+
+        with h5py.File(split_file, "r") as h5f:
+            try:
+                return read_field(h5f, field_name, n_points)
+            except KeyError as err:
+                field_errors.append(f"{split_file}: {err}")
+
+    details = "\n".join(missing_files + field_errors)
+    raise FileNotFoundError(f"Missing split field data for {field_names}:\n{details}")
 
 
 def get_field_association(grid, field_name):
@@ -522,8 +539,8 @@ with h5py.File(mesh_h5_path, "r") as h5f:
     points = np.asarray(h5f["geometry/vertices"], dtype=np.float64)
     cells = np.asarray(h5f["viz/topology/cells"], dtype=np.int64)
 
-v_u = read_split_field(mesh_h5_path, "V_u", points.shape[0])
-p_u = read_split_field(mesh_h5_path, "P_u", points.shape[0]).reshape(-1)
+v_u = read_split_field(mesh_h5_path, ("Velocity", "V_u"), points.shape[0])
+p_u = read_split_field(mesh_h5_path, ("Pressure", "P_u"), points.shape[0]).reshape(-1)
 
 cells_flat = np.hstack([np.full((cells.shape[0], 1), cells.shape[1], dtype=np.int64), cells]).ravel()
 celltypes = np.full(cells.shape[0], pv.CellType.TETRA, dtype=np.uint8)
@@ -615,28 +632,33 @@ def clip_grid(grid, clip_angle, crinkle=False):
     return [clip_1, clip_2]
 
 
-def save_colorbar(colormap, clim, label, fname, label_y):
+def save_colorbar(colormap, clim, label, fname, label_y, fontsize=18):
+    """Save a horizontal colorbar using the benchmark layout."""
+
     fig = plt.figure(figsize=(5, 5))
-    plt.rc("font", size=18)
+    plt.rc("font", size=24)
     image = plt.imshow(np.array([[clim[0], clim[1]]]), cmap=colormap)
     plt.gca().set_visible(False)
 
-    cax = plt.axes([0.1, 0.2, 1.15, 0.06])
+    cax = plt.axes([0.1, 0.2, 0.6, 0.04])
     cb = plt.colorbar(image, orientation="horizontal", cax=cax)
     cb.locator = ticker.MaxNLocator(nbins=5, min_n_ticks=3)
     formatter = ticker.ScalarFormatter(useMathText=True)
     formatter.set_powerlimits((-2, 2))
     cb.formatter = formatter
     cb.update_ticks()
-    cb.ax.tick_params(labelsize=16)
-    cb.ax.xaxis.get_offset_text().set_size(16)
-    cb.ax.set_title(label, fontsize=18, x=0.5, y=label_y)
+    cb.ax.tick_params(labelsize=fontsize)
+    cb.ax.xaxis.get_offset_text().set_size(fontsize)
+    cb.ax.set_title(label, fontsize=fontsize, x=0.5, y=label_y-1.3)
 
-    fig.savefig(os.path.join(output_dir, f"{fname}_cbhorz.pdf"), dpi=150, bbox_inches="tight")
+    fig.savefig(
+        os.path.join(output_dir, f"{fname}_cbhorz.pdf"),
+        dpi=150,
+        bbox_inches="tight",
+    )
     if IS_INTERACTIVE and display is not None:
         display(fig)
     plt.close(fig)
-
 
 def save_vertical_colorbar(
     colormap,
@@ -802,10 +824,14 @@ def save_exact_interface_density_plot(
         off_screen=True,
         window_size=SCREENSHOT_WINDOW_SIZE,
     )
-    add_scene(save_plotter)
-    configure_camera(save_plotter)
-    save_plotter.screenshot(os.path.join(output_dir, png_name))
-    save_plotter.close()
+    try:
+        add_scene(save_plotter)
+        configure_camera(save_plotter)
+        save_plotter.screenshot(os.path.join(output_dir, png_name))
+    finally:
+        save_plotter.close()
+        del save_plotter
+        gc.collect()
 
     save_colorbar(colormap, clim, cb_label, cb_name, label_y)
     save_vertical_colorbar(colormap, output_dir, cb_name, cb_label, clim[0], clim[1])
@@ -833,12 +859,16 @@ def save_field_plot(field_name, png_name, colormap, clim, cb_label, cb_name, lab
         off_screen=True,
         window_size=SCREENSHOT_WINDOW_SIZE,
     )
-    add_field_meshes(save_plotter, work, scalars, colormap, clim)
-    if show_interface:
-        add_internal_interface_overlay(save_plotter)
-    configure_camera(save_plotter)
-    save_plotter.screenshot(os.path.join(output_dir, png_name))
-    save_plotter.close()
+    try:
+        add_field_meshes(save_plotter, work, scalars, colormap, clim)
+        if show_interface:
+            add_internal_interface_overlay(save_plotter)
+        configure_camera(save_plotter)
+        save_plotter.screenshot(os.path.join(output_dir, png_name))
+    finally:
+        save_plotter.close()
+        del save_plotter
+        gc.collect()
 
     save_colorbar(colormap, clim, cb_label, cb_name, label_y)
     save_vertical_colorbar(colormap, output_dir, cb_name, cb_label, clim[0], clim[1])
@@ -857,10 +887,14 @@ mesh_save_plotter = make_plotter(
     off_screen=True,
     window_size=SCREENSHOT_WINDOW_SIZE,
 )
-add_mesh_scene(mesh_save_plotter)
-configure_camera(mesh_save_plotter)
-mesh_save_plotter.screenshot(os.path.join(output_dir, "mesh.png"))
-mesh_save_plotter.close()
+try:
+    add_mesh_scene(mesh_save_plotter)
+    configure_camera(mesh_save_plotter)
+    mesh_save_plotter.screenshot(os.path.join(output_dir, "mesh.png"))
+finally:
+    mesh_save_plotter.close()
+    del mesh_save_plotter
+    gc.collect()
 
 # %% [markdown]
 # ### Analytical Velocity
