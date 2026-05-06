@@ -23,6 +23,7 @@ CASE_TITLES = {
     "case4": "Case 4: zero-slip, smooth forcing",
 }
 CASE_ORDER = ("case1", "case2", "case3", "case4")
+GROUPS_PER_TABLE = 3
 
 DIR_PATTERN = re.compile(
     r"(?P<case>case\d+)_"
@@ -123,8 +124,20 @@ def case_groups(records: list[MetricRecord], case: str) -> list[tuple[int, int, 
     return sorted({(record.l, record.m, record.k) for record in records if record.case == case})
 
 
-def table_for_case(records: list[MetricRecord], case: str) -> str:
-    groups = case_groups(records, case)
+def chunked_groups(groups: list[tuple[int, int, int]]) -> list[list[tuple[int, int, int]]]:
+    return [
+        groups[index : index + GROUPS_PER_TABLE]
+        for index in range(0, len(groups), GROUPS_PER_TABLE)
+    ]
+
+
+def table_for_case_group(
+    records: list[MetricRecord],
+    case: str,
+    groups: list[tuple[int, int, int]],
+    table_idx: int,
+    table_count: int,
+) -> str:
     column_spec = "c" + "cccc" * len(groups)
     header_cmidrules = []
     for group_idx in range(len(groups)):
@@ -148,7 +161,7 @@ def table_for_case(records: list[MetricRecord], case: str) -> str:
     lines = [
         r"\begin{table}[p]",
         r"\centering",
-        rf"\caption{{{CASE_TITLES[case]}.}}",
+        rf"\caption{{{CASE_TITLES[case]} ({table_idx} of {table_count}).}}",
         r"\tiny",
         r"\setlength{\tabcolsep}{1.7pt}",
         r"\resizebox{\linewidth}{!}{%",
@@ -198,9 +211,24 @@ def table_for_case(records: list[MetricRecord], case: str) -> str:
     return "\n".join(lines)
 
 
+def tables_for_case(records: list[MetricRecord], case: str) -> str:
+    group_chunks = chunked_groups(case_groups(records, case))
+    table_count = len(group_chunks)
+    return "\n".join(
+        table_for_case_group(
+            records=records,
+            case=case,
+            groups=groups,
+            table_idx=table_idx,
+            table_count=table_count,
+        )
+        for table_idx, groups in enumerate(group_chunks, start=1)
+    )
+
+
 def make_latex(records: list[MetricRecord]) -> str:
-    tables = "\n".join(table_for_case(records, case) for case in CASE_ORDER)
-    return rf"""\documentclass[11pt,a4paper,landscape]{{article}}
+    tables = "\n".join(tables_for_case(records, case) for case in CASE_ORDER)
+    return rf"""\documentclass[11pt,a4paper]{{article}}
 
 \usepackage[margin=0.45in]{{geometry}}
 \usepackage{{booktabs}}

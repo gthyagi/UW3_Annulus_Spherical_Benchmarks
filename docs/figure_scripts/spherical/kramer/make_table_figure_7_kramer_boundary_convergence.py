@@ -16,6 +16,7 @@ OUTPUT_TEX = OUTPUT_DIR / "table_figure_7_kramer_boundary_convergence.tex"
 
 H_VALUES = (1 / 8, 1 / 16, 1 / 32, 1 / 64)
 H_LABELS = ("1/8", "1/16", "1/32", "1/64")
+GROUPS_PER_TABLE = 3
 DIR_PATTERN = re.compile(
     r"case1_"
     r"inv_lc_(?P<inv_lc>\d+)_"
@@ -96,6 +97,13 @@ def groups(records: list[MetricRecord]) -> list[tuple[int, int, int]]:
     return sorted({(record.l, record.m, record.k) for record in records})
 
 
+def chunked_groups(metric_groups: list[tuple[int, int, int]]) -> list[list[tuple[int, int, int]]]:
+    return [
+        metric_groups[index : index + GROUPS_PER_TABLE]
+        for index in range(0, len(metric_groups), GROUPS_PER_TABLE)
+    ]
+
+
 def values_for_group(records: list[MetricRecord], group: tuple[int, int, int], metric_name: str) -> np.ndarray:
     l_val, m_val, k_val = group
     values_by_h = {
@@ -106,16 +114,19 @@ def values_for_group(records: list[MetricRecord], group: tuple[int, int, int], m
     return np.array([values_by_h.get(h, np.nan) for h in H_VALUES], dtype=float)
 
 
-def table_for_metric(
+def table_for_metric_group(
     records: list[MetricRecord],
     caption: str,
+    metric_groups: list[tuple[int, int, int]],
+    table_idx: int,
+    table_count: int,
     upper_metric: str,
     lower_metric: str,
     upper_label: str,
     lower_label: str,
 ) -> str:
-    metric_groups = groups(records)
     column_spec = "c" + "cccc" * len(metric_groups)
+    caption_text = caption.rstrip(".")
     header_cmidrules = []
     for group_idx in range(len(metric_groups)):
         first_col = 2 + 4 * group_idx
@@ -138,7 +149,7 @@ def table_for_metric(
     lines = [
         r"\begin{table}[p]",
         r"\centering",
-        rf"\caption{{{caption}}}",
+        rf"\caption{{{caption_text} ({table_idx} of {table_count}).}}",
         r"\tiny",
         r"\setlength{\tabcolsep}{1.7pt}",
         r"\resizebox{\linewidth}{!}{%",
@@ -188,8 +199,34 @@ def table_for_metric(
     return "\n".join(lines)
 
 
+def tables_for_metric(
+    records: list[MetricRecord],
+    caption: str,
+    upper_metric: str,
+    lower_metric: str,
+    upper_label: str,
+    lower_label: str,
+) -> str:
+    group_chunks = chunked_groups(groups(records))
+    table_count = len(group_chunks)
+    return "\n".join(
+        table_for_metric_group(
+            records=records,
+            caption=caption,
+            metric_groups=metric_groups,
+            table_idx=table_idx,
+            table_count=table_count,
+            upper_metric=upper_metric,
+            lower_metric=lower_metric,
+            upper_label=upper_label,
+            lower_label=lower_label,
+        )
+        for table_idx, metric_groups in enumerate(group_chunks, start=1)
+    )
+
+
 def make_latex(records: list[MetricRecord]) -> str:
-    velocity_table = table_for_metric(
+    velocity_table = tables_for_metric(
         records,
         "Case 1 boundary velocity convergence.",
         "v_l2_norm_upper",
@@ -197,7 +234,7 @@ def make_latex(records: list[MetricRecord]) -> str:
         r"|e_v|_{2,\mathrm{outer}}",
         r"|e_v|_{2,\mathrm{inner}}",
     )
-    stress_table = table_for_metric(
+    stress_table = tables_for_metric(
         records,
         r"Case 1 boundary radial-stress convergence.",
         "sigma_rr_l2_norm_upper",
@@ -205,7 +242,7 @@ def make_latex(records: list[MetricRecord]) -> str:
         r"|e_{\sigma_{rr}}|_{2,\mathrm{outer}}",
         r"|e_{\sigma_{rr}}|_{2,\mathrm{inner}}",
     )
-    return rf"""\documentclass[11pt,a4paper,landscape]{{article}}
+    return rf"""\documentclass[11pt,a4paper]{{article}}
 
 \usepackage[margin=0.45in]{{geometry}}
 \usepackage{{booktabs}}

@@ -4,6 +4,9 @@
 \usepackage[export]{adjustbox}
 \usepackage{tikz}
 
+\newcommand{\outputroot}{/Volumes/seagate4_1/output/spherical/kramer/latest}
+\newcommand{\rhocbar}{\outputroot/case2_inv_lc_32_l_2_m_1_k_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana_cbhorz.pdf}
+
 \newcommand{\panel}[3]{%
   \begin{tikzpicture}
     \node[inner sep=0pt] (img) {%
@@ -26,11 +29,12 @@
 
 \begin{document}
 \begin{tabular}{@{}ccc@{}}
-\panel{/Volumes/seagate4_1/output/spherical/kramer/latest/case2_inv_lc_32_l_2_m_1_k_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(a)}{$l=2,\ m=1,\ k=3$} &
-\panel{/Volumes/seagate4_1/output/spherical/kramer/latest/case2_inv_lc_32_l_4_m_2_k_5_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(b)}{$l=4,\ m=2,\ k=5$} &
-\panel{/Volumes/seagate4_1/output/spherical/kramer/latest/case2_inv_lc_32_l_8_m_4_k_9_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(c)}{$l=8,\ m=4,\ k=9$} \\
-\panel{/Volumes/seagate4_1/output/spherical/kramer/latest/case1_inv_lc_32_l_2_m_1_k_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(d)}{$l=2,\ m=1,\ k=3$} &
-\panel{/Volumes/seagate4_1/output/spherical/kramer/latest/case1_inv_lc_32_l_4_m_2_k_5_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(e)}{$l=4,\ m=2,\ k=5$} &
-\panel{/Volumes/seagate4_1/output/spherical/kramer/latest/case1_inv_lc_32_l_8_m_4_k_9_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(f)}{$l=8,\ m=4,\ k=9$}
+\panel{\outputroot/case2_inv_lc_32_l_2_m_1_k_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(a)}{} &
+\panel{\outputroot/case2_inv_lc_32_l_4_m_2_k_5_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(b)}{} &
+\panel{\outputroot/case2_inv_lc_32_l_8_m_4_k_9_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana.png}{(c)}{} \\
+\panel{\outputroot/case1_inv_lc_32_l_2_m_1_k_3_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana_interface.png}{(d)}{$l=2,\ m=1,\ k=3$} &
+\panel{\outputroot/case1_inv_lc_32_l_4_m_2_k_5_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana_interface.png}{(e)}{$l=4,\ m=2,\ k=5$} &
+\panel{\outputroot/case1_inv_lc_32_l_8_m_4_k_9_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-08_ncpus_192_bc_natural_nitsche/rho_ana_interface.png}{(f)}{$l=8,\ m=4,\ k=9$} \\
+\multicolumn{3}{c}{\includegraphics[width=0.34\textwidth]{\rhocbar}}
 \end{tabular}
 \end{document}
