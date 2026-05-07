@@ -1,0 +1,45 @@
+\documentclass[border=0pt]{standalone}
+
+\usepackage{graphicx}
+\usepackage[export]{adjustbox}
+\usepackage{tikz}
+
+\newcommand{\OutputRoot}{/Volumes/seagate4_1/output/annulus/thieulot/latest}
+\newcommand{\CaseZero}{model_inv_lc_64_k_0_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_4_bc_natural_vel_penalty_2.5e+08}
+\newcommand{\CaseOne}{model_inv_lc_64_k_1_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_4_bc_essential}
+\newcommand{\CaseTwo}{model_inv_lc_64_k_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_4_bc_essential}
+\newcommand{\CaseFour}{model_inv_lc_64_k_4_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_4_bc_essential}
+\newcommand{\panel}[2]{\includegraphics[width=0.215\linewidth,height=0.29\linewidth,keepaspectratio,valign=c]{\OutputRoot/#1/#2}}
+\newcommand{\colorbar}[1]{\includegraphics[height=0.2\linewidth,keepaspectratio,valign=c]{\OutputRoot/\CaseFour/#1}}
+\newcommand{\labeledpanel}[3]{%
+  \begin{tikzpicture}[baseline=(image.base)]
+    \node[inner sep=0pt, outer sep=0pt] (image) {\panel{#1}{#2}};
+    \node[font=\Large, inner sep=0pt, outer sep=0pt] at (image.center) {#3};
+  \end{tikzpicture}%
+}
+
+\begin{document}
+\noindent
+\begin{minipage}{7.6in}
+\centering
+\setlength{\tabcolsep}{0pt}
+\renewcommand{\arraystretch}{0.0}
+\begin{tabular}{@{}c@{\hspace{0.006\linewidth}}c@{\hspace{0.006\linewidth}}c@{\hspace{0.006\linewidth}}c@{\hspace{0.012\linewidth}}c@{}}
+\labeledpanel{\CaseZero}{rho_ana.png}{$k=0$} &
+\labeledpanel{\CaseOne}{rho_ana.png}{$k=1$} &
+\labeledpanel{\CaseTwo}{rho_ana.png}{$k=2$} &
+\labeledpanel{\CaseFour}{rho_ana.png}{$k=4$} &
+\colorbar{rho_ana_cbvert.pdf} \\[-0.2em]
+\panel{\CaseZero}{vel_uw.png} &
+\panel{\CaseOne}{vel_uw.png} &
+\panel{\CaseTwo}{vel_uw.png} &
+\panel{\CaseFour}{vel_uw.png} &
+\colorbar{v_ana_cbvert.pdf} \\[-0.2em]
+\panel{\CaseZero}{p_ana.png} &
+\panel{\CaseOne}{p_ana.png} &
+\panel{\CaseTwo}{p_ana.png} &
+\panel{\CaseFour}{p_ana.png} &
+\colorbar{p_ana_cbvert.pdf}
+\end{tabular}
+\end{minipage}
+\end{document}

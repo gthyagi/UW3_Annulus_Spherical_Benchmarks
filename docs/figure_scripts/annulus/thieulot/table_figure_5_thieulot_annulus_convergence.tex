@@ -1,0 +1,100 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=0.55in,landscape]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{newtxtext,newtxmath}
+\pagestyle{empty}
+\begin{document}
+\begin{table}[p]
+\centering
+\caption{Annulus Thieulot convergence for $P_1\times P_0$.}
+\label{tab:annulus_thieulot_v1_p0_disc}
+\small
+\begin{tabular}{
+r rr rr rr rr rr rr
+}
+\toprule
+& \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
+$h$ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & 6.398e-02 & -- & 8.040e-01 & -- & 1.763e-01 & -- & 7.800e-01 & -- & 1.298e-01 & -- & 8.163e-01 & -- \\
+$1/16$ & 6.427e-02 & -0.01 & 7.384e-01 & 0.12 & 1.775e-01 & -0.01 & 7.295e-01 & 0.10 & 1.401e-01 & -0.11 & 7.589e-01 & 0.11 \\
+$1/32$ & 6.426e-02 & 0.00 & 7.220e-01 & 0.03 & 1.780e-01 & -0.00 & 7.161e-01 & 0.03 & 1.435e-01 & -0.04 & 7.403e-01 & 0.04 \\
+$1/64$ & 6.426e-02 & 0.00 & 7.177e-01 & 0.01 & 1.781e-01 & -0.00 & 7.124e-01 & 0.01 & 1.445e-01 & -0.01 & 7.349e-01 & 0.01 \\
+$1/128$ & 6.425e-02 & 0.00 & 7.167e-01 & 0.00 & 1.782e-01 & -0.00 & 7.114e-01 & 0.00 & 1.447e-01 & -0.00 & 7.334e-01 & 0.00 \\
+$1/256$ & 6.425e-02 & 0.00 & 7.164e-01 & 0.00 & 1.782e-01 & -0.00 & 7.112e-01 & 0.00 & 1.448e-01 & -0.00 & 7.330e-01 & 0.00 \\
+$1/512$ & 6.425e-02 & 0.00 & 7.163e-01 & 0.00 & 1.782e-01 & -0.00 & 7.111e-01 & 0.00 & 1.448e-01 & -0.00 & 7.329e-01 & 0.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{Annulus Thieulot convergence for $P_1\times P_1$.}
+\label{tab:annulus_thieulot_v1_p1_cont}
+\small
+\begin{tabular}{
+r rr rr rr rr rr rr
+}
+\toprule
+& \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
+$h$ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & 1.537e-02 & -- & 4.325e+00 & -- & 2.994e-02 & -- & 3.202e+00 & -- & 3.629e-02 & -- & 3.184e+00 & -- \\
+$1/16$ & 3.459e-03 & 2.15 & 1.628e+00 & 1.41 & 6.385e-03 & 2.23 & 1.625e+00 & 0.98 & 7.925e-03 & 2.19 & 1.417e+00 & 1.17 \\
+$1/32$ & 8.358e-04 & 2.05 & 7.174e-01 & 1.18 & 1.293e-03 & 2.30 & 6.195e-01 & 1.39 & 1.937e-03 & 2.03 & 7.144e-01 & 0.99 \\
+$1/64$ & 2.056e-04 & 2.02 & 3.115e-01 & 1.20 & 2.776e-04 & 2.22 & 2.855e-01 & 1.12 & 4.931e-04 & 1.97 & 3.210e-01 & 1.15 \\
+$1/128$ & 5.095e-05 & 2.01 & 1.582e-01 & 0.98 & 6.252e-05 & 2.15 & 1.083e-01 & 1.40 & 1.243e-04 & 1.99 & 1.260e-01 & 1.35 \\
+$1/256$ & 1.266e-05 & 2.01 & 5.740e-02 & 1.46 & 1.487e-05 & 2.07 & 5.231e-02 & 1.05 & 3.158e-05 & 1.98 & 6.476e-02 & 0.96 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{Annulus Thieulot convergence for $P_2\times P_1$.}
+\label{tab:annulus_thieulot_v2_p1_cont}
+\small
+\begin{tabular}{
+r rr rr rr rr rr rr
+}
+\toprule
+& \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
+$h$ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & 2.218e-04 & -- & 1.087e-02 & -- & 9.781e-04 & -- & 1.944e-02 & -- & 2.731e-03 & -- & 4.174e-02 & -- \\
+$1/16$ & 2.675e-05 & 3.05 & 2.530e-03 & 2.10 & 1.151e-04 & 3.09 & 4.611e-03 & 2.08 & 3.225e-04 & 3.08 & 9.354e-03 & 2.16 \\
+$1/32$ & 3.388e-06 & 2.98 & 6.427e-04 & 1.98 & 1.437e-05 & 3.00 & 1.159e-03 & 1.99 & 4.016e-05 & 3.01 & 2.310e-03 & 2.02 \\
+$1/64$ & 4.205e-07 & 3.01 & 1.601e-04 & 2.01 & 1.763e-06 & 3.03 & 2.869e-04 & 2.01 & 4.850e-06 & 3.05 & 5.666e-04 & 2.03 \\
+$1/128$ & 5.254e-08 & 3.00 & 3.992e-05 & 2.00 & 2.190e-07 & 3.01 & 7.152e-05 & 2.00 & 6.001e-07 & 3.01 & 1.412e-04 & 2.00 \\
+$1/256$ & 6.575e-09 & 3.00 & 9.979e-06 & 2.00 & 2.730e-08 & 3.00 & 1.787e-05 & 2.00 & 7.449e-08 & 3.01 & 3.524e-05 & 2.00 \\
+$1/512$ & 8.632e-10 & 2.93 & 2.494e-06 & 2.00 & 3.412e-09 & 3.00 & 4.466e-06 & 2.00 & 9.287e-09 & 3.00 & 8.802e-06 & 2.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{Annulus Thieulot convergence for $P_3\times P_2$.}
+\label{tab:annulus_thieulot_v3_p2_cont}
+\small
+\begin{tabular}{
+r rr rr rr rr rr rr
+}
+\toprule
+& \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
+$h$ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & 1.102e-05 & -- & 1.210e-03 & -- & 6.233e-05 & -- & 2.498e-03 & -- & 2.198e-04 & -- & 6.495e-03 & -- \\
+$1/16$ & 6.792e-07 & 4.02 & 1.220e-04 & 3.31 & 3.811e-06 & 4.03 & 2.905e-04 & 3.10 & 1.363e-05 & 4.01 & 8.249e-04 & 2.98 \\
+$1/32$ & 4.360e-08 & 3.96 & 1.392e-05 & 3.13 & 2.441e-07 & 3.96 & 3.358e-05 & 3.11 & 8.723e-07 & 3.97 & 9.664e-05 & 3.09 \\
+$1/64$ & 2.729e-09 & 4.00 & 1.585e-06 & 3.13 & 1.510e-08 & 4.01 & 3.870e-06 & 3.12 & 5.323e-08 & 4.03 & 1.110e-05 & 3.12 \\
+$1/128$ & 4.043e-10 & 2.75 & 1.877e-07 & 3.08 & 9.826e-10 & 3.94 & 4.601e-07 & 3.07 & 3.344e-09 & 3.99 & 1.322e-06 & 3.07 \\
+\bottomrule
+\end{tabular}
+\end{table}
+\end{document}
