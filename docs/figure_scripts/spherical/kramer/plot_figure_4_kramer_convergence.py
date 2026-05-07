@@ -138,7 +138,12 @@ def values_for_group(
     return h[mask], y[mask]
 
 
-def add_reference_slope(ax: plt.Axes, slope: float, y_values: list[np.ndarray]) -> None:
+def add_reference_slope(
+    ax: plt.Axes,
+    slope: float,
+    y_values: list[np.ndarray],
+    linestyle: str = "-",
+) -> None:
     """Add a reference convergence line spanning the full h range."""
 
     positive_values = np.concatenate([values[np.isfinite(values) & (values > 0.0)] for values in y_values])
@@ -153,11 +158,25 @@ def add_reference_slope(ax: plt.Axes, slope: float, y_values: list[np.ndarray]) 
         [h0, h1],
         [y0, y1],
         color="black",
-        linestyle="-",
+        linestyle=linestyle,
         linewidth=1.3,
         zorder=5,
         label=rf"$\mathcal{{O}}(h^{{{slope:g}}})$",
     )
+
+
+def reference_handles_labels(ax: plt.Axes) -> tuple[list, list]:
+    """Return only reference-line legend entries for a panel."""
+
+    handles, labels = ax.get_legend_handles_labels()
+    refs = [
+        (handle, label)
+        for handle, label in zip(handles, labels)
+        if r"\mathcal{O}" in label
+    ]
+    if not refs:
+        return [], []
+    return [handle for handle, _ in refs], [label for _, label in refs]
 
 
 def add_panel_label(ax: plt.Axes, label: str) -> None:
@@ -210,8 +229,12 @@ def plot_panel(
         )
         plotted_values.append(y)
 
-    slope_key = "velocity_slope" if metric_name == "v_l2_norm" else "pressure_slope"
-    add_reference_slope(ax, CASE_INFO[case][slope_key], plotted_values)
+    if case in ("case2", "case4") and metric_name == "v_l2_norm":
+        add_reference_slope(ax, 2.0, plotted_values, linestyle="-")
+        add_reference_slope(ax, 3.0, plotted_values, linestyle="--")
+    else:
+        slope_key = "velocity_slope" if metric_name == "v_l2_norm" else "pressure_slope"
+        add_reference_slope(ax, CASE_INFO[case][slope_key], plotted_values)
 
     ax.set_xlim(H_VALUES[0] * 0.82, H_VALUES[-1] * 1.18)
     ax.set_xticks(H_VALUES)
@@ -247,10 +270,11 @@ def main() -> None:
     fig.text(0.055, 0.29, "Zero-Slip", rotation=90, va="center", ha="center", fontsize=15, fontweight="bold")
 
     data_handles, data_labels = axes[0, 0].get_legend_handles_labels()
-    series_handles = data_handles[:-1]
-    series_labels = data_labels[:-1]
-    reference_handle = data_handles[-1:]
-    reference_label = data_labels[-1:]
+    series_handles = [
+        handle for handle, label in zip(data_handles, data_labels) if r"\mathcal{O}" not in label
+    ]
+    series_labels = [label for label in data_labels if r"\mathcal{O}" not in label]
+    reference_handle, reference_label = reference_handles_labels(axes[0, 0])
 
     axes[0, 0].legend(
         reference_handle,
@@ -276,11 +300,11 @@ def main() -> None:
     )
 
     for ax in list(axes.flat)[1:]:
-        handles, labels = ax.get_legend_handles_labels()
+        handles, labels = reference_handles_labels(ax)
         if handles:
             ax.legend(
-                handles[-1:],
-                labels[-1:],
+                handles,
+                labels,
                 loc="lower right",
                 frameon=True,
                 framealpha=0.9,

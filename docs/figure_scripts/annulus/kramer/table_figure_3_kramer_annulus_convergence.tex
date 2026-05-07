@@ -1,0 +1,170 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=0.45in]{geometry}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{siunitx}
+\usepackage{newtxtext,newtxmath}
+
+\pagestyle{empty}
+
+\sisetup{
+  scientific-notation = true,
+  round-mode = places,
+  round-precision = 3,
+}
+
+\begin{document}
+
+\begin{table}[p]
+\centering
+\caption{Free-slip, delta-function forcing.}
+\tiny
+\setlength{\tabcolsep}{1.7pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{ccccccccccccc}
+\toprule
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$n=2$} & \multicolumn{4}{c}{$n=8$} & \multicolumn{4}{c}{$n=32$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & \num{6.636331e-02} & -- & \num{3.161041e-01} & -- & \num{6.455240e-02} & -- & \num{4.609634e-01} & -- & \num{1.700066e-01} & -- & \num{8.511211e-01} & -- \\
+$1/16$ & \num{1.935920e-02} & 1.78 & \num{2.259964e-01} & 0.48 & \num{1.797945e-02} & 1.84 & \num{3.318072e-01} & 0.47 & \num{7.044648e-02} & 1.27 & \num{6.623729e-01} & 0.36 \\
+$1/32$ & \num{6.346328e-03} & 1.61 & \num{1.553140e-01} & 0.54 & \num{5.914042e-03} & 1.60 & \num{2.289660e-01} & 0.54 & \num{2.523227e-02} & 1.48 & \num{4.735935e-01} & 0.48 \\
+$1/64$ & \num{2.229752e-03} & 1.51 & \num{1.096557e-01} & 0.50 & \num{2.083897e-03} & 1.50 & \num{1.617354e-01} & 0.50 & \num{8.968098e-03} & 1.49 & \num{3.364121e-01} & 0.49 \\
+$1/128$ & \num{8.025816e-04} & 1.47 & \num{7.803588e-02} & 0.49 & \num{7.459703e-04} & 1.48 & \num{1.148883e-01} & 0.49 & \num{3.242431e-03} & 1.47 & \num{2.399638e-01} & 0.49 \\
+$1/256$ & \num{2.828244e-04} & 1.50 & \num{5.511575e-02} & 0.50 & \num{2.643446e-04} & 1.50 & \num{8.131887e-02} & 0.50 & \num{1.150050e-03} & 1.50 & \num{1.699336e-01} & 0.50 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{Free-slip, smooth forcing ($k=2$).}
+\tiny
+\setlength{\tabcolsep}{1.7pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{ccccccccccccc}
+\toprule
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$n=2$} & \multicolumn{4}{c}{$n=8$} & \multicolumn{4}{c}{$n=32$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & \num{2.441264e-03} & -- & \num{4.638875e-03} & -- & \num{2.935277e-03} & -- & \num{2.313078e-02} & -- & \num{3.710244e-02} & -- & \num{2.795656e-01} & -- \\
+$1/16$ & \num{6.376560e-04} & 1.94 & \num{1.163544e-03} & 2.00 & \num{6.480508e-04} & 2.18 & \num{5.727893e-03} & 2.01 & \num{4.628323e-03} & 3.00 & \num{6.660257e-02} & 2.07 \\
+$1/32$ & \num{1.680209e-04} & 1.92 & \num{2.911293e-04} & 2.00 & \num{1.547168e-04} & 2.07 & \num{1.401257e-03} & 2.03 & \num{5.784145e-04} & 3.00 & \num{1.580443e-02} & 2.08 \\
+$1/64$ & \num{4.259915e-05} & 1.98 & \num{7.311555e-05} & 1.99 & \num{3.792333e-05} & 2.03 & \num{3.486774e-04} & 2.01 & \num{7.999407e-05} & 2.85 & \num{3.904483e-03} & 2.02 \\
+$1/128$ & \num{1.075848e-05} & 1.99 & \num{1.835519e-05} & 1.99 & \num{9.436069e-06} & 2.01 & \num{8.721514e-05} & 2.00 & \num{1.438333e-05} & 2.48 & \num{9.717605e-04} & 2.01 \\
+$1/256$ & \num{2.703949e-06} & 1.99 & \num{4.611105e-06} & 1.99 & \num{2.358819e-06} & 2.00 & \num{2.189231e-05} & 1.99 & \num{3.209128e-06} & 2.16 & \num{2.425170e-04} & 2.00 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{Free-slip, smooth forcing ($k=8$).}
+\tiny
+\setlength{\tabcolsep}{1.7pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{ccccccccccccc}
+\toprule
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$n=2$} & \multicolumn{4}{c}{$n=8$} & \multicolumn{4}{c}{$n=32$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & \num{3.794447e-03} & -- & \num{1.194868e-02} & -- & \num{3.583856e-03} & -- & \num{3.454198e-02} & -- & \num{4.637935e-02} & -- & \num{3.105948e-01} & -- \\
+$1/16$ & \num{6.230364e-04} & 2.61 & \num{3.079711e-03} & 1.96 & \num{7.176033e-04} & 2.32 & \num{8.903145e-03} & 1.96 & \num{5.447312e-03} & 3.09 & \num{7.427074e-02} & 2.06 \\
+$1/32$ & \num{1.319875e-04} & 2.24 & \num{7.416036e-04} & 2.05 & \num{1.771640e-04} & 2.02 & \num{2.179568e-03} & 2.03 & \num{6.411399e-04} & 3.09 & \num{1.776693e-02} & 2.06 \\
+$1/64$ & \num{3.649960e-05} & 1.85 & \num{1.848237e-04} & 2.00 & \num{4.600973e-05} & 1.95 & \num{5.461135e-04} & 2.00 & \num{9.064251e-05} & 2.82 & \num{4.427356e-03} & 2.00 \\
+$1/128$ & \num{9.792216e-06} & 1.90 & \num{4.616666e-05} & 2.00 & \num{1.176768e-05} & 1.97 & \num{1.367462e-04} & 2.00 & \num{1.857818e-05} & 2.29 & \num{1.104729e-03} & 2.00 \\
+$1/256$ & \num{2.523792e-06} & 1.96 & \num{1.154370e-05} & 2.00 & \num{3.022568e-06} & 1.96 & \num{3.423742e-05} & 2.00 & \num{4.520294e-06} & 2.04 & \num{2.760595e-04} & 2.00 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{Zero-slip, delta-function forcing.}
+\tiny
+\setlength{\tabcolsep}{1.7pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{ccccccccccccc}
+\toprule
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$n=2$} & \multicolumn{4}{c}{$n=8$} & \multicolumn{4}{c}{$n=32$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & \num{2.545360e-01} & -- & \num{2.831924e-01} & -- & \num{1.024660e-01} & -- & \num{3.449341e-01} & -- & \num{1.782993e-01} & -- & \num{8.167350e-01} & -- \\
+$1/16$ & \num{9.755330e-02} & 1.38 & \num{2.019273e-01} & 0.49 & \num{3.555165e-02} & 1.53 & \num{2.473036e-01} & 0.48 & \num{7.343641e-02} & 1.28 & \num{6.354934e-01} & 0.36 \\
+$1/32$ & \num{3.227828e-02} & 1.60 & \num{1.387698e-01} & 0.54 & \num{1.181011e-02} & 1.59 & \num{1.706561e-01} & 0.54 & \num{2.628664e-02} & 1.48 & \num{4.543711e-01} & 0.48 \\
+$1/64$ & \num{1.134308e-02} & 1.51 & \num{9.797495e-02} & 0.50 & \num{4.162762e-03} & 1.50 & \num{1.205467e-01} & 0.50 & \num{9.342522e-03} & 1.49 & \num{3.227549e-01} & 0.49 \\
+$1/128$ & \num{4.083142e-03} & 1.47 & \num{6.972332e-02} & 0.49 & \num{1.490191e-03} & 1.48 & \num{8.562981e-02} & 0.49 & \num{3.377787e-03} & 1.47 & \num{2.302215e-01} & 0.49 \\
+$1/256$ & \num{1.438938e-03} & 1.50 & \num{4.924469e-02} & 0.50 & \num{5.280782e-04} & 1.50 & \num{6.060940e-02} & 0.50 & \num{1.198057e-03} & 1.50 & \num{1.630344e-01} & 0.50 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{Zero-slip, smooth forcing ($k=2$).}
+\tiny
+\setlength{\tabcolsep}{1.7pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{ccccccccccccc}
+\toprule
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$n=2$} & \multicolumn{4}{c}{$n=8$} & \multicolumn{4}{c}{$n=32$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & \num{5.168956e-03} & -- & \num{4.309436e-03} & -- & \num{4.692175e-03} & -- & \num{2.188069e-02} & -- & \num{4.621273e-02} & -- & \num{2.766099e-01} & -- \\
+$1/16$ & \num{1.287201e-03} & 2.01 & \num{1.082779e-03} & 1.99 & \num{9.928775e-04} & 2.24 & \num{5.433500e-03} & 2.01 & \num{6.648290e-03} & 2.80 & \num{6.437265e-02} & 2.10 \\
+$1/32$ & \num{3.252548e-04} & 1.98 & \num{2.715193e-04} & 2.00 & \num{2.374888e-04} & 2.06 & \num{1.342736e-03} & 2.02 & \num{8.624319e-04} & 2.95 & \num{1.526527e-02} & 2.08 \\
+$1/64$ & \num{8.137191e-05} & 2.00 & \num{6.831342e-05} & 1.99 & \num{5.872906e-05} & 2.02 & \num{3.357814e-04} & 2.00 & \num{1.205726e-04} & 2.84 & \num{3.783880e-03} & 2.01 \\
+$1/128$ & \num{2.041298e-05} & 2.00 & \num{1.721431e-05} & 1.99 & \num{1.467004e-05} & 2.00 & \num{8.418959e-05} & 2.00 & \num{2.004009e-05} & 2.59 & \num{9.431879e-04} & 2.00 \\
+$1/256$ & \num{5.102878e-06} & 2.00 & \num{4.350714e-06} & 1.98 & \num{3.662470e-06} & 2.00 & \num{2.110592e-05} & 2.00 & \num{4.125614e-06} & 2.28 & \num{2.353821e-04} & 2.00 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{Zero-slip, smooth forcing ($k=8$).}
+\tiny
+\setlength{\tabcolsep}{1.7pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{ccccccccccccc}
+\toprule
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$n=2$} & \multicolumn{4}{c}{$n=8$} & \multicolumn{4}{c}{$n=32$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & \num{5.720115e-03} & -- & \num{9.904936e-03} & -- & \num{6.657493e-03} & -- & \num{2.663052e-02} & -- & \num{6.008615e-02} & -- & \num{2.828653e-01} & -- \\
+$1/16$ & \num{1.311188e-03} & 2.13 & \num{2.584918e-03} & 1.94 & \num{1.283182e-03} & 2.38 & \num{6.863236e-03} & 1.96 & \num{9.135903e-03} & 2.72 & \num{6.628060e-02} & 2.09 \\
+$1/32$ & \num{3.201684e-04} & 2.03 & \num{6.338315e-04} & 2.03 & \num{2.836855e-04} & 2.18 & \num{1.696111e-03} & 2.02 & \num{1.184976e-03} & 2.95 & \num{1.590312e-02} & 2.06 \\
+$1/64$ & \num{7.961525e-05} & 2.01 & \num{1.595783e-04} & 1.99 & \num{6.861374e-05} & 2.05 & \num{4.264265e-04} & 1.99 & \num{1.698742e-04} & 2.80 & \num{3.969085e-03} & 2.00 \\
+$1/128$ & \num{1.990222e-05} & 2.00 & \num{4.002589e-05} & 2.00 & \num{1.699746e-05} & 2.01 & \num{1.069452e-04} & 2.00 & \num{2.923368e-05} & 2.54 & \num{9.910254e-04} & 2.00 \\
+$1/256$ & \num{4.969624e-06} & 2.00 & \num{1.002742e-05} & 2.00 & \num{4.233604e-06} & 2.01 & \num{2.680053e-05} & 2.00 & \num{6.180873e-06} & 2.24 & \num{2.475702e-04} & 2.00 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\end{document}
