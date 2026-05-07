@@ -12,6 +12,7 @@ nest_asyncio.apply()
 import os
 import re
 import sys
+import argparse
 import cmcrameri.cm as cmc
 import h5py
 import matplotlib.pyplot as plt
@@ -37,17 +38,22 @@ if IS_INTERACTIVE:
 # ### Parameters And Paths
 
 # %%
-dirname = f'case1_inv_lc_32_n_2_k_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche'
+DEFAULT_DIRNAME = "case1_inv_lc_64_n_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche"
+parser = argparse.ArgumentParser()
+parser.add_argument("-dirname", type=str, default=DEFAULT_DIRNAME, help="directory name")
+args, _ = parser.parse_known_args()
+dirname = os.path.basename(os.path.normpath(args.dirname))
 
 # %%
-output_dir = os.path.join("../../output/annulus/kramer/latest/", f'{dirname}/')
+# output_dir = os.path.join("../../output/annulus/kramer/latest/", f'{dirname}/')
+output_dir = os.path.join("/Volumes/seagate4_1/output/annulus/kramer/latest/", f'{dirname}/')
 
 # %%
 pattern = (
     r"(?P<case>case\d+)_"
     r"inv_lc_(?P<inv_lc>\d+)_"
     r"n_(?P<n>\d+)_"
-    r"k_(?P<k>\d+)_"
+    r"(?:k_(?P<k>\d+)_)?"
     r"vdeg_(?P<vdeg>\d+)_"
     r"pdeg_(?P<pdeg>\d+)_"
     r"pcont_(?P<pcont>true|false)_"
@@ -70,7 +76,7 @@ cellsize = 1 / inv_lc
 
 case = params["case"]
 n = int(params["n"])
-k = int(params["k"])
+k = None if params["k"] is None else int(params["k"])
 
 vdegree = int(params["vdeg"])
 pdegree = int(params["pdeg"])
@@ -92,6 +98,8 @@ freeslip = case in ("case1", "case2")
 zeroslip = case in ("case3", "case4")
 delta_fn = case in ("case1", "case3")
 smooth = case in ("case2", "case4")
+if smooth and k is None:
+    raise ValueError(f"Smooth density case requires k in dirname: {dirname}")
 
 # %%
 plot_size = (750, 750)
@@ -654,7 +662,7 @@ def save_colorbar(
         )
 
     elif cb_orient == "horizontal":
-        cax = plt.axes([0.1, 0.2, 1.15, 0.06])
+        cax = plt.axes([0.1, 0.2, 0.6, 0.04])
         cb = plt.colorbar(
             orientation="horizontal",
             cax=cax,
@@ -664,7 +672,7 @@ def save_colorbar(
             cb_axis_label,
             fontsize=primary_fs,
             x=cb_label_xpos,
-            y=cb_label_ypos,
+            y=cb_label_ypos-1.15,
         )
         fig.savefig(
             os.path.join(output_path, f"{fname}_cbhorz.{fformat}"),

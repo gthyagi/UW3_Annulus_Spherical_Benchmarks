@@ -1,0 +1,79 @@
+\documentclass{article}
+
+\usepackage[papersize={7.2in,5.5in},margin=0.12in]{geometry}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{xcolor}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\tabcolsep}{1.5pt}
+\renewcommand{\arraystretch}{0.98}
+
+\newcommand{\OutputRoot}{/Volumes/seagate4_1/output/annulus/kramer/latest}
+\newcommand{\RhoColorbar}{case2_inv_lc_64_n_2_k_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche/rho_ana_cbhorz.pdf}
+
+\newcommand{\MissingPanel}[1]{%
+  \begin{tikzpicture}
+    \node[
+      draw=gray!55,
+      fill=gray!8,
+      minimum width=0.318\textwidth,
+      minimum height=0.305\textwidth,
+      align=center,
+      font=\scriptsize,
+      text=gray!70,
+    ] {Missing\\\texttt{rho\_ana.png}\\[-1pt]#1};
+  \end{tikzpicture}%
+}
+
+\newcommand{\Panel}[4]{%
+  \begin{tikzpicture}
+    \IfFileExists{\OutputRoot/#2/rho_ana.png}{%
+      \node[inner sep=0pt] (img) {%
+        \includegraphics[width=0.318\textwidth]{\OutputRoot/#2/rho_ana.png}%
+      };
+    }{%
+      \node[inner sep=0pt] (img) {\MissingPanel{#3}};
+    }%
+    \node[
+      anchor=north west,
+      xshift=2.0pt,
+      yshift=-2.0pt,
+      fill=white,
+      fill opacity=0.88,
+      text opacity=1,
+      inner sep=1.5pt,
+      font=\bfseries\scriptsize
+    ] at (img.north west) {#1};
+    \node[
+      anchor=center,
+      fill=white,
+      fill opacity=0.86,
+      text opacity=1,
+      inner sep=1.5pt,
+      font=\scriptsize
+    ] at (img.center) {#4};
+  \end{tikzpicture}%
+}
+
+\begin{document}
+
+\centering
+\begin{tabular}{ccc}
+\Panel{a)}{case2_inv_lc_64_n_2_k_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case2, $n=2,k=2$}{$n=2,\ k=2$} &
+\Panel{b)}{case2_inv_lc_64_n_8_k_8_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case2, $n=8,k=8$}{$n=8,\ k=8$} &
+\Panel{c)}{case2_inv_lc_64_n_32_k_8_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case2, $n=32,k=8$}{$n=32,\ k=8$} \\
+\Panel{d)}{case1_inv_lc_64_n_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case1, $n=2$}{$n=2$} &
+\Panel{e)}{case1_inv_lc_64_n_8_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case1, $n=8$}{$n=8$} &
+\Panel{f)}{case1_inv_lc_64_n_32_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case1, $n=32$}{$n=32$}
+\end{tabular}
+
+\vspace{0.05in}
+
+\IfFileExists{\OutputRoot/\RhoColorbar}{%
+  \includegraphics[width=0.3\textwidth]{\OutputRoot/\RhoColorbar}%
+}{}
+
+\end{document}
