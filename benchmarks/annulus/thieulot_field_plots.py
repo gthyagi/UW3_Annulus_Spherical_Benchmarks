@@ -39,11 +39,14 @@ if IS_INTERACTIVE:
 # ### Parameters And Paths
 
 # %%
-dirname = "model_inv_lc_64_k_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_essential"
+dirname = "model_inv_lc_64_k_1_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_4_bc_essential"
 
 # %%
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-output_dir = os.path.join(repo_root, "output", "annulus", "thieulot", "latest", dirname)
+# output_dir = os.path.join(repo_root, "output", "annulus", "thieulot", "latest", dirname)
+
+output_dir = os.path.join("/Volumes/seagate4_1/output/annulus/thieulot/latest/", f'{dirname}/')
+
 
 # %%
 pattern = (
