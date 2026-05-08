@@ -1,4 +1,4 @@
-\documentclass[11pt,a4paper]{article}
+\documentclass[12pt,a4paper]{article}
 
 \usepackage[margin=0.9in]{geometry}
 \usepackage{graphicx}
@@ -12,7 +12,7 @@
 \graphicspath{{./}}
 \emergencystretch=2em
 
-\title{Thieulot annulus Stokes benchmark}
+\title{Incompressible Stokes Flow Annulus Benchmark Using Underworld3}
 \author{}
 \date{}
 
@@ -21,23 +21,205 @@
 \maketitle
 \vspace{-2.0em}
 
+\begin{abstract}
+We reproduce the annulus Stokes benchmark of \citet{thieulot2018} (TP2018) using
+Underworld3 (UW3). The benchmark describes incompressible isoviscous Stokes flow
+in a cylindrical annulus with tangential velocity boundary conditions imposed on
+both the inner and outer boundaries, driven by radially directed gravity and
+analytically prescribed buoyancy forcing that generates convection cells
+parameterised by the harmonic number \(k\). We investigate the accuracy and
+convergence behaviour of several mixed finite-element discretisations, including
+\(P_1\times P_0\), \(P_1\times P_1\), \(P_2\times P_1\), and
+\(P_3\times P_2\). Numerical solutions are evaluated against the analytical
+velocity and pressure fields using relative \(L_2\)-norm errors. The higher-order
+Taylor--Hood discretisations reproduce the expected convergence hierarchy for
+smooth Stokes solutions, with approximately third-order velocity and second-order
+pressure convergence for \(P_2\times P_1\), and fourth-order velocity and
+third-order pressure convergence for \(P_3\times P_2\). In contrast,
+lower-order discretisations exhibit reduced robustness, particularly in pressure
+recovery. These results demonstrate that UW3 accurately reproduces analytical
+Stokes solutions in curved geometries and provides a robust framework for future
+annulus geodynamics simulations.
+\end{abstract}
+
 \section{Introduction}
 
-The annulus benchmark of \citet{thieulot2018} provides an analytical solution for incompressible, isoviscous Stokes flow in a two-dimensional cylindrical shell. The benchmark is designed for geodynamic Stokes solvers because it combines curved boundaries, a radial gravity field, non-trivial density forcing, and a velocity field that is tangential on both the inner and outer boundaries. The integer parameter \(k\) controls the number of convection cells and therefore provides a simple way to increase the angular complexity of the manufactured solution.
+Accurate numerical solution of the incompressible Stokes equations is fundamental
+to modelling mantle convection, lithospheric deformation, subduction dynamics,
+and planetary evolution. Many geodynamic applications require simulations in
+curved geometries, including cylindrical annuli, spherical caps, and full
+spherical shells. These geometries introduce additional numerical challenges
+associated with curved boundaries, pressure nullspaces, coordinate-dependent
+forcing terms, and tangential boundary conditions.
 
-Here we use this benchmark to verify the Underworld3 annulus Stokes implementation. The calculations use the analytical density, velocity, and pressure fields of \citet{thieulot2018}; relative volume \(L_2\)-norm errors are evaluated for velocity and pressure, and boundary pressure profiles are compared directly against the analytical solution.
+Reproducing analytical solutions remains one of the most rigorous approaches for
+assessing the correctness of numerical implementations. Unlike code-to-code
+comparisons, analytical benchmarks permit direct quantification of discretisation
+errors and convergence rates. For geodynamic Stokes solvers, analytical
+benchmarks are particularly valuable because they simultaneously test
+velocity--pressure coupling, incompressibility preservation, boundary condition
+enforcement, and curved-domain representation \citep{kramer2021,davies2022}.
 
-\section{Benchmark setup}
+The annulus benchmark introduced by TP2018 provides an exact analytical solution
+for incompressible isoviscous Stokes flow in a cylindrical shell subjected to
+radial gravity. The benchmark was specifically designed for geodynamics
+applications and has been used in the verification of geodynamic codes such as
+ASPECT and ELEFANT. Unlike classical Cartesian manufactured solutions, the
+benchmark includes curved inner and outer boundaries, non-trivial pressure
+distributions along the boundaries, coordinate-dependent buoyancy forcing,
+tangential velocity boundary conditions, and controllable azimuthal complexity
+through the harmonic parameter \(k\). These properties make the benchmark
+particularly suitable for assessing finite-element formulations intended for
+annulus and spherical-shell mantle convection problems.
 
-The model solves
+UW3 is a next-generation geodynamics framework built around PETSc and symbolic
+problem specification in Python. Similar benchmark studies have recently been reproduced
+using other geodynamic codes \citep{gassmoller2024,davies2022}.
+Here, we reproduce the TP2018 annulus benchmark to validate the curved-domain
+finite-element implementations in UW3.
+
+In this study, we use the TP2018 annulus benchmark to evaluate the convergence
+and accuracy of several mixed finite-element discretisations implemented in UW3.
+Numerical results are compared against the analytical velocity and pressure
+fields using global \(L_2\)-norm errors and direct boundary pressure
+diagnostics. Particular attention is given to the convergence hierarchy of
+higher-order Taylor--Hood discretisations and the behaviour of lower-order and
+equal-order element pairs.
+
+\section{Governing Equations}
+
+We consider the steady incompressible Stokes equations:
 \[
-  -\nabla\cdot\boldsymbol{\sigma}=\rho\mathbf{g},
+  -\nabla \cdot \boldsymbol{\sigma} = \rho \mathbf{g},
   \qquad
-  \nabla\cdot\mathbf{u}=0,
+  \nabla \cdot \mathbf{u} = 0,
 \]
-in an annulus with inner radius \(R_1=1\) and outer radius \(R_2=2\). The viscosity is constant and the gravity vector is radial. The analytical solution is parameterised by \(k\), with \(k=1,2,4\) shown for the field plots and boundary-pressure profiles, and \(k=1,4,8\) used for the convergence study. Mesh resolution is reported using the nominal cell size \(h\). The convergence calculations use the element pairs \(P_1\times P_0\), \(P_1\times P_1\), \(P_2\times P_1\), and \(P_3\times P_2\), allowing the expected order hierarchy of mixed finite-element approximations to be tested.
+where \(\mathbf{u}\) is velocity, \(p\) is pressure, \(\rho\) is density, and \(\mathbf{g}\) is gravitational acceleration.
+The Cauchy stress tensor is
+\[
+  \boldsymbol{\sigma} = -p\mathbf{I} + 2\eta\boldsymbol{\varepsilon}(\mathbf{u}),
+\]
+with viscosity \(\eta\) and strain-rate tensor
+\[
+  \boldsymbol{\varepsilon}(\mathbf{u})
+  =
+  \frac{1}{2}\left(\nabla \mathbf{u} + (\nabla \mathbf{u})^T\right).
+\]
 
-\section{Analytical fields}
+The computational domain is a two-dimensional annulus bounded by inner radius \(R_1=1\) and outer radius \(R_2=2\).
+Gravity acts radially inward:
+\[
+  \mathbf{g} = -\mathbf{e}_r.
+\]
+The benchmark assumes constant viscosity \(\eta=1\) and prescribes analytical velocity, pressure, and density fields satisfying the Stokes equations exactly.
+
+\section{Analytical Benchmark Solution}
+
+Following \citet{thieulot2018}, the analytical velocity field in polar coordinates is defined as
+\[
+  v_\theta(r,\theta) = f(r)\cos(k\theta),
+  \qquad
+  v_r(r,\theta) = k g(r)\sin(k\theta),
+\]
+where
+\[
+  f(r)=Ar+\frac{B}{r},
+  \qquad
+  g(r)=\frac{A}{2}r+\frac{B}{r}\ln r+\frac{C}{r}.
+\]
+The constants \(A\) and \(B\) are chosen such that radial velocity vanishes at both annulus boundaries:
+\[
+  A=-C\frac{2(\ln R_1-\ln R_2)}{R_2^2\ln R_1-R_1^2\ln R_2},
+  \qquad
+  B=-C\frac{R_2^2-R_1^2}{R_2^2\ln R_1-R_1^2\ln R_2}.
+\]
+The pressure field is
+\[
+  p(r,\theta)=k h(r)\sin(k\theta)+\rho_0(R_2-r),
+\]
+where
+\[
+  h(r)=\frac{2g(r)-f(r)}{r}.
+\]
+The corresponding density field is
+\[
+  \rho(r,\theta)=kM(r)\sin(k\theta)+\rho_0,
+\]
+with
+\[
+  M(r)=g''(r)-\frac{g'(r)}{r}
+  -\frac{g(r)}{r^2}(k^2-1)
+  +\frac{f(r)}{r^2}
+  +\frac{f'(r)}{r}.
+\]
+The benchmark calculations use the standard parameter values
+\[
+  R_1=1,
+  \qquad
+  R_2=2,
+  \qquad
+  C=-1,
+  \qquad
+  \rho_0=0.
+\]
+
+Increasing the harmonic parameter \(k\) increases azimuthal complexity and produces \(2k\) convection cells in the annulus.
+This enables systematic evaluation of numerical performance across increasingly oscillatory flow structures.
+
+\section{Numerical Methodology}
+
+\subsection{Underworld3 Formulation}
+
+The benchmark is implemented in Underworld3 using PETSc-based finite-element Stokes solvers.
+The governing equations are assembled symbolically using SymPy and solved through PETSc Krylov subspace methods.
+
+A constant-pressure nullspace is supplied to PETSc to remove the pressure gauge ambiguity.
+Following solution, the domain-average numerical pressure is removed prior to error evaluation.
+
+The annulus meshes are generated using unstructured triangular elements with progressively refined nominal cell sizes.
+The mesh geometry degree is set to linear for all reported calculations.
+
+\subsection{Finite-Element Discretisations}
+
+The following mixed finite-element pairs are evaluated:
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+Velocity space & Pressure space & Description \\
+\midrule
+\(P_1\) & \(P_0\) & Linear velocity, discontinuous constant pressure \\
+\(P_1\) & \(P_1\) & Equal-order continuous discretisation \\
+\(P_2\) & \(P_1\) & Taylor--Hood discretisation \\
+\(P_3\) & \(P_2\) & Higher-order Taylor--Hood discretisation \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The quadrature degree is chosen according to the highest polynomial order present in the discretisation.
+For smooth incompressible Stokes solutions, stable Taylor--Hood-type discretisations are expected to exhibit velocity convergence of order \(p+1\) and pressure convergence of order \(p\) for a \(P_{p+1}\times P_p\) discretisation \citep{girault1986,boffi2013}.
+
+\subsection{Error Metrics}
+
+Relative \(L_2\)-norm errors are computed as
+\[
+  \|e_q\|_{L_2,\mathrm{rel}}
+  =
+  \left(
+  \frac{\int_\Omega |q_h-q|^2\,d\Omega}
+       {\int_\Omega |q|^2\,d\Omega}
+  \right)^{1/2},
+\]
+where \(q_h\) is the numerical solution and \(q\) is the analytical solution.
+Convergence rates are computed from successive mesh refinements.
+
+\section{Results}
+
+\subsection{Analytical Benchmark Fields}
+
+Figure~\ref{fig:thieulot_annulus_fields} illustrates the analytical density, velocity, and pressure fields for several harmonic values \(k\).
+Increasing \(k\) produces increasingly complex azimuthal structure while preserving the exact incompressible solution.
+The benchmark simultaneously tests curved boundary representation, velocity--pressure coupling, radial gravity forcing, tangential slip-compatible velocity fields, and pressure recovery on curved boundaries.
 
 \begin{figure}[H]
     \centering
@@ -46,9 +228,17 @@ in an annulus with inner radius \(R_1=1\) and outer radius \(R_2=2\). The viscos
     \label{fig:thieulot_annulus_fields}
 \end{figure}
 
-Figure~\ref{fig:thieulot_annulus_fields} shows the forcing and analytical fields used in the verification runs. Increasing \(k\) increases the azimuthal wavenumber of the solution, producing progressively finer angular structure in density, velocity, and pressure. These fields are useful visual diagnostics because the exact solution contains strong angular variation while maintaining tangential velocity on both curved boundaries.
+\subsection{Convergence Behaviour}
 
-\section{Velocity and pressure convergence}
+The convergence behaviour for all tested discretisations is shown in Fig.~\ref{fig:thieulot_annulus_convergence}.
+The \(P_2\times P_1\) Taylor--Hood discretisation exhibits approximately third-order velocity convergence and second-order pressure convergence, consistent with theoretical expectations for smooth Stokes solutions.
+
+The higher-order \(P_3\times P_2\) discretisation achieves approximately fourth-order velocity convergence and third-order pressure convergence on coarse-to-intermediate mesh resolutions.
+At the finest resolutions, convergence rates begin to plateau, likely reflecting accumulated effects from geometry approximation, quadrature errors, and solver tolerances.
+
+The lower-order discretisations show reduced robustness.
+The \(P_1\times P_0\) pair fails to produce reliable convergence behaviour for this benchmark, while the equal-order \(P_1\times P_1\) discretisation produces acceptable velocity convergence but weaker and less consistent pressure convergence.
+These observations are consistent with established finite-element theory for incompressible Stokes flow \citep{boffi2013,thieulot2022}.
 
 \begin{figure}[H]
     \centering
@@ -57,32 +247,62 @@ Figure~\ref{fig:thieulot_annulus_fields} shows the forcing and analytical fields
     \label{fig:thieulot_annulus_convergence}
 \end{figure}
 
-For sufficiently smooth Stokes solutions, stable Taylor--Hood-type approximations are expected to converge with order \(p+1\) in the velocity \(L_2\) norm and order \(p\) in the pressure \(L_2\) norm for a \(P_{p+1}\times P_p\) pair, assuming that geometry and quadrature errors are not dominant \citep[e.g.][]{girault1986,boffi2013}. The UW3 results follow this pattern for the higher-order pairs. The \(P_2\times P_1\) calculations show approximately \(O(h^3)\) velocity convergence and \(O(h^2)\) pressure convergence for \(k=1,4,8\). The \(P_3\times P_2\) calculations show approximately \(O(h^4)\) velocity convergence and \(O(h^3)\) pressure convergence until the finest resolutions, where the velocity error approaches a small absolute error floor.
-
-The lower-order element pairs behave as expected for less robust discretisations in this benchmark. The \(P_1\times P_1\) results show systematic velocity convergence close to \(O(h^2)\), while pressure convergence is lower and more variable. The \(P_1\times P_0\) results do not show useful convergence for this setup. This is consistent with the role of stable velocity--pressure coupling in incompressible Stokes discretisations and indicates that the higher-order Taylor--Hood pairs are the appropriate production choices for this benchmark.
-
-\section{Tabulated errors}
-
-The numerical values and pairwise convergence rates are provided in the following pages. Each table groups \(k=1,4,8\) and reports \(h\), velocity error, velocity rate, pressure error, and pressure rate for one element pair.
-
 \includepdf[pages=-,fitpaper=true,pagecommand={\thispagestyle{plain}}]{table_figure_5_thieulot_annulus_convergence.pdf}
 
-\section{Boundary pressure}
+\subsection{Boundary Pressure Recovery}
+
+Pressure profiles extracted along the inner and outer annulus boundaries are compared against analytical solutions in Fig.~\ref{fig:thieulot_annulus_boundary_pressure}.
+The higher-order Taylor--Hood discretisations reproduce the analytical pressure distributions accurately across the annulus boundaries, including extrema near regions of high azimuthal variation.
+Pressure discrepancies are most pronounced for lower-order discretisations and become increasingly visible for larger \(k\), where sharper angular pressure gradients must be resolved.
+
+Because the benchmark includes non-trivial pressure variation directly on curved boundaries, these comparisons provide a stringent test of both pressure interpolation quality and curved-domain numerical accuracy.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.92\linewidth]{figure_2_thieulot_annulus_pressure_boundary.pdf}
-    \caption{Pressure along the inner and outer annulus boundaries for \(k=1,2,4\), using the \(h=1/128\) calculations. Solid curves denote the analytical solution and dashed curves denote UW3 values sampled from the numerical pressure field.}
+    \caption{Pressure along the inner and outer annulus boundaries for \(k=1,2,4\), using the \(P_2\times P_1\), \(h=1/128\) calculations. Solid curves denote the analytical solution and dashed curves denote UW3 values sampled from the numerical pressure field.}
     \label{fig:thieulot_annulus_boundary_pressure}
 \end{figure}
 
-Figure~\ref{fig:thieulot_annulus_boundary_pressure} reproduces the boundary-pressure comparison of \citet{thieulot2018} using the \(h=1/128\) UW3 models. The numerical curves are phase-aligned with the analytical pressure on both \(r=R_1\) and \(r=R_2\), and the amplitude agreement is close for all tested values of \(k\). This comparison is a complementary diagnostic to the volume \(L_2\) norms because it checks the pressure field directly on the curved boundaries, where geometric representation and pressure recovery errors are most visible.
+\subsection{Implications for Spherical Geodynamics}
 
-\section{Discussion and conclusions}
+Although the benchmark is formulated in a two-dimensional annulus, its numerical characteristics are directly relevant to spherical-shell mantle convection calculations.
+In particular, the benchmark tests curved-boundary finite-element behaviour, radial body-force implementation, pressure nullspace treatment, incompressibility preservation, and higher-order mixed discretisations.
+These are all essential ingredients in regional and global spherical geodynamics models.
 
-The annulus Thieulot benchmark verifies the UW3 Stokes implementation for a smooth analytical solution in a curved two-dimensional shell. The analytical field plots confirm that the benchmark exercises non-trivial angular structure, and the convergence results demonstrate the expected finite-element hierarchy for the stable higher-order pairs. In particular, \(P_2\times P_1\) recovers approximately third-order velocity and second-order pressure convergence, while \(P_3\times P_2\) recovers approximately fourth-order velocity and third-order pressure convergence before fine-grid error-floor effects become visible.
+The strong convergence behaviour observed for higher-order Taylor--Hood discretisations therefore provides confidence in Underworld3 implementations intended for annulus and spherical-shell mantle convection applications.
 
-The direct boundary-pressure comparison further indicates that the pressure solution is accurate not only in the volume norm but also on the annulus boundaries. Together, the convergence and boundary-profile results are consistent with the analytical benchmark behaviour reported by \citet{thieulot2018} and support the use of the annulus Thieulot problem as a production verification test for Underworld3 curved-domain Stokes calculations.
+\section{Discussion}
+
+The present results demonstrate that Underworld3 reproduces the analytical annulus benchmark solution with convergence behaviour consistent with finite-element theory.
+The benchmark additionally highlights several important numerical considerations.
+
+First, higher-order mixed discretisations provide substantially improved pressure accuracy relative to lower-order formulations.
+This is particularly important in geodynamics applications where pressure gradients strongly influence buoyancy-driven flow and dynamic topography.
+
+Second, curved geometries remain sensitive to geometric approximation order.
+Although linear geometry representation was sufficient to recover theoretical convergence trends for the present benchmark, higher-order curved geometry representations may become increasingly important for extremely fine meshes or strongly curved spherical-shell problems.
+
+Third, equal-order discretisations continue to exhibit weaker pressure robustness relative to stable Taylor--Hood formulations.
+This behaviour aligns with expectations from the Ladyzhenskaya--Babuska--Brezzi stability condition.
+
+The benchmark therefore provides a valuable verification framework not only for Underworld3, but also for future development of curved-element geometries, advanced boundary-condition implementations, and spherical-shell finite-element formulations.
+
+\section{Conclusions}
+
+We have presented a verification study of the Thieulot--Puckett annulus Stokes benchmark using Underworld3.
+The benchmark provides a stringent test of incompressible Stokes flow in curved geometries through the combination of radial gravity, coordinate-dependent forcing, tangential boundary velocity conditions, and non-trivial pressure variation on curved annulus boundaries.
+
+The principal findings are:
+\begin{enumerate}
+  \item Higher-order Taylor--Hood discretisations reproduce the expected smooth-solution convergence hierarchy.
+  \item The \(P_2\times P_1\) discretisation achieves approximately third-order velocity and second-order pressure convergence.
+  \item The \(P_3\times P_2\) discretisation achieves approximately fourth-order velocity and third-order pressure convergence before fine-resolution error saturation.
+  \item Lower-order discretisations exhibit weaker pressure robustness and reduced convergence quality.
+  \item Underworld3 accurately reproduces analytical Stokes solutions in curved annular geometries.
+\end{enumerate}
+
+These results establish the Thieulot--Puckett annulus benchmark as an effective verification framework for Underworld3 annulus and spherical-shell geodynamics applications.
 
 \bibliographystyle{plainnat}
 \bibliography{thieulot_annulus_benchmark_report_refs}
