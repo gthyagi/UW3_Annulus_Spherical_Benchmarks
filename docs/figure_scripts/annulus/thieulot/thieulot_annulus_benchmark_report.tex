@@ -1,25 +1,28 @@
-\documentclass[12pt,a4paper]{article}
+\documentclass[gmd, manuscript]{copernicus}
 
-\usepackage[margin=0.9in]{geometry}
-\usepackage{graphicx}
 \usepackage{pdfpages}
 \usepackage{booktabs}
-\usepackage{float}
-\usepackage{natbib}
-\usepackage{newtxtext,newtxmath}
-\usepackage[hidelinks]{hyperref}
 
 \graphicspath{{./}}
 \emergencystretch=2em
 
 \title{Incompressible Stokes Flow Annulus Benchmark Using Underworld3}
-\author{}
-\date{}
+\Author[1]{T.}{G. Tyagi}
+\affil[1]{School of Earth, Atmosphere and Environment, Monash University, Clayton, Australia}
+
+\runningtitle{Annulus Stokes flow benchmark in Underworld3}
+\runningauthor{Tyagi}
+
+\received{}
+\pubdiscuss{}
+\revised{}
+\accepted{}
+\published{}
+\firstpage{1}
 
 \begin{document}
 
 \maketitle
-\vspace{-2.0em}
 
 \begin{abstract}
 We reproduce the annulus Stokes benchmark of \citet{thieulot2018} (TP2018) using
@@ -42,7 +45,7 @@ Stokes solutions in curved geometries and provides a robust framework for future
 annulus geodynamics simulations.
 \end{abstract}
 
-\section{Introduction}
+\introduction
 
 Accurate numerical solution of the incompressible Stokes equations is fundamental
 to modelling mantle convection, lithospheric deformation, subduction dynamics,
@@ -288,7 +291,7 @@ This behaviour aligns with expectations from the Ladyzhenskaya--Babuska--Brezzi 
 
 The benchmark therefore provides a valuable verification framework not only for Underworld3, but also for future development of curved-element geometries, advanced boundary-condition implementations, and spherical-shell finite-element formulations.
 
-\section{Conclusions}
+\conclusions
 
 We have presented a verification study of the Thieulot--Puckett annulus Stokes benchmark using Underworld3.
 The benchmark provides a stringent test of incompressible Stokes flow in curved geometries through the combination of radial gravity, coordinate-dependent forcing, tangential boundary velocity conditions, and non-trivial pressure variation on curved annulus boundaries.
@@ -304,7 +307,7 @@ The principal findings are:
 
 These results establish the Thieulot--Puckett annulus benchmark as an effective verification framework for Underworld3 annulus and spherical-shell geodynamics applications.
 
-\bibliographystyle{plainnat}
+\bibliographystyle{copernicus}
 \bibliography{thieulot_annulus_benchmark_report_refs}
 
 \end{document}
