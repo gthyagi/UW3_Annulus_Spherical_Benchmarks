@@ -1,0 +1,759 @@
+%% Copernicus Publications Manuscript Preparation Template for LaTeX Submissions
+%% ---------------------------------
+%% This template should be used for copernicus.cls
+%% The class file and some style files are bundled in the Copernicus Latex Package, which can be downloaded from the different journal webpages.
+%% For further assistance please contact Copernicus Publications at: production@copernicus.org
+%% https://publications.copernicus.org/for_authors/manuscript_preparation.html
+
+
+%% Please use the following documentclass and journal abbreviations for preprints and final revised papers.
+
+%% 2-column papers and preprints
+\documentclass[gmd, manuscript]{copernicus}
+
+
+
+%% Journal abbreviations (please use the same for preprints and final revised papers)
+
+
+% Advances in Geosciences (adgeo)
+% Advances in Radio Science (ars)
+% Advances in Science and Research (asr)
+% Advances in Statistical Climatology, Meteorology and Oceanography (ascmo)
+% Aerosol Research (ar)
+% Annales Geophysicae (angeo)
+% Archives Animal Breeding (aab)
+% Atmospheric Chemistry and Physics (acp)
+% Atmospheric Measurement Techniques (amt)
+% Biogeosciences (bg)
+% Climate of the Past (cp)
+% DEUQUA Special Publications (deuquasp)
+% Earth Surface Dynamics (esurf)
+% Earth System Dynamics (esd)
+% Earth System Science Data (essd)
+% E&G Quaternary Science Journal (egqsj)
+% EGUsphere (egusphere) | This is only for EGUsphere preprints submitted without relation to an EGU journal.
+% Earth Observation (eo)
+% European Journal of Mineralogy (ejm)
+% Geochronology (gchron)
+% Geographica Helvetica (gh)
+% Geoscience Communication (gc)
+% Geoscientific Instrumentation, Methods and Data Systems (gi)
+% Geoscientific Model Development (gmd)
+% History of Geo- and Space Sciences (hgss)
+% Hydrology and Earth System Sciences (hess)
+% Journal of Bone and Joint Infection (jbji)
+% Journal of Environmentally Compatible Air Transport System (jecats)
+% Journal of Micropalaeontology (jm)
+% Journal of Sensors and Sensor Systems (jsss)
+% Magnetic Resonance (mr)
+% Mechanical Sciences (ms)
+% Natural Hazards and Earth System Sciences (nhess)
+% Nonlinear Processes in Geophysics (npg)
+% Ocean Science (os)
+% Polarforschung - Journal of the German Society for Polar Research (polf)
+% Proceedings of the International Association of Hydrological Sciences (piahs)
+% Proceedings of the International Ocean Drilling Programme (piodp)
+% Safety of Nuclear Waste Disposal (sand)
+% Scientific Drilling (sd)
+% SOIL (soil)
+% Solid Earth (se)
+% State of the Planet (sp)
+% The Cryosphere (tc)
+% Weather and Climate Dynamics (wcd)
+% Web Ecology (we)
+% Wind Energy Science (wes)
+
+
+%% \usepackage commands included in the copernicus.cls:
+%\usepackage[german, english]{babel}
+%\usepackage{tabularx}
+%\usepackage{cancel}
+%\usepackage{multirow}
+%\usepackage{supertabular}
+%\usepackage{algorithmic}
+%\usepackage{algorithm}
+%\usepackage{amsthm}
+%\usepackage{float}
+%\usepackage{subfig}
+%\usepackage{rotating}
+
+
+\usepackage{pdfpages}
+\usepackage{booktabs}
+\usepackage{pdflscape}
+
+\graphicspath{{./}}
+\emergencystretch=2em
+
+\begin{document}
+
+\title{Incompressible Stokes Flow Annulus Benchmark Using Underworld3}
+
+
+% \Author[affil]{given_name}{surname}
+
+\Author[1][gthyagi@gmail.com]{Thyagarajulu}{Gollapalli} %% correspondence author
+\Author[1]{Underworld}{Team}
+
+\affil[1]{Research School of Earth Sciences, Australian National University, Canberra, ACT, Australia}
+
+%% The [] brackets identify the author with the corresponding affiliation. 1, 2, 3, etc. should be inserted.
+
+%% If an author is deceased, please add \deceased[$Deceased date if applicable$]{$Author number$} (e.g. \deceased[13 November 2015]{2}) at the end of the affiliations. The author number depends on the placement of the author in the author list, e.g. the third author has number 3.
+
+
+%% If authors contributed equally, please add \equalcontrib{$Author numbers$} (e.g. \equalcontrib{1,3}) at the end of the affiliations. The author number depends on the placement of the author in the author list, e.g. the third author has number 3.
+
+
+
+
+\runningtitle{Annulus Stokes flow benchmark in Underworld3}
+
+\runningauthor{Gollapalli}
+
+
+
+
+
+\received{}
+\pubdiscuss{} %% only important for two-stage journals
+\revised{}
+\accepted{}
+\published{}
+
+%% These dates will be inserted by Copernicus Publications during the typesetting process.
+
+
+\firstpage{1}
+
+\maketitle
+
+
+
+\begin{abstract}
+We reproduce the annulus Stokes benchmark of \citet{thieulot2018} (TP2018) using
+Underworld3 (UW3). The benchmark describes incompressible isoviscous Stokes flow
+in a cylindrical annulus with tangential velocity boundary conditions imposed on
+both the inner and outer boundaries, driven by radially directed gravity and
+analytically prescribed buoyancy forcing that generates convection cells
+parameterised by the harmonic number \(k\). We investigate the accuracy and
+convergence behaviour of several mixed finite-element discretisations, including
+\(P_1\times P_0\), \(P_1\times P_1\), \(P_2\times P_1\), and
+\(P_3\times P_2\). Numerical solutions are evaluated against the analytical
+velocity and pressure fields using relative \(L_2\)-norm errors. The higher-order
+Taylor--Hood discretisations reproduce the expected convergence hierarchy for
+smooth Stokes solutions, with approximately third-order velocity and second-order
+pressure convergence for \(P_2\times P_1\), and fourth-order velocity and
+third-order pressure convergence for \(P_3\times P_2\). In contrast,
+lower-order discretisations exhibit reduced robustness, particularly in pressure
+recovery. These results demonstrate that UW3 accurately reproduces analytical
+Stokes solutions in curved geometries and provides a robust framework for future
+annulus geodynamics simulations.
+\end{abstract}
+
+
+% \copyrightstatement{TEXT} %% This section is optional and can be used for copyright transfers.
+
+
+\introduction
+
+Accurate numerical solution of the incompressible Stokes equations is fundamental
+to modelling mantle convection, lithospheric deformation, subduction dynamics,
+and planetary evolution. Many geodynamic applications require simulations in
+curved geometries, such as annulus, spherical cap, and full spherical shell.
+These geometries introduce additional numerical challenges associated with
+curved boundaries, pressure nullspaces, coordinate-dependent forcing terms, and
+tangential boundary conditions.
+
+Reproducing analytical benchmarks remains one of the most rigorous approaches
+for assessing the correctness of numerical implementations. Unlike code-to-code
+comparisons, analytical benchmarks enable direct quantification of
+discretisation errors and convergence rates. They are particularly valuable for
+geodynamic Stokes problems because they simultaneously assess
+velocity--pressure coupling, incompressibility preservation, boundary condition
+implementation, and the accurate representation of curved geometries
+\citep{kramer2021,davies2022}.
+
+The annulus benchmark introduced by TP2018 provides an exact analytical solution
+for incompressible isoviscous Stokes flow in a cylindrical shell subjected to
+radially directed gravity. The benchmark was specifically designed for
+geodynamics applications and has since been widely used for verification of
+geodynamic codes within the community \citep{gassmoller2024}. Unlike classical
+Cartesian manufactured solutions, the benchmark incorporates curved inner and
+outer boundaries, non-trivial pressure distributions along the boundaries,
+coordinate-dependent buoyancy forcing, tangential velocity boundary conditions,
+and controllable azimuthal complexity through the harmonic parameter \(k\).
+These characteristics make the benchmark particularly well suited for assessing
+finite-element formulations in annulus and curved-domain mantle convection
+problems.
+
+UW3 is a next-generation geodynamics framework built around PETSc and symbolic
+problem specification in Python. In this study, we reproduce the TP2018 annulus
+benchmark to verify the curved-domain finite-element implementations in UW3. We
+evaluate the convergence and accuracy of several mixed finite-element
+discretisations, including both lower-order and higher-order
+velocity--pressure element pairs. Numerical results are compared against the
+analytical velocity and pressure fields using \(L_2\)-norm errors and
+boundary pressure diagnostics. Particular attention is given to the convergence
+behaviour of Taylor--Hood discretisations and the performance of lower-order and
+equal-order element formulations.
+
+\section{Governing Equations}
+
+We consider steady state incompressible Stokes equations:
+\begin{subequations}
+\begin{align}
+  -\nabla \cdot \boldsymbol{\sigma} &= \rho \mathbf{g}, \\
+  \nabla \cdot \mathbf{u} &= 0.
+\end{align}
+\end{subequations}
+The stress tensor is
+\begin{equation}
+  \boldsymbol{\sigma} = -p\mathbf{I} + 2\eta\boldsymbol{\varepsilon}(\mathbf{u}),
+\end{equation}
+with viscosity \(\eta\) and strain-rate tensor
+\begin{equation}
+  \boldsymbol{\varepsilon}(\mathbf{u})
+  =
+  \frac{1}{2}\left(\nabla \mathbf{u} + (\nabla \mathbf{u})^T\right).
+\end{equation}
+where \(\mathbf{u}\) is velocity, \(p\) is pressure, \(\rho\) is density, and \(\mathbf{g}\) is gravitational acceleration.
+
+\section{Analytical Benchmark Solution}
+
+Following \citet{thieulot2018}, the analytical velocity field in polar coordinates is defined as
+\begin{subequations}
+\begin{align}
+  v_\theta(r,\theta) &= f(r)\cos(k\theta), \\
+  v_r(r,\theta) &= k g(r)\sin(k\theta).
+\end{align}
+\end{subequations}
+where
+\begin{subequations}
+\begin{align}
+  f(r) &= Ar+\frac{B}{r}, \\
+  g(r) &= \frac{A}{2}r+\frac{B}{r}\ln r+\frac{C}{r}.
+\end{align}
+\end{subequations}
+The constants \(A\) and \(B\) are chosen such that radial velocity vanishes at both annulus boundaries:
+\begin{subequations}
+\begin{align}
+  A &= -C\frac{2(\ln R_1-\ln R_2)}{R_2^2\ln R_1-R_1^2\ln R_2}, \\
+  B &= -C\frac{R_2^2-R_1^2}{R_2^2\ln R_1-R_1^2\ln R_2}.
+\end{align}
+\end{subequations}
+The pressure field is
+\begin{equation}
+  p(r,\theta)=k h(r)\sin(k\theta)+\rho_0(R_2-r),
+\end{equation}
+where
+\begin{equation}
+  h(r)=\frac{2g(r)-f(r)}{r}.
+\end{equation}
+The corresponding density field is
+\begin{equation}
+  \rho(r,\theta)=kM(r)\sin(k\theta)+\rho_0,
+\end{equation}
+with
+\begin{equation}
+  M(r)=g''(r)-\frac{g'(r)}{r}
+  -\frac{g(r)}{r^2}(k^2-1)
+  +\frac{f(r)}{r^2}
+  +\frac{f'(r)}{r}.
+\end{equation}
+The benchmark calculations use the standard parameter values
+\[
+  R_1=1,
+  \qquad
+  R_2=2,
+  \qquad
+  C=-1,
+  \qquad
+  \rho_0=0.
+\]
+where \(R_1\) is the inner radius and \(R_2\) is the outer radius.
+Gravity acts radially inward:
+\begin{equation}
+  \mathbf{g} = -\mathbf{e}_r.
+\end{equation}
+The benchmark assumes constant viscosity \(\eta=1\) and prescribes analytical velocity on boundaries, and density field in the domain.
+Increasing the harmonic parameter \(k\) increases azimuthal complexity and produces \(2k\) convection cells in the annulus.
+This enables systematic evaluation of numerical performance across increasingly oscillatory flow structures.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\linewidth]{figure_1_thieulot_annulus_analytical.pdf}
+    \caption{Analytical density, velocity, and pressure fields. Columns correspond to increasing \(k\), which increases the number of convection cells in the annulus.}
+    \label{fig:thieulot_annulus_fields}
+\end{figure}
+
+\section{Numerical Methodology}
+
+\subsection{UW3 Formulation}
+
+The benchmark is implemented in UW3 using PETSc-based finite-element Stokes system.
+The governing equations are assembled symbolically using SymPy and solved through PETSc Krylov subspace methods.
+A constant-pressure nullspace is supplied to PETSc to remove the pressure gauge ambiguity.
+Following solution, the domain-average numerical pressure is removed prior to error evaluation.
+The annulus meshes are generated using unstructured triangular elements with progressively refined nominal cell sizes.
+The mesh geometry degree is set to linear for all reported calculations.
+
+\subsection{Finite-Element Discretisations}
+
+The following mixed finite-element pairs are evaluated:
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+Velocity space & Pressure space & Description \\
+\midrule
+\(P_1\) & \(P_0\) & Linear velocity, discontinuous constant pressure \\
+\(P_1\) & \(P_1\) & Equal-order continuous discretisation \\
+\(P_2\) & \(P_1\) & Taylor--Hood discretisation \\
+\(P_3\) & \(P_2\) & Higher-order Taylor--Hood discretisation \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The quadrature degree is chosen according to the highest polynomial order present in the discretisation.
+For smooth incompressible Stokes solutions, stable Taylor--Hood-type discretisations are expected to exhibit velocity convergence of order \(p+1\) and pressure convergence of order \(p\) for a \(P_{p+1}\times P_p\) discretisation \citep{girault1986,boffi2013}.
+
+\subsection{Error Metrics}
+
+Relative \(L_2\)-norm errors are computed as
+\begin{equation}
+  \|e_q\|_{L_2,\mathrm{rel}}
+  =
+  \left(
+  \frac{\int_\Omega |q_h-q|^2\,d\Omega}
+       {\int_\Omega |q|^2\,d\Omega}
+  \right)^{1/2},
+\end{equation}
+where \(q_h\) is the numerical solution and \(q\) is the analytical solution.
+Convergence rates are computed from successive mesh refinements.
+
+add convergence rate formula. add absolute l2 norms.
+
+\section{Results}
+
+\subsection{Convergence Behaviour}
+
+The convergence behaviour for all tested discretisations is shown in Fig.~\ref{fig:thieulot_annulus_convergence}.
+The \(P_2\times P_1\) Taylor--Hood discretisation exhibits approximately third-order velocity convergence and second-order pressure convergence, consistent with theoretical expectations for smooth Stokes solutions.
+
+The higher-order \(P_3\times P_2\) discretisation achieves approximately fourth-order velocity convergence and third-order pressure convergence on coarse-to-intermediate mesh resolutions.
+At the finest resolutions, convergence rates begin to plateau, likely reflecting accumulated effects from geometry approximation, quadrature errors, and solver tolerances.
+
+The lower-order discretisations show reduced robustness.
+The \(P_1\times P_0\) pair fails to produce reliable convergence behaviour for this benchmark, while the equal-order \(P_1\times P_1\) discretisation produces acceptable velocity convergence but weaker and less consistent pressure convergence.
+These observations are consistent with established finite-element theory for incompressible Stokes flow \citep{boffi2013,thieulot2022}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\linewidth]{figure_5_thieulot_annulus_convergence.pdf}
+    \caption{Convergence of relative volume \(L_2\)-norm velocity and pressure errors for the annulus Thieulot benchmark. Reference lines indicate the expected smooth-solution rates for the higher-order element pairs.}
+    \label{fig:thieulot_annulus_convergence}
+\end{figure}
+
+% Native LaTeX table content from table_figure_5_thieulot_annulus_convergence.tex.
+\par\nolinenumbers
+\begin{landscape}
+\thispagestyle{empty}
+\begin{center}
+\centering
+\captionof{table}{Errors and Convergence Rates for $P_1\times P_0$.}
+\label{tab:annulus_thieulot_v1_p0_disc}
+\small
+\begin{tabular}{
+r rr rr rr rr rr rr
+}
+\toprule
+& \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
+$h$ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & 6.398e-02 & -- & 8.040e-01 & -- & 1.763e-01 & -- & 7.800e-01 & -- & 1.298e-01 & -- & 8.163e-01 & -- \\
+$1/16$ & 6.427e-02 & -0.01 & 7.384e-01 & 0.12 & 1.775e-01 & -0.01 & 7.295e-01 & 0.10 & 1.401e-01 & -0.11 & 7.589e-01 & 0.11 \\
+$1/32$ & 6.426e-02 & 0.00 & 7.220e-01 & 0.03 & 1.780e-01 & -0.00 & 7.161e-01 & 0.03 & 1.435e-01 & -0.04 & 7.403e-01 & 0.04 \\
+$1/64$ & 6.426e-02 & 0.00 & 7.177e-01 & 0.01 & 1.781e-01 & -0.00 & 7.124e-01 & 0.01 & 1.445e-01 & -0.01 & 7.349e-01 & 0.01 \\
+$1/128$ & 6.425e-02 & 0.00 & 7.167e-01 & 0.00 & 1.782e-01 & -0.00 & 7.114e-01 & 0.00 & 1.447e-01 & -0.00 & 7.334e-01 & 0.00 \\
+$1/256$ & 6.425e-02 & 0.00 & 7.164e-01 & 0.00 & 1.782e-01 & -0.00 & 7.112e-01 & 0.00 & 1.448e-01 & -0.00 & 7.330e-01 & 0.00 \\
+$1/512$ & 6.425e-02 & 0.00 & 7.163e-01 & 0.00 & 1.782e-01 & -0.00 & 7.111e-01 & 0.00 & 1.448e-01 & -0.00 & 7.329e-01 & 0.00 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\centering
+\captionof{table}{Errors and Convergence Rates for $P_1\times P_1$.}
+\label{tab:annulus_thieulot_v1_p1_cont}
+\small
+\begin{tabular}{
+r rr rr rr rr rr rr
+}
+\toprule
+& \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
+$h$ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & 1.537e-02 & -- & 4.325e+00 & -- & 2.994e-02 & -- & 3.202e+00 & -- & 3.629e-02 & -- & 3.184e+00 & -- \\
+$1/16$ & 3.459e-03 & 2.15 & 1.628e+00 & 1.41 & 6.385e-03 & 2.23 & 1.625e+00 & 0.98 & 7.925e-03 & 2.19 & 1.417e+00 & 1.17 \\
+$1/32$ & 8.358e-04 & 2.05 & 7.174e-01 & 1.18 & 1.293e-03 & 2.30 & 6.195e-01 & 1.39 & 1.937e-03 & 2.03 & 7.144e-01 & 0.99 \\
+$1/64$ & 2.056e-04 & 2.02 & 3.115e-01 & 1.20 & 2.776e-04 & 2.22 & 2.855e-01 & 1.12 & 4.931e-04 & 1.97 & 3.210e-01 & 1.15 \\
+$1/128$ & 5.095e-05 & 2.01 & 1.582e-01 & 0.98 & 6.252e-05 & 2.15 & 1.083e-01 & 1.40 & 1.243e-04 & 1.99 & 1.260e-01 & 1.35 \\
+$1/256$ & 1.266e-05 & 2.01 & 5.740e-02 & 1.46 & 1.487e-05 & 2.07 & 5.231e-02 & 1.05 & 3.158e-05 & 1.98 & 6.476e-02 & 0.96 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vfill
+\begin{center}\thepage\end{center}
+\clearpage
+\end{landscape}
+\begin{landscape}
+\thispagestyle{empty}
+
+\begin{center}
+\centering
+\captionof{table}{Errors and Convergence Rates for $P_2\times P_1$.}
+\label{tab:annulus_thieulot_v2_p1_cont}
+\small
+\begin{tabular}{
+r rr rr rr rr rr rr
+}
+\toprule
+& \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
+$h$ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & 2.218e-04 & -- & 1.087e-02 & -- & 9.781e-04 & -- & 1.944e-02 & -- & 2.731e-03 & -- & 4.174e-02 & -- \\
+$1/16$ & 2.675e-05 & 3.05 & 2.530e-03 & 2.10 & 1.151e-04 & 3.09 & 4.611e-03 & 2.08 & 3.225e-04 & 3.08 & 9.354e-03 & 2.16 \\
+$1/32$ & 3.388e-06 & 2.98 & 6.427e-04 & 1.98 & 1.437e-05 & 3.00 & 1.159e-03 & 1.99 & 4.016e-05 & 3.01 & 2.310e-03 & 2.02 \\
+$1/64$ & 4.205e-07 & 3.01 & 1.601e-04 & 2.01 & 1.763e-06 & 3.03 & 2.869e-04 & 2.01 & 4.850e-06 & 3.05 & 5.666e-04 & 2.03 \\
+$1/128$ & 5.254e-08 & 3.00 & 3.992e-05 & 2.00 & 2.190e-07 & 3.01 & 7.152e-05 & 2.00 & 6.001e-07 & 3.01 & 1.412e-04 & 2.00 \\
+$1/256$ & 6.575e-09 & 3.00 & 9.979e-06 & 2.00 & 2.730e-08 & 3.00 & 1.787e-05 & 2.00 & 7.449e-08 & 3.01 & 3.524e-05 & 2.00 \\
+$1/512$ & 8.632e-10 & 2.93 & 2.494e-06 & 2.00 & 3.412e-09 & 3.00 & 4.466e-06 & 2.00 & 9.287e-09 & 3.00 & 8.802e-06 & 2.00 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\centering
+\captionof{table}{Errors and Convergence Rates for $P_3\times P_2$.}
+\label{tab:annulus_thieulot_v3_p2_cont}
+\small
+\begin{tabular}{
+r rr rr rr rr rr rr
+}
+\toprule
+& \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
+$h$ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+\midrule
+$1/8$ & 1.102e-05 & -- & 1.210e-03 & -- & 6.233e-05 & -- & 2.498e-03 & -- & 2.198e-04 & -- & 6.495e-03 & -- \\
+$1/16$ & 6.792e-07 & 4.02 & 1.220e-04 & 3.31 & 3.811e-06 & 4.03 & 2.905e-04 & 3.10 & 1.363e-05 & 4.01 & 8.249e-04 & 2.98 \\
+$1/32$ & 4.360e-08 & 3.96 & 1.392e-05 & 3.13 & 2.441e-07 & 3.96 & 3.358e-05 & 3.11 & 8.723e-07 & 3.97 & 9.664e-05 & 3.09 \\
+$1/64$ & 2.729e-09 & 4.00 & 1.585e-06 & 3.13 & 1.510e-08 & 4.01 & 3.870e-06 & 3.12 & 5.323e-08 & 4.03 & 1.110e-05 & 3.12 \\
+$1/128$ & 4.043e-10 & 2.75 & 1.877e-07 & 3.08 & 9.826e-10 & 3.94 & 4.601e-07 & 3.07 & 3.344e-09 & 3.99 & 1.322e-06 & 3.07 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vfill
+\begin{center}\thepage\end{center}
+\end{landscape}
+\par\linenumbers
+
+\subsection{Boundary Pressure Recovery}
+
+Pressure profiles extracted along the inner and outer annulus boundaries are compared against analytical solutions in Fig.~\ref{fig:thieulot_annulus_boundary_pressure}.
+The higher-order Taylor--Hood discretisations reproduce the analytical pressure distributions accurately across the annulus boundaries, including extrema near regions of high azimuthal variation.
+Pressure discrepancies are most pronounced for lower-order discretisations and become increasingly visible for larger \(k\), where sharper angular pressure gradients must be resolved.
+
+Because the benchmark includes non-trivial pressure variation directly on curved boundaries, these comparisons provide a stringent test of both pressure interpolation quality and curved-domain numerical accuracy.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\linewidth]{figure_2_thieulot_annulus_pressure_boundary.pdf}
+    \caption{Pressure along the inner and outer annulus boundaries for \(k=1,2,4\), using the \(P_2\times P_1\), \(h=1/128\) calculations. Solid curves denote the analytical solution and dashed curves denote UW3 values sampled from the numerical pressure field.}
+    \label{fig:thieulot_annulus_boundary_pressure}
+\end{figure}
+
+\subsection{Implications for Spherical Geodynamics}
+
+Although the benchmark is formulated in a two-dimensional annulus, its numerical characteristics are directly relevant to spherical-shell mantle convection calculations.
+In particular, the benchmark tests curved-boundary finite-element behaviour, radial body-force implementation, pressure nullspace treatment, incompressibility preservation, and higher-order mixed discretisations.
+These are all essential ingredients in regional and global spherical geodynamics models.
+
+The strong convergence behaviour observed for higher-order Taylor--Hood discretisations therefore provides confidence in Underworld3 implementations intended for annulus and spherical-shell mantle convection applications.
+
+\section{Discussion}
+
+The present results demonstrate that Underworld3 reproduces the analytical annulus benchmark solution with convergence behaviour consistent with finite-element theory.
+The benchmark additionally highlights several important numerical considerations.
+
+First, higher-order mixed discretisations provide substantially improved pressure accuracy relative to lower-order formulations.
+This is particularly important in geodynamics applications where pressure gradients strongly influence buoyancy-driven flow and dynamic topography.
+
+Second, curved geometries remain sensitive to geometric approximation order.
+Although linear geometry representation was sufficient to recover theoretical convergence trends for the present benchmark, higher-order curved geometry representations may become increasingly important for extremely fine meshes or strongly curved spherical-shell problems.
+
+Third, equal-order discretisations continue to exhibit weaker pressure robustness relative to stable Taylor--Hood formulations.
+This behaviour aligns with expectations from the Ladyzhenskaya--Babuska--Brezzi stability condition.
+
+The benchmark therefore provides a valuable verification framework not only for Underworld3, but also for future development of curved-element geometries, advanced boundary-condition implementations, and spherical-shell finite-element formulations.
+
+\conclusions
+
+We have presented a verification study of the Thieulot--Puckett annulus Stokes benchmark using Underworld3.
+The benchmark provides a stringent test of incompressible Stokes flow in curved geometries through the combination of radial gravity, coordinate-dependent forcing, tangential boundary velocity conditions, and non-trivial pressure variation on curved annulus boundaries.
+
+The principal findings are:
+\begin{enumerate}
+  \item Higher-order Taylor--Hood discretisations reproduce the expected smooth-solution convergence hierarchy.
+  \item The \(P_2\times P_1\) discretisation achieves approximately third-order velocity and second-order pressure convergence.
+  \item The \(P_3\times P_2\) discretisation achieves approximately fourth-order velocity and third-order pressure convergence before fine-resolution error saturation.
+  \item Lower-order discretisations exhibit weaker pressure robustness and reduced convergence quality.
+  \item Underworld3 accurately reproduces analytical Stokes solutions in curved annular geometries.
+\end{enumerate}
+
+These results establish the Thieulot--Puckett annulus benchmark as an effective verification framework for Underworld3 annulus and spherical-shell geodynamics applications.
+
+%% The following commands are for the statements about the availability of data sets and/or software code corresponding to the manuscript.
+%% It is strongly recommended to make use of these sections in case data sets and/or software code have been part of your research the article is based on.
+
+% \codeavailability{TEXT} %% use this section when having only software code available
+
+
+% \dataavailability{TEXT} %% use this section when having only data sets available
+
+
+% \codedataavailability{TEXT} %% use this section when having data sets and software code available
+
+
+% \sampleavailability{TEXT} %% use this section when having geoscientific samples available
+
+
+% \videosupplement{TEXT} %% use this section when having video supplements available
+
+
+% \appendix
+% \section{}    %% Appendix A
+
+% \subsection{}     %% Appendix A1, A2, etc.
+
+
+% \noappendix       %% use this to mark the end of the appendix section. Otherwise the figures might be numbered incorrectly (e.g. 10 instead of 1).
+
+%% Regarding figures and tables in appendices, the following two options are possible depending on your general handling of figures and tables in the manuscript environment:
+
+%% Option 1: If you sorted all figures and tables into the sections of the text, please also sort the appendix figures and appendix tables into the respective appendix sections.
+%% They will be correctly named automatically.
+
+%% Option 2: If you put all figures after the reference list, please insert appendix tables and figures after the normal tables and figures.
+%% To rename them correctly to A1, A2, etc., please add the following commands in front of them:
+
+% % \appendixfigures  %% needs to be added in front of appendix figures
+
+% % \appendixtables   %% needs to be added in front of appendix tables
+
+%% Please add \clearpage between each table and/or figure. Further guidelines on figures and tables can be found below.
+
+
+
+% \authorcontribution{TEXT} %% this section is mandatory
+
+% \competinginterests{TEXT} %% this section is mandatory even if you declare that no competing interests are present
+
+% \disclaimer{TEXT} %% optional section
+
+% \begin{acknowledgements}
+% TEXT
+% \end{acknowledgements}
+
+
+
+
+%% REFERENCES
+
+%% The reference list is compiled as follows:
+
+\bibliographystyle{copernicus}
+\bibliography{thieulot_annulus_benchmark_report_refs}
+
+%% Since the Copernicus LaTeX package includes the BibTeX style file copernicus.bst,
+%% authors experienced with BibTeX only have to include the following two lines:
+%%
+%% \bibliographystyle{copernicus}
+%% \bibliography{example.bib}
+%%
+%% URLs and DOIs can be entered in your BibTeX file as:
+%%
+%% URL = {http://www.xyz.org/~jones/idx_g.htm}
+%% DOI = {10.5194/xyz}
+
+
+%% LITERATURE CITATIONS
+%%
+%% command                        & example result
+%% \citet{jones90}|               & Jones et al. (1990)
+%% \citep{jones90}|               & (Jones et al., 1990)
+%% \citep{jones90,jones93}|       & (Jones et al., 1990, 1993)
+%% \citep[p.~32]{jones90}|        & (Jones et al., 1990, p.~32)
+%% \citep[e.g.,][]{jones90}|      & (e.g., Jones et al., 1990)
+%% \citep[e.g.,][p.~32]{jones90}| & (e.g., Jones et al., 1990, p.~32)
+%% \citeauthor{jones90}|          & Jones et al.
+%% \citeyear{jones90}|            & 1990
+
+
+
+%% FIGURES
+
+%% When figures and tables are placed at the end of the MS (article in one-column style), please add \clearpage
+%% between bibliography and first table and/or figure as well as between each table and/or figure.
+
+% The figure files should be labelled correctly with Arabic numerals (e.g. fig01.jpg, fig02.png).
+
+
+%% ONE-COLUMN FIGURES
+
+%%f
+%\begin{figure}[t]
+%\includegraphics[width=8.3cm]{FILE NAME}
+%\caption{TEXT}
+%\end{figure}
+%
+%%% TWO-COLUMN FIGURES
+%
+%%f
+%\begin{figure*}[t]
+%\includegraphics[width=12cm]{FILE NAME}
+%\caption{TEXT}
+%\end{figure*}
+%
+%
+%%% TABLES
+%%%
+%%% The different columns must be seperated with a & command and should
+%%% end with \\ to identify the column brake.
+%
+%%% ONE-COLUMN TABLE
+%
+%%t
+%\begin{table}[t]
+%\caption{TEXT}
+%\begin{tabular}{column = lcr}
+%\tophline
+%
+%\middlehline
+%
+%\bottomhline
+%\end{tabular}
+%\belowtable{} % Table Footnotes
+%\end{table}
+%
+%%% TWO-COLUMN TABLE
+%
+%%t
+%\begin{table*}[t]
+%\caption{TEXT}
+%\begin{tabular}{column = lcr}
+%\tophline
+%
+%\middlehline
+%
+%\bottomhline
+%\end{tabular}
+%\belowtable{} % Table Footnotes
+%\end{sidewaystable*}
+%
+%%% LANDSCAPE TABLE
+%
+%%t
+%\begin{sidewaystable*}[t]
+%\caption{TEXT}
+%\begin{tabular}{column = lcr}
+%\tophline
+%
+%\middlehline
+%
+%\bottomhline
+%\end{tabular}
+%\belowtable{} % Table Footnotes
+%\end{table*}
+%
+%
+%%% MATHEMATICAL EXPRESSIONS
+%
+%%% All papers typeset by Copernicus Publications follow the math typesetting regulations
+%%% given by the IUPAC Green Book (IUPAC: Quantities, Units and Symbols in Physical Chemistry,
+%%% 2nd Edn., Blackwell Science, available at: http://old.iupac.org/publications/books/gbook/green_book_2ed.pdf, 1993).
+%%%
+%%% Physical quantities/variables are typeset in italic font (t for time, T for Temperature)
+%%% Indices which are not defined are typeset in italic font (x, y, z, a, b, c)
+%%% Items/objects which are defined are typeset in roman font (Car A, Car B)
+%%% Descriptions/specifications which are defined by itself are typeset in roman font (abs, rel, ref, tot, net, ice)
+%%% Abbreviations from 2 letters are typeset in roman font (RH, LAI)
+%%% Vectors are identified in bold italic font using \vec{x}
+%%% Matrices are identified in bold roman font
+%%% Multiplication signs are typeset using the LaTeX commands \times (for vector products, grids, and exponential notations) or \cdot
+%%% The character * should not be applied as mutliplication sign
+%
+%
+%%% EQUATIONS
+%
+%%% Single-row equation
+%
+%\begin{equation}
+%
+%\end{equation}
+%
+%%% Multiline equation
+%
+%\begin{align}
+%& 3 + 5 = 8\\
+%& 3 + 5 = 8\\
+%& 3 + 5 = 8
+%\end{align}
+%
+%
+%%% MATRICES
+%
+%\begin{matrix}
+%x & y & z\\
+%x & y & z\\
+%x & y & z\\
+%\end{matrix}
+%
+%
+%%% ALGORITHM
+%
+%\begin{algorithm}
+%\caption{...}
+%\label{a1}
+%\begin{algorithmic}
+%...
+%\end{algorithmic}
+%\end{algorithm}
+%
+%
+%%% CHEMICAL FORMULAS AND REACTIONS
+%
+%%% For formulas embedded in the text, please use \chem{}
+%
+%%% The reaction environment creates labels including the letter R, i.e. (R1), (R2), etc.
+%
+%\begin{reaction}
+%%% \rightarrow should be used for normal (one-way) chemical reactions
+%%% \rightleftharpoons should be used for equilibria
+%%% \leftrightarrow should be used for resonance structures
+%\end{reaction}
+%
+%
+%%% PHYSICAL UNITS
+%%%
+%%% Please use \unit{} and apply the exponential notation (e.g. 20\,\unit{W\,m^{-2}})
+
+
+\end{document}
