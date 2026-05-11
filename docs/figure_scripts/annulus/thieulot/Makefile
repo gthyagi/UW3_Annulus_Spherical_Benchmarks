@@ -16,6 +16,7 @@ field-plots:
 figures:
 	$(PYTHON) plot_figure_2_thieulot_annulus_pressure_boundary.py
 	$(PYTHON) plot_figure_5_thieulot_annulus_convergence.py
+	$(PYTHON) plot_p2p1_boundary_pressure_convergence.py
 	$(PYTHON) make_table_figure_5_thieulot_annulus_convergence.py
 	$(LATEXMK) -pdf -interaction=nonstopmode table_figure_5_thieulot_annulus_convergence.tex
 

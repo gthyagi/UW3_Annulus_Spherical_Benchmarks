@@ -188,8 +188,7 @@ These characteristics make the benchmark particularly well suited for assessing
 finite-element formulations in annulus and curved-domain mantle convection
 problems.
 
-UW3 is a next-generation geodynamics framework built around PETSc and symbolic
-problem specification in Python. In this study, we reproduce the TP2018 annulus
+In this study, we reproduce the TP2018 annulus
 benchmark to verify the curved-domain finite-element implementations in UW3. We
 evaluate the convergence and accuracy of several mixed finite-element
 discretisations, including both lower-order and higher-order
@@ -292,12 +291,23 @@ This enables systematic evaluation of numerical performance across increasingly 
 
 \subsection{UW3 Formulation}
 
-The benchmark is implemented in UW3 using PETSc-based finite-element Stokes system.
-The governing equations are assembled symbolically using SymPy and solved through PETSc Krylov subspace methods.
-A constant-pressure nullspace is supplied to PETSc to remove the pressure gauge ambiguity.
-Following solution, the domain-average numerical pressure is removed prior to error evaluation.
-The annulus meshes are generated using unstructured triangular elements with progressively refined nominal cell sizes.
-The mesh geometry degree is set to linear for all reported calculations.
+The benchmark is implemented in Underworld3 (UW3), a next-generation
+geodynamics framework built on PETSc and symbolic problem specification
+in Python. The incompressible Stokes system is discretised using the
+finite-element method and assembled through symbolic expressions defined
+with SymPy. The resulting linear systems are solved using PETSc Krylov
+subspace solvers and preconditioners.
+
+To remove the pressure gauge ambiguity inherent to incompressible Stokes
+flow, a constant-pressure nullspace is supplied to PETSc during the solve.
+Following solution, the domain-average pressure is removed from the
+numerical solution prior to error evaluation and comparison with the
+analytical benchmark solution.
+
+The annulus domain is discretised using unstructured triangular meshes
+generated with progressively refined nominal cell sizes. All simulations
+reported in this study employ linear geometric representation of the
+curved annulus boundaries.
 
 \subsection{Finite-Element Discretisations}
 
@@ -317,23 +327,60 @@ Velocity space & Pressure space & Description \\
 \end{table}
 
 The quadrature degree is chosen according to the highest polynomial order present in the discretisation.
-For smooth incompressible Stokes solutions, stable Taylor--Hood-type discretisations are expected to exhibit velocity convergence of order \(p+1\) and pressure convergence of order \(p\) for a \(P_{p+1}\times P_p\) discretisation \citep{girault1986,boffi2013}.
+For smooth incompressible Stokes solutions, stable Taylor--Hood-type discretisations are expected to exhibit velocity convergence of order \(p+1\) and pressure convergence of order \(p\) for a \(P_{p}\times P_{p-1}\) discretisation \citep{girault1986,boffi2013}.
 
 \subsection{Error Metrics}
 
-Relative \(L_2\)-norm errors are computed as
+Errors are quantified by comparing the numerical and analytical
+solutions using both absolute and relative \(L_2\)-norm measures.
+The absolute \(L_2\)-norm error is defined as
 \begin{equation}
-  \|e_q\|_{L_2,\mathrm{rel}}
+  E_{L_2}(q)
   =
   \left(
-  \frac{\int_\Omega |q_h-q|^2\,d\Omega}
-       {\int_\Omega |q|^2\,d\Omega}
+  \int_\Omega |q-q^*|^2 \, d\Omega
   \right)^{1/2},
 \end{equation}
-where \(q_h\) is the numerical solution and \(q\) is the analytical solution.
-Convergence rates are computed from successive mesh refinements.
+and the relative \(L_2\)-norm error is computed as
+\begin{equation}
+  E^{\mathrm{rel}}_{L_2}(q)
+  =
+  \frac{E_{L_2}(q)}{\|q^*\|_{L_2}}
+  =
+  \left(
+  \frac{\int_\Omega |q-q^*|^2\,d\Omega}
+       {\int_\Omega |q^*|^2\,d\Omega}
+  \right)^{1/2},
+\end{equation}
+where \(q\) and \(q^*\) denote the numerical and analytical
+solutions, respectively.
 
-add convergence rate formula. add absolute l2 norms.
+Convergence rates are evaluated from successive mesh refinements as
+\begin{equation}
+  rate
+  =
+  \frac{
+    \log\left(
+      E_{L_2,h_1}(q) /
+      E_{L_2,h_2}(q)
+    \right)
+  }
+  {
+    \log\left(h_1/h_2\right)
+  },
+\end{equation}
+where \(h_1\) and \(h_2\) are the characteristic mesh sizes of two
+consecutive refinements. For uniform mesh refinement with
+\(h_2=h_1/2\), this reduces to
+\begin{equation}
+  rate
+  =
+  \log_2
+  \left(
+    \frac{E_{L_2,h_1}(q)}
+         {E_{L_2,h_2}(q)}
+  \right).
+\end{equation}
 
 \section{Results}
 
@@ -352,7 +399,7 @@ These observations are consistent with established finite-element theory for inc
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.98\linewidth]{figure_5_thieulot_annulus_convergence.pdf}
-    \caption{Convergence of relative volume \(L_2\)-norm velocity and pressure errors for the annulus Thieulot benchmark. Reference lines indicate the expected smooth-solution rates for the higher-order element pairs.}
+    \caption{Convergence of relative volume errors \(E^{\mathrm{rel}}_{L_2}(\mathbf{u})\) and \(E^{\mathrm{rel}}_{L_2}(p)\) for the annulus Thieulot benchmark. Reference lines indicate the expected smooth-solution rates for the higher-order element pairs.}
     \label{fig:thieulot_annulus_convergence}
 \end{figure}
 
@@ -362,7 +409,7 @@ These observations are consistent with established finite-element theory for inc
 \thispagestyle{empty}
 \begin{center}
 \centering
-\captionof{table}{Errors and Convergence Rates for $P_1\times P_0$.}
+\captionof{table}{Relative errors and convergence rates for $P_1\times P_0$.}
 \label{tab:annulus_thieulot_v1_p0_disc}
 \small
 \begin{tabular}{
@@ -371,7 +418,7 @@ r rr rr rr rr rr rr
 \toprule
 & \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
 \cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
-$h$ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+$h$ & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate \\
 \midrule
 $1/8$ & 6.398e-02 & -- & 8.040e-01 & -- & 1.763e-01 & -- & 7.800e-01 & -- & 1.298e-01 & -- & 8.163e-01 & -- \\
 $1/16$ & 6.427e-02 & -0.01 & 7.384e-01 & 0.12 & 1.775e-01 & -0.01 & 7.295e-01 & 0.10 & 1.401e-01 & -0.11 & 7.589e-01 & 0.11 \\
@@ -386,7 +433,7 @@ $1/512$ & 6.425e-02 & 0.00 & 7.163e-01 & 0.00 & 1.782e-01 & -0.00 & 7.111e-01 & 
 
 \begin{center}
 \centering
-\captionof{table}{Errors and Convergence Rates for $P_1\times P_1$.}
+\captionof{table}{Relative errors and convergence rates for $P_1\times P_1$.}
 \label{tab:annulus_thieulot_v1_p1_cont}
 \small
 \begin{tabular}{
@@ -395,7 +442,7 @@ r rr rr rr rr rr rr
 \toprule
 & \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
 \cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
-$h$ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+$h$ & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate \\
 \midrule
 $1/8$ & 1.537e-02 & -- & 4.325e+00 & -- & 2.994e-02 & -- & 3.202e+00 & -- & 3.629e-02 & -- & 3.184e+00 & -- \\
 $1/16$ & 3.459e-03 & 2.15 & 1.628e+00 & 1.41 & 6.385e-03 & 2.23 & 1.625e+00 & 0.98 & 7.925e-03 & 2.19 & 1.417e+00 & 1.17 \\
@@ -416,7 +463,7 @@ $1/256$ & 1.266e-05 & 2.01 & 5.740e-02 & 1.46 & 1.487e-05 & 2.07 & 5.231e-02 & 1
 
 \begin{center}
 \centering
-\captionof{table}{Errors and Convergence Rates for $P_2\times P_1$.}
+\captionof{table}{Relative errors and convergence rates for $P_2\times P_1$.}
 \label{tab:annulus_thieulot_v2_p1_cont}
 \small
 \begin{tabular}{
@@ -425,7 +472,7 @@ r rr rr rr rr rr rr
 \toprule
 & \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
 \cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
-$h$ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+$h$ & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate \\
 \midrule
 $1/8$ & 2.218e-04 & -- & 1.087e-02 & -- & 9.781e-04 & -- & 1.944e-02 & -- & 2.731e-03 & -- & 4.174e-02 & -- \\
 $1/16$ & 2.675e-05 & 3.05 & 2.530e-03 & 2.10 & 1.151e-04 & 3.09 & 4.611e-03 & 2.08 & 3.225e-04 & 3.08 & 9.354e-03 & 2.16 \\
@@ -440,7 +487,7 @@ $1/512$ & 8.632e-10 & 2.93 & 2.494e-06 & 2.00 & 3.412e-09 & 3.00 & 4.466e-06 & 2
 
 \begin{center}
 \centering
-\captionof{table}{Errors and Convergence Rates for $P_3\times P_2$.}
+\captionof{table}{Relative errors and convergence rates for $P_3\times P_2$.}
 \label{tab:annulus_thieulot_v3_p2_cont}
 \small
 \begin{tabular}{
@@ -449,7 +496,7 @@ r rr rr rr rr rr rr
 \toprule
 & \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
 \cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
-$h$ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\
+$h$ & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate \\
 \midrule
 $1/8$ & 1.102e-05 & -- & 1.210e-03 & -- & 6.233e-05 & -- & 2.498e-03 & -- & 2.198e-04 & -- & 6.495e-03 & -- \\
 $1/16$ & 6.792e-07 & 4.02 & 1.220e-04 & 3.31 & 3.811e-06 & 4.03 & 2.905e-04 & 3.10 & 1.363e-05 & 4.01 & 8.249e-04 & 2.98 \\

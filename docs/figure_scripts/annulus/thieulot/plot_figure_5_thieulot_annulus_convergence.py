@@ -241,7 +241,7 @@ def main() -> None:
         axes[0],
         records,
         "v_l2_norm",
-        r"$\|e_\mathbf{u}\|_{L_2}$",
+        r"$E^{\mathrm{rel}}_{L_2}(\mathbf{u})$",
         (("p1p1", 2.0, "-"), ("p2p1", 3.0, "--"), ("p3p2", 4.0, ":")),
     )
     # axes[0].set_title("velocity error", fontsize=11)
@@ -250,7 +250,7 @@ def main() -> None:
         axes[1],
         records,
         "p_l2_norm",
-        r"$\|e_p\|_{L_2}$",
+        r"$E^{\mathrm{rel}}_{L_2}(p)$",
         (("p1p1", 1.0, "-"), ("p2p1", 2.0, "--"), ("p3p2", 3.0, ":")),
     )
     # axes[1].set_title("pressure error", fontsize=11)

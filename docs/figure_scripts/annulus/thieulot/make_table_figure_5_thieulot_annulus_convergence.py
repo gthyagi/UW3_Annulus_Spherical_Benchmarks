@@ -145,7 +145,7 @@ def table_block(records: list[MetricRecord], element: tuple[int, int, bool, str]
     lines = [
         r"\begin{table}[p]",
         r"\centering",
-        rf"\caption{{Annulus Thieulot convergence for {label}.}}",
+        rf"\caption{{Annulus Thieulot relative volume errors and convergence rates for {label}.}}",
         rf"\label{{tab:annulus_thieulot_v{vdegree}_p{pdegree}_{'cont' if pcont else 'disc'}}}",
         r"\small",
         r"\begin{tabular}{",
@@ -154,7 +154,7 @@ def table_block(records: list[MetricRecord], element: tuple[int, int, bool, str]
         r"\toprule",
         r"& \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\",
         r"\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}",
-        r"$h$ & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate & $|e_v|_2$ & rate & $|e_p|_2$ & rate \\",
+        r"$h$ & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate \\",
         r"\midrule",
     ]
 

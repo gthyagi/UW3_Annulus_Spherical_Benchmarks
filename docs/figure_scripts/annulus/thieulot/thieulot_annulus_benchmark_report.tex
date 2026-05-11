@@ -204,17 +204,56 @@ For smooth incompressible Stokes solutions, stable Taylor--Hood-type discretisat
 
 \subsection{Error Metrics}
 
-Relative \(L_2\)-norm errors are computed as
-\[
-  \|e_q\|_{L_2,\mathrm{rel}}
+Errors are quantified by comparing the numerical and analytical
+solutions using both absolute and relative \(L_2\)-norm measures.
+The absolute \(L_2\)-norm error is defined as
+\begin{equation}
+  E_{L_2}(q)
   =
   \left(
-  \frac{\int_\Omega |q_h-q|^2\,d\Omega}
-       {\int_\Omega |q|^2\,d\Omega}
+  \int_\Omega |q-q^*|^2 \, d\Omega
   \right)^{1/2},
-\]
-where \(q_h\) is the numerical solution and \(q\) is the analytical solution.
-Convergence rates are computed from successive mesh refinements.
+\end{equation}
+and the relative \(L_2\)-norm error is computed as
+\begin{equation}
+  E^{\mathrm{rel}}_{L_2}(q)
+  =
+  \frac{E_{L_2}(q)}{\|q^*\|_{L_2}}
+  =
+  \left(
+  \frac{\int_\Omega |q-q^*|^2\,d\Omega}
+       {\int_\Omega |q^*|^2\,d\Omega}
+  \right)^{1/2},
+\end{equation}
+where \(q\) and \(q^*\) denote the numerical and analytical
+solutions, respectively.
+
+Convergence rates are evaluated from successive mesh refinements as
+\begin{equation}
+  rate
+  =
+  \frac{
+    \log\left(
+      E_{L_2,h_1}(q) /
+      E_{L_2,h_2}(q)
+    \right)
+  }
+  {
+    \log\left(h_1/h_2\right)
+  },
+\end{equation}
+where \(h_1\) and \(h_2\) are the characteristic mesh sizes of two
+consecutive refinements. For uniform mesh refinement with
+\(h_2=h_1/2\), this reduces to
+\begin{equation}
+  rate
+  =
+  \log_2
+  \left(
+    \frac{E_{L_2,h_1}(q)}
+         {E_{L_2,h_2}(q)}
+  \right).
+\end{equation}
 
 \section{Results}
 
@@ -246,7 +285,7 @@ These observations are consistent with established finite-element theory for inc
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.98\linewidth]{figure_5_thieulot_annulus_convergence.pdf}
-    \caption{Convergence of relative volume \(L_2\)-norm velocity and pressure errors for the annulus Thieulot benchmark. Reference lines indicate the expected smooth-solution rates for the higher-order element pairs.}
+    \caption{Convergence of relative volume errors \(E^{\mathrm{rel}}_{L_2}(\mathbf{u})\) and \(E^{\mathrm{rel}}_{L_2}(p)\) for the annulus Thieulot benchmark. Reference lines indicate the expected smooth-solution rates for the higher-order element pairs.}
     \label{fig:thieulot_annulus_convergence}
 \end{figure}
 
