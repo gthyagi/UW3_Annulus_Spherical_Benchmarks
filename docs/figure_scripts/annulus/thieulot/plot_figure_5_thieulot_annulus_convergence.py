@@ -18,6 +18,8 @@ OUTPUT_FILE = OUTPUT_DIR / "figure_5_thieulot_annulus_convergence.pdf"
 ELEMENTS = (
     (1, 0, False, r"$P_1\times P_0$"),
     (1, 1, True, r"$P_1\times P_1$"),
+    (2, 0, False, r"$P_2\times P_0$"),
+    (2, 1, False, r"$P_2\times P_{-1}$"),
     (2, 1, True, r"$P_2\times P_1$"),
     (3, 2, True, r"$P_3\times P_2$"),
 )
@@ -29,6 +31,8 @@ P3P2_EXCLUDED_H = 1 / 256
 COLORS = {
     (1, 0, False): "#7A3E9D",
     (1, 1, True): "#C06C2B",
+    (2, 0, False): "#CC4C4C",
+    (2, 1, False): "#6B8E23",
     (2, 1, True): "#008C72",
     (3, 2, True): "#3A8DDE",
 }

@@ -173,7 +173,7 @@ def main() -> None:
     add_reference_line(ax, records)
 
     ax.set_xlabel(r"$h$")
-    ax.set_ylabel(r"$E_{L_2,\Gamma}(p)$")
+    ax.set_ylabel(r"$E_{L_2}(p|_{\Gamma})$")
     ax.set_xlim(H_TICKS[0] * 0.82, H_TICKS[-1] * 1.18)
     ax.set_xticks(H_TICKS)
     ax.set_xticklabels(H_TICK_LABELS)

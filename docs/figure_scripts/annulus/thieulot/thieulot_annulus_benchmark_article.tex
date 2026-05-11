@@ -139,8 +139,9 @@ both the inner and outer boundaries, driven by radially directed gravity and
 analytically prescribed buoyancy forcing that generates convection cells
 parameterised by the harmonic number \(k\). We investigate the accuracy and
 convergence behaviour of several mixed finite-element discretisations, including
-\(P_1\times P_0\), \(P_1\times P_1\), \(P_2\times P_1\), and
-\(P_3\times P_2\). Numerical solutions are evaluated against the analytical
+\(P_1\times P_0\), \(P_1\times P_1\), \(P_2\times P_0\),
+\(P_2\times P_{-1}\), \(P_2\times P_1\), and \(P_3\times P_2\).
+Numerical solutions are evaluated against the analytical
 velocity and pressure fields using relative \(L_2\)-norm errors. The higher-order
 Taylor--Hood discretisations reproduce the expected convergence hierarchy for
 smooth Stokes solutions, with approximately third-order velocity and second-order
@@ -320,6 +321,8 @@ Velocity space & Pressure space & Description \\
 \midrule
 \(P_1\) & \(P_0\) & Linear velocity, discontinuous constant pressure \\
 \(P_1\) & \(P_1\) & Equal-order continuous discretisation \\
+\(P_2\) & \(P_0\) & Quadratic velocity, discontinuous constant pressure \\
+\(P_2\) & \(P_{-1}\) & Quadratic velocity, discontinuous linear pressure \\
 \(P_2\) & \(P_1\) & Taylor--Hood discretisation \\
 \(P_3\) & \(P_2\) & Higher-order Taylor--Hood discretisation \\
 \bottomrule
@@ -394,7 +397,8 @@ At the finest resolutions, convergence rates begin to plateau, likely reflecting
 
 The lower-order discretisations show reduced robustness.
 The \(P_1\times P_0\) pair fails to produce reliable convergence behaviour for this benchmark, while the equal-order \(P_1\times P_1\) discretisation produces acceptable velocity convergence but weaker and less consistent pressure convergence.
-These observations are consistent with established finite-element theory for incompressible Stokes flow \citep{boffi2013,thieulot2022}.
+The discontinuous-pressure \(P_2\times P_0\) pair gives approximately second-order velocity convergence and first-order pressure convergence, whereas \(P_2\times P_{-1}\) gives near second-order velocity convergence but poor pressure convergence over the available mesh refinements.
+These observations are consistent with established finite-element theory for incompressible Stokes flow \citep{boffi2013,thieulot2025}.
 
 \begin{figure}[H]
     \centering
@@ -403,114 +407,8 @@ These observations are consistent with established finite-element theory for inc
     \label{fig:thieulot_annulus_convergence}
 \end{figure}
 
-% Native LaTeX table content from table_figure_5_thieulot_annulus_convergence.tex.
-\par\nolinenumbers
-\begin{landscape}
-\thispagestyle{empty}
-\begin{center}
-\centering
-\captionof{table}{Relative errors and convergence rates for $P_1\times P_0$.}
-\label{tab:annulus_thieulot_v1_p0_disc}
-\small
-\begin{tabular}{
-r rr rr rr rr rr rr
-}
-\toprule
-& \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
-\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
-$h$ & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate \\
-\midrule
-$1/8$ & 6.398e-02 & -- & 8.040e-01 & -- & 1.763e-01 & -- & 7.800e-01 & -- & 1.298e-01 & -- & 8.163e-01 & -- \\
-$1/16$ & 6.427e-02 & -0.01 & 7.384e-01 & 0.12 & 1.775e-01 & -0.01 & 7.295e-01 & 0.10 & 1.401e-01 & -0.11 & 7.589e-01 & 0.11 \\
-$1/32$ & 6.426e-02 & 0.00 & 7.220e-01 & 0.03 & 1.780e-01 & -0.00 & 7.161e-01 & 0.03 & 1.435e-01 & -0.04 & 7.403e-01 & 0.04 \\
-$1/64$ & 6.426e-02 & 0.00 & 7.177e-01 & 0.01 & 1.781e-01 & -0.00 & 7.124e-01 & 0.01 & 1.445e-01 & -0.01 & 7.349e-01 & 0.01 \\
-$1/128$ & 6.425e-02 & 0.00 & 7.167e-01 & 0.00 & 1.782e-01 & -0.00 & 7.114e-01 & 0.00 & 1.447e-01 & -0.00 & 7.334e-01 & 0.00 \\
-$1/256$ & 6.425e-02 & 0.00 & 7.164e-01 & 0.00 & 1.782e-01 & -0.00 & 7.112e-01 & 0.00 & 1.448e-01 & -0.00 & 7.330e-01 & 0.00 \\
-$1/512$ & 6.425e-02 & 0.00 & 7.163e-01 & 0.00 & 1.782e-01 & -0.00 & 7.111e-01 & 0.00 & 1.448e-01 & -0.00 & 7.329e-01 & 0.00 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\begin{center}
-\centering
-\captionof{table}{Relative errors and convergence rates for $P_1\times P_1$.}
-\label{tab:annulus_thieulot_v1_p1_cont}
-\small
-\begin{tabular}{
-r rr rr rr rr rr rr
-}
-\toprule
-& \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
-\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
-$h$ & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate \\
-\midrule
-$1/8$ & 1.537e-02 & -- & 4.325e+00 & -- & 2.994e-02 & -- & 3.202e+00 & -- & 3.629e-02 & -- & 3.184e+00 & -- \\
-$1/16$ & 3.459e-03 & 2.15 & 1.628e+00 & 1.41 & 6.385e-03 & 2.23 & 1.625e+00 & 0.98 & 7.925e-03 & 2.19 & 1.417e+00 & 1.17 \\
-$1/32$ & 8.358e-04 & 2.05 & 7.174e-01 & 1.18 & 1.293e-03 & 2.30 & 6.195e-01 & 1.39 & 1.937e-03 & 2.03 & 7.144e-01 & 0.99 \\
-$1/64$ & 2.056e-04 & 2.02 & 3.115e-01 & 1.20 & 2.776e-04 & 2.22 & 2.855e-01 & 1.12 & 4.931e-04 & 1.97 & 3.210e-01 & 1.15 \\
-$1/128$ & 5.095e-05 & 2.01 & 1.582e-01 & 0.98 & 6.252e-05 & 2.15 & 1.083e-01 & 1.40 & 1.243e-04 & 1.99 & 1.260e-01 & 1.35 \\
-$1/256$ & 1.266e-05 & 2.01 & 5.740e-02 & 1.46 & 1.487e-05 & 2.07 & 5.231e-02 & 1.05 & 3.158e-05 & 1.98 & 6.476e-02 & 0.96 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\vfill
-\begin{center}\thepage\end{center}
-\clearpage
-\end{landscape}
-\begin{landscape}
-\thispagestyle{empty}
-
-\begin{center}
-\centering
-\captionof{table}{Relative errors and convergence rates for $P_2\times P_1$.}
-\label{tab:annulus_thieulot_v2_p1_cont}
-\small
-\begin{tabular}{
-r rr rr rr rr rr rr
-}
-\toprule
-& \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
-\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
-$h$ & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate \\
-\midrule
-$1/8$ & 2.218e-04 & -- & 1.087e-02 & -- & 9.781e-04 & -- & 1.944e-02 & -- & 2.731e-03 & -- & 4.174e-02 & -- \\
-$1/16$ & 2.675e-05 & 3.05 & 2.530e-03 & 2.10 & 1.151e-04 & 3.09 & 4.611e-03 & 2.08 & 3.225e-04 & 3.08 & 9.354e-03 & 2.16 \\
-$1/32$ & 3.388e-06 & 2.98 & 6.427e-04 & 1.98 & 1.437e-05 & 3.00 & 1.159e-03 & 1.99 & 4.016e-05 & 3.01 & 2.310e-03 & 2.02 \\
-$1/64$ & 4.205e-07 & 3.01 & 1.601e-04 & 2.01 & 1.763e-06 & 3.03 & 2.869e-04 & 2.01 & 4.850e-06 & 3.05 & 5.666e-04 & 2.03 \\
-$1/128$ & 5.254e-08 & 3.00 & 3.992e-05 & 2.00 & 2.190e-07 & 3.01 & 7.152e-05 & 2.00 & 6.001e-07 & 3.01 & 1.412e-04 & 2.00 \\
-$1/256$ & 6.575e-09 & 3.00 & 9.979e-06 & 2.00 & 2.730e-08 & 3.00 & 1.787e-05 & 2.00 & 7.449e-08 & 3.01 & 3.524e-05 & 2.00 \\
-$1/512$ & 8.632e-10 & 2.93 & 2.494e-06 & 2.00 & 3.412e-09 & 3.00 & 4.466e-06 & 2.00 & 9.287e-09 & 3.00 & 8.802e-06 & 2.00 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\begin{center}
-\centering
-\captionof{table}{Relative errors and convergence rates for $P_3\times P_2$.}
-\label{tab:annulus_thieulot_v3_p2_cont}
-\small
-\begin{tabular}{
-r rr rr rr rr rr rr
-}
-\toprule
-& \multicolumn{4}{c}{$k=1$} & \multicolumn{4}{c}{$k=4$} & \multicolumn{4}{c}{$k=8$} \\
-\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
-$h$ & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate & $E^{\mathrm{rel}}_{L_2}(\mathbf{u})$ & rate & $E^{\mathrm{rel}}_{L_2}(p)$ & rate \\
-\midrule
-$1/8$ & 1.102e-05 & -- & 1.210e-03 & -- & 6.233e-05 & -- & 2.498e-03 & -- & 2.198e-04 & -- & 6.495e-03 & -- \\
-$1/16$ & 6.792e-07 & 4.02 & 1.220e-04 & 3.31 & 3.811e-06 & 4.03 & 2.905e-04 & 3.10 & 1.363e-05 & 4.01 & 8.249e-04 & 2.98 \\
-$1/32$ & 4.360e-08 & 3.96 & 1.392e-05 & 3.13 & 2.441e-07 & 3.96 & 3.358e-05 & 3.11 & 8.723e-07 & 3.97 & 9.664e-05 & 3.09 \\
-$1/64$ & 2.729e-09 & 4.00 & 1.585e-06 & 3.13 & 1.510e-08 & 4.01 & 3.870e-06 & 3.12 & 5.323e-08 & 4.03 & 1.110e-05 & 3.12 \\
-$1/128$ & 4.043e-10 & 2.75 & 1.877e-07 & 3.08 & 9.826e-10 & 3.94 & 4.601e-07 & 3.07 & 3.344e-09 & 3.99 & 1.322e-06 & 3.07 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\vfill
-\begin{center}\thepage\end{center}
-\end{landscape}
-\par\linenumbers
+% Native LaTeX table content generated by make_table_figure_5_thieulot_annulus_convergence.py.
+\input{table_figure_5_thieulot_annulus_convergence_fragment.tex}
 
 \subsection{Boundary Pressure Recovery}
 
@@ -527,18 +425,213 @@ Because the benchmark includes non-trivial pressure variation directly on curved
     \label{fig:thieulot_annulus_boundary_pressure}
 \end{figure}
 
-\subsection{Implications for Spherical Geodynamics}
+The corresponding absolute boundary pressure errors for the \(P_2\times P_1\)
+discretisation are shown in Fig.~\ref{fig:thieulot_annulus_boundary_pressure_convergence}.
+Both inner- and outer-boundary errors decrease at approximately second order,
+consistent with the volume pressure convergence observed for this element pair.
 
-Although the benchmark is formulated in a two-dimensional annulus, its numerical characteristics are directly relevant to spherical-shell mantle convection calculations.
-In particular, the benchmark tests curved-boundary finite-element behaviour, radial body-force implementation, pressure nullspace treatment, incompressibility preservation, and higher-order mixed discretisations.
-These are all essential ingredients in regional and global spherical geodynamics models.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\linewidth]{figure_p2p1_boundary_pressure_convergence.pdf}
+    \caption{Convergence of absolute boundary pressure errors \(E_{L_2}(p|_{\Gamma})\) for the \(P_2\times P_1\) annulus Thieulot benchmark calculations. Solid curves denote the inner boundary and dashed curves denote the outer boundary.}
+    \label{fig:thieulot_annulus_boundary_pressure_convergence}
+\end{figure}
 
-The strong convergence behaviour observed for higher-order Taylor--Hood discretisations therefore provides confidence in Underworld3 implementations intended for annulus and spherical-shell mantle convection applications.
 
 \section{Discussion}
 
 The present results demonstrate that Underworld3 reproduces the analytical annulus benchmark solution with convergence behaviour consistent with finite-element theory.
 The benchmark additionally highlights several important numerical considerations.
+
+Table~\ref{tab:observed_convergence_rates} summarises the observed convergence
+rates for the three harmonic benchmark cases for which analytical solutions are
+available. The optimal-rate column reports the smooth-solution reference rates
+used here; entries marked \(-/-\) have no optimal-rate claim in this comparison,
+and their fitted rates should be interpreted empirically.
+
+\input{table_observed_convergence_rates_fragment.tex}
+
+The stability status of the lower-order and discontinuous-pressure pairs requires
+some qualification. The equal-order \(P_1\times P_1\) pair is not inf-sup stable
+as a standard Galerkin Stokes discretisation and is therefore susceptible to
+spurious pressure modes unless an additional pressure-stabilisation mechanism is
+introduced \citep{boffi2013}. Stabilised equal-order formulations, such as
+Petrov--Galerkin, Galerkin least-squares, or related stabilised mixed methods, can
+restore well-posedness and recover the smooth-solution target rates
+\(E_{L_2}(\mathbf{u})/E_{L_2}(p)=2/1\) \citep{Hughes_1986,Brezzi_1988}.
+The \(P_2\times P_0\) pair is inf-sup stable, but is non-standard and
+approximation-unbalanced: the constant pressure space limits the expected
+pressure convergence to first order and the velocity convergence to second order
+\citep{boffi2013,thieulot2025}. The \(P_2\times P_{-1}\) pair used here denotes
+continuous quadratic velocity with discontinuous linear pressure, i.e. the
+lowest-order Scott--Vogelius-type \(P_2\times P_1^{\mathrm{disc}}\) pairing. This
+pair is not uniformly stable on arbitrary triangular meshes, but can be made
+stable on suitable split meshes, including barycentric/Alfeld refinements, where
+the smooth-solution target is \(3/2\) \citep{Scott_1985,Guzm_n_2018}.
+
+\begin{table}[H]
+\centering
+\caption{Stability interpretation and expected smooth-solution rates for selected
+non-Taylor--Hood element pairs. Rates are reported as
+\(E_{L_2}(\mathbf{u})/E_{L_2}(p)\).}
+\label{tab:nonstandard_element_stability}
+\scriptsize
+\begin{tabular}{p{0.14\linewidth}p{0.25\linewidth}p{0.35\linewidth}p{0.13\linewidth}}
+\toprule
+Pair & Status in standard Galerkin form & Route to stable use & Expected rate \\
+\midrule
+\(P_1\times P_1\) & Unstable equal-order pair & Add consistent pressure stabilisation, e.g. PSPG/GLS or related stabilised mixed methods & \(2/1\) when stabilised \\
+\(P_2\times P_0\) & Stable but non-standard and pressure-limited & No stabilisation required, but pressure approximation remains piecewise constant & \(2/1\) \\
+\(P_2\times P_{-1}\) & Not uniformly stable on arbitrary triangular meshes & Use suitable Scott--Vogelius meshes such as barycentric/Alfeld refinements, or equivalent stabilising enrichment/restriction & \(3/2\) when stable \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Boundary Pressure Error Asymmetry}
+
+The inner- and outer-boundary pressure errors in
+Fig.~\ref{fig:thieulot_annulus_boundary_pressure_convergence} are not expected to
+be equal, even though the analytical pressure has zero signed integral on each
+boundary. With \(\rho_0=0\), the analytical boundary pressure is
+\begin{equation}
+  p^*(r,\theta) = k h(r)\sin(k\theta),
+\end{equation}
+and therefore
+\begin{equation}
+  \int_{\Gamma_r} p^*\,ds
+  =
+  \int_0^{2\pi} k h(r)\sin(k\theta)\,r\,d\theta
+  =
+  0.
+\end{equation}
+The error plotted in Fig.~\ref{fig:thieulot_annulus_boundary_pressure_convergence}
+is instead an absolute boundary \(L_2\) error,
+\begin{equation}
+  E_{L_2}(p|_{\Gamma_r})
+  =
+  \left(
+  \int_{\Gamma_r} |p_h-p^*|^2\,ds
+  \right)^{1/2}
+  =
+  \left(
+  \int_0^{2\pi} |p_h(r,\theta)-p^*(r,\theta)|^2 r\,d\theta
+  \right)^{1/2}.
+\end{equation}
+The corresponding analytical pressure magnitude is
+\begin{equation}
+  \|p^*\|_{L_2(\Gamma_r)}
+  =
+  |k h(r)|\sqrt{\pi r},
+\end{equation}
+which is different on the two boundaries. For the present benchmark parameters,
+\[
+  h(R_1) \simeq 2.328,
+  \qquad
+  h(R_2) \simeq -0.918,
+  \qquad
+  \frac{\|p^*\|_{L_2(\Gamma_{R_2})}}
+       {\|p^*\|_{L_2(\Gamma_{R_1})}}
+  \simeq 0.558 .
+\]
+Thus the signed mean cancels on both boundaries, but the pressure trace has
+larger \(L_2\) magnitude on the inner boundary.
+
+A second source of asymmetry is the sensitivity of the pressure trace to small
+geometric perturbations. If a discrete boundary point is displaced from the
+exact circular boundary by
+\[
+  x_h(\theta)-x(\theta)
+  =
+  \delta r(\theta)\mathbf{e}_r
+  +
+  r\,\delta\theta(\theta)\mathbf{e}_\theta,
+\]
+then the analytical pressure sampled on the perturbed boundary satisfies, to
+first order,
+\begin{equation}
+  p^*(r+\delta r,\theta+\delta\theta)-p^*(r,\theta)
+  \simeq
+  k h'(r)\sin(k\theta)\,\delta r
+  +
+  k^2 h(r)\cos(k\theta)\,\delta\theta .
+\end{equation}
+Consequently, a boundary-pressure error model contains the geometric component
+\begin{equation}
+  E_{L_2}^2(p|_{\Gamma_r})
+  \approx
+  r\int_0^{2\pi}
+  \left|
+    e_{\mathrm{disc}}(\theta)
+    +
+    k h'(r)\sin(k\theta)\,\delta r
+    +
+    k^2 h(r)\cos(k\theta)\,\delta\theta
+  \right|^2 d\theta ,
+\end{equation}
+where \(e_{\mathrm{disc}}\) contains the pressure discretisation and solver
+errors on the represented boundary. For the benchmark constants,
+\[
+  h'(R_1)\simeq -13.31,
+  \qquad
+  h'(R_2)\simeq -0.164 .
+\]
+The inner pressure trace is therefore far more sensitive to small radial
+boundary-location errors than the outer trace. This explains why the absolute
+inner-boundary error can be much larger than the outer-boundary error, despite
+the outer boundary having a larger arclength measure.
+
+Linear boundary elements approximate a circular boundary by straight chords. If
+\(\Delta\) denotes the boundary mesh spacing, the geometric displacement is
+typically \(O(\Delta^2)\), while the normal error is \(O(\Delta)\). Classical
+curved-element and isoparametric finite-element estimates show how higher-order
+geometry can recover the optimal approximation behaviour expected on smooth
+domains \citep{Ciarlet_1972,Lenoir_1986,Bernardi_1989}. A curved isoparametric
+element of geometric degree \(m\) uses
+\begin{equation}
+  x_h(\xi)=\sum_i N_i^{(m)}(\xi)X_i
+\end{equation}
+and improves these estimates to approximately
+\begin{equation}
+  \|x_h-x\|_{L^\infty(\Gamma)}=O(\Delta^{m+1}),
+  \qquad
+  \|n_h-n\|_{L^\infty(\Gamma)}=O(\Delta^m).
+\end{equation}
+This is particularly relevant for pressure because the normal stress contains
+the pressure term
+\begin{equation}
+  \sigma(\mathbf{u},p)n
+  =
+  -p n + 2\eta \varepsilon(\mathbf{u})n .
+\end{equation}
+Replacing \(n\) by a discrete normal \(n_h\) perturbs the pressure contribution
+by approximately \(-p(n_h-n)\). Higher-order curved geometry reduces this
+normal and boundary-location error, and should therefore reduce boundary
+pressure errors most strongly where \(|h'(r)|\) and \(|h(r)|\) are largest.
+Table~\ref{tab:boundary_pressure_error_mechanisms} summarises the main terms
+controlling the inner--outer error difference.
+
+\begin{table}[H]
+\centering
+\caption{Diagnostic quantities controlling the difference between inner- and
+outer-boundary pressure errors. Values use \(R_1=1\), \(R_2=2\), and \(C=-1\).
+The listed effects are qualitative because the final error also depends on the
+discrete pressure field and solver tolerance.}
+\label{tab:boundary_pressure_error_mechanisms}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{p{0.22\linewidth}p{0.25\linewidth}p{0.24\linewidth}p{0.20\linewidth}}
+\toprule
+Mechanism & Diagnostic quantity & Benchmark value & Expected effect \\
+\midrule
+Signed pressure mean & \(\int_{\Gamma_r} p^*\,ds\) & Zero on both boundaries & Does not determine \(L_2\) error because signs cancel only before squaring \\
+Trace magnitude & \(|h(R_1)|\), \(|h(R_2)|\) & \(2.328\), \(0.918\) & Larger inner pressure amplitude increases potential inner trace error \\
+Boundary measure & \(\sqrt{R_2/R_1}\) in an \(L_2\) norm & \(1.414\) & Would favour larger outer error if pointwise errors were equal \\
+Radial geometry sensitivity & \(|h'(R_1)|\), \(|h'(R_2)|\) & \(13.31\), \(0.164\) & Strongly amplifies inner error from radial boundary displacement \\
+Tangential phase sensitivity & \(|h(R_1)|/|h(R_2)|\) in the \(k^2 h\,\delta\theta\) term & \(2.54\) & Inner trace is more sensitive to tangential/phase perturbations; sensitivity grows with \(k\) \\
+Boundary geometry order & Linear: \(O(\Delta^2)\) position, \(O(\Delta)\) normal; curved degree \(m\): \(O(\Delta^{m+1})\), \(O(\Delta^m)\) & Method-dependent & Curved elements reduce pressure-trace and stress-normal errors, especially on the inner boundary \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 First, higher-order mixed discretisations provide substantially improved pressure accuracy relative to lower-order formulations.
 This is particularly important in geodynamics applications where pressure gradients strongly influence buoyancy-driven flow and dynamic topography.
@@ -560,6 +653,7 @@ The principal findings are:
 \begin{enumerate}
   \item Higher-order Taylor--Hood discretisations reproduce the expected smooth-solution convergence hierarchy.
   \item The \(P_2\times P_1\) discretisation achieves approximately third-order velocity and second-order pressure convergence.
+  \item The \(P_2\times P_0\) discretisation achieves approximately second-order velocity and first-order pressure convergence.
   \item The \(P_3\times P_2\) discretisation achieves approximately fourth-order velocity and third-order pressure convergence before fine-resolution error saturation.
   \item Lower-order discretisations exhibit weaker pressure robustness and reduced convergence quality.
   \item Underworld3 accurately reproduces analytical Stokes solutions in curved annular geometries.
@@ -627,7 +721,7 @@ These results establish the Thieulot--Puckett annulus benchmark as an effective 
 %% The reference list is compiled as follows:
 
 \bibliographystyle{copernicus}
-\bibliography{thieulot_annulus_benchmark_report_refs}
+\bibliography{thieulot_annulus_benchmark_article_refs}
 
 %% Since the Copernicus LaTeX package includes the BibTeX style file copernicus.bst,
 %% authors experienced with BibTeX only have to include the following two lines:
