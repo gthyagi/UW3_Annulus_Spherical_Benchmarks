@@ -166,7 +166,7 @@ def main() -> None:
         axes[0],
         data,
         "v_l2_norm",
-        r"$e_u$ ($L_2$ error)",
+        r"$E_{L_2}^{\mathrm{rel}}(\mathbf{u})$",
         show_legend=False,
     )
     # axes[0].set_title("Velocity error")
@@ -178,7 +178,7 @@ def main() -> None:
         axes[1],
         data,
         "p_l2_norm",
-        r"$e_p$ ($L_2$ error)",
+        r"$E_{L_2}^{\mathrm{rel}}(p)$",
         show_legend=True,
     )
     # axes[1].set_title("Pressure error")

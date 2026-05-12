@@ -35,14 +35,14 @@ CASE_INFO = {
 }
 
 PANEL_LAYOUT = (
-    ("case1", "v_l2_norm", r"$\|e_\mathbf{u}\|_{L_2}$", "a)"),
-    ("case2", "v_l2_norm", r"$\|e_\mathbf{u}\|_{L_2}$", "b)"),
-    ("case1", "p_l2_norm", r"$\|e_p\|_{L_2}$", "c)"),
-    ("case2", "p_l2_norm", r"$\|e_p\|_{L_2}$", "d)"),
-    ("case3", "v_l2_norm", r"$\|e_\mathbf{u}\|_{L_2}$", "e)"),
-    ("case4", "v_l2_norm", r"$\|e_\mathbf{u}\|_{L_2}$", "f)"),
-    ("case3", "p_l2_norm", r"$\|e_p\|_{L_2}$", "g)"),
-    ("case4", "p_l2_norm", r"$\|e_p\|_{L_2}$", "h)"),
+    ("case1", "v_l2_norm", r"$E_{L_2}^{\mathrm{rel}}(\mathbf{u})$", "a)"),
+    ("case2", "v_l2_norm", r"$E_{L_2}^{\mathrm{rel}}(\mathbf{u})$", "b)"),
+    ("case1", "p_l2_norm", r"$E_{L_2}^{\mathrm{rel}}(p)$", "c)"),
+    ("case2", "p_l2_norm", r"$E_{L_2}^{\mathrm{rel}}(p)$", "d)"),
+    ("case3", "v_l2_norm", r"$E_{L_2}^{\mathrm{rel}}(\mathbf{u})$", "e)"),
+    ("case4", "v_l2_norm", r"$E_{L_2}^{\mathrm{rel}}(\mathbf{u})$", "f)"),
+    ("case3", "p_l2_norm", r"$E_{L_2}^{\mathrm{rel}}(p)$", "g)"),
+    ("case4", "p_l2_norm", r"$E_{L_2}^{\mathrm{rel}}(p)$", "h)"),
 )
 MARKERS = ("o", "s", "^", "D", "v", "P")
 COLORS = ("#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9")

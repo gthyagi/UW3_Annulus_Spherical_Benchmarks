@@ -346,7 +346,7 @@ The absolute \(L_2\)-norm error is defined as
 \end{equation}
 and the relative \(L_2\)-norm error is computed as
 \begin{equation}
-  E^{\mathrm{rel}}_{L_2}(q)
+  E_{L_2}^{\mathrm{rel}}(q)
   =
   \frac{E_{L_2}(q)}{\|q^*\|_{L_2}}
   =
@@ -357,6 +357,17 @@ and the relative \(L_2\)-norm error is computed as
 \end{equation}
 where \(q\) and \(q^*\) denote the numerical and analytical
 solutions, respectively.
+Boundary errors are written with a boundary subscript. For an annulus boundary
+\(\Gamma\), the absolute pressure trace error is
+\begin{equation}
+  E_{L_2,\Gamma}(p)
+  =
+  \left(
+  \int_\Gamma |p-p^*|^2\,d\Gamma
+  \right)^{1/2}.
+\end{equation}
+The inner and outer boundaries are denoted
+\(\Gamma_{\mathrm{inner}}\) and \(\Gamma_{\mathrm{outer}}\), respectively.
 
 Convergence rates are evaluated from successive mesh refinements as
 \begin{equation}
@@ -403,7 +414,7 @@ These observations are consistent with established finite-element theory for inc
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.98\linewidth]{figure_5_thieulot_annulus_convergence.pdf}
-    \caption{Convergence of relative volume errors \(E^{\mathrm{rel}}_{L_2}(\mathbf{u})\) and \(E^{\mathrm{rel}}_{L_2}(p)\) for the annulus Thieulot benchmark. Reference lines indicate the expected smooth-solution rates for the higher-order element pairs.}
+    \caption{Convergence of relative volume errors \(E_{L_2}^{\mathrm{rel}}(\mathbf{u})\) and \(E_{L_2}^{\mathrm{rel}}(p)\) for the annulus Thieulot benchmark. Reference lines indicate the expected smooth-solution rates for the higher-order element pairs.}
     \label{fig:thieulot_annulus_convergence}
 \end{figure}
 
@@ -433,7 +444,7 @@ consistent with the volume pressure convergence observed for this element pair.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.92\linewidth]{figure_p2p1_boundary_pressure_convergence.pdf}
-    \caption{Convergence of absolute boundary pressure errors \(E_{L_2}(p|_{\Gamma})\) for the \(P_2\times P_1\) annulus Thieulot benchmark calculations. Solid curves denote the inner boundary and dashed curves denote the outer boundary.}
+    \caption{Convergence of absolute boundary pressure errors \(E_{L_2,\Gamma}(p)\) for the \(P_2\times P_1\) annulus Thieulot benchmark calculations. Solid curves denote the inner boundary and dashed curves denote the outer boundary.}
     \label{fig:thieulot_annulus_boundary_pressure_convergence}
 \end{figure}
 
@@ -458,7 +469,8 @@ spurious pressure modes unless an additional pressure-stabilisation mechanism is
 introduced \citep{boffi2013}. Stabilised equal-order formulations, such as
 Petrov--Galerkin, Galerkin least-squares, or related stabilised mixed methods, can
 restore well-posedness and recover the smooth-solution target rates
-\(E_{L_2}(\mathbf{u})/E_{L_2}(p)=2/1\) \citep{Hughes_1986,Brezzi_1988}.
+\(E_{L_2}^{\mathrm{rel}}(\mathbf{u})/E_{L_2}^{\mathrm{rel}}(p)=2/1\)
+\citep{Hughes_1986,Brezzi_1988}.
 The \(P_2\times P_0\) pair is inf-sup stable, but is non-standard and
 approximation-unbalanced: the constant pressure space limits the expected
 pressure convergence to first order and the velocity convergence to second order
@@ -473,7 +485,7 @@ the smooth-solution target is \(3/2\) \citep{Scott_1985,Guzm_n_2018}.
 \centering
 \caption{Stability interpretation and expected smooth-solution rates for selected
 non-Taylor--Hood element pairs. Rates are reported as
-\(E_{L_2}(\mathbf{u})/E_{L_2}(p)\).}
+\(E_{L_2}^{\mathrm{rel}}(\mathbf{u})/E_{L_2}^{\mathrm{rel}}(p)\).}
 \label{tab:nonstandard_element_stability}
 \scriptsize
 \begin{tabular}{p{0.14\linewidth}p{0.25\linewidth}p{0.35\linewidth}p{0.13\linewidth}}
@@ -507,7 +519,7 @@ and therefore
 The error plotted in Fig.~\ref{fig:thieulot_annulus_boundary_pressure_convergence}
 is instead an absolute boundary \(L_2\) error,
 \begin{equation}
-  E_{L_2}(p|_{\Gamma_r})
+  E_{L_2,\Gamma_r}(p)
   =
   \left(
   \int_{\Gamma_r} |p_h-p^*|^2\,ds
@@ -557,7 +569,7 @@ first order,
 \end{equation}
 Consequently, a boundary-pressure error model contains the geometric component
 \begin{equation}
-  E_{L_2}^2(p|_{\Gamma_r})
+  E_{L_2,\Gamma_r}^2(p)
   \approx
   r\int_0^{2\pi}
   \left|

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproduce Kramer et al. annulus benchmark Figure 3 from UW3 metrics."""
+"""Plot annulus Kramer boundary pressure convergence from UW3 metrics."""
 
 from __future__ import annotations
 
@@ -14,16 +14,20 @@ from matplotlib.lines import Line2D
 
 
 METRICS_ROOT = Path("/Volumes/seagate4_1/output/annulus/kramer/latest")
-OUTPUT_FILE = Path(__file__).resolve().parent / "figure_3_kramer_annulus_convergence.pdf"
+OUTPUT_FILE = Path(__file__).resolve().parent / "figure_boundary_pressure_convergence.pdf"
 
 INV_LC_BASE = 8
 INV_LC_VALUES = np.array([8, 16, 32, 64, 128, 256], dtype=int)
-REFINEMENT_LEVELS = np.array([1 + int(np.log2(inv_lc // INV_LC_BASE)) for inv_lc in INV_LC_VALUES])
 H_VALUES = 1.0 / INV_LC_VALUES.astype(float)
 H_TICK_LABELS = tuple(f"1/{inv_lc}" for inv_lc in INV_LC_VALUES)
 
 N_VALUES = (2, 8, 32)
+COLORS = {2: "#0072B2", 8: "#D55E00", 32: "#009E73"}
 MARKERS = {2: "o", 8: "*", 32: "s"}
+BOUNDARIES = (
+    ("p_l2_norm_lower", "inner", "-"),
+    ("p_l2_norm_upper", "outer", "--"),
+)
 
 DIR_PATTERN = re.compile(
     r"(?P<case>case\d+)_"
@@ -40,14 +44,14 @@ class MetricRecord:
     level: int
     n: int
     k: int | None
-    v_l2_norm: float
-    p_l2_norm: float
+    p_l2_norm_lower: float
+    p_l2_norm_upper: float
 
 
 def read_scalar(h5f: h5py.File, name: str) -> float:
     value = h5f[name][()]
     if isinstance(value, bytes):
-        return value.decode()
+        return float(value.decode())
     return float(np.asarray(value))
 
 
@@ -75,12 +79,44 @@ def read_metrics() -> list[MetricRecord]:
                     level=1 + int(np.log2(inv_lc // INV_LC_BASE)),
                     n=int(read_scalar(h5f, "n")),
                     k=None if match.group("k") is None else int(read_scalar(h5f, "k")),
-                    v_l2_norm=read_scalar(h5f, "v_l2_norm"),
-                    p_l2_norm=read_scalar(h5f, "p_l2_norm"),
+                    p_l2_norm_lower=read_scalar(h5f, "p_l2_norm_lower"),
+                    p_l2_norm_upper=read_scalar(h5f, "p_l2_norm_upper"),
                 )
             )
 
     return records
+
+
+def validate_records(records: list[MetricRecord]) -> None:
+    if not records:
+        raise FileNotFoundError(f"No benchmark_metrics.h5 files found in {METRICS_ROOT}")
+
+    required_panels = (
+        ("case1", None, "free-slip delta"),
+        ("case2", 2, "free-slip smooth k=2"),
+        ("case2", 8, "free-slip smooth k=8"),
+        ("case3", None, "zero-slip delta"),
+        ("case4", 2, "zero-slip smooth k=2"),
+        ("case4", 8, "zero-slip smooth k=8"),
+    )
+
+    missing: list[str] = []
+    for case, k, label in required_panels:
+        for n in N_VALUES:
+            available = {
+                record.inv_lc
+                for record in records
+                if record.case == case and record.k == k and record.n == n
+            }
+            missing_inv_lc = [inv_lc for inv_lc in INV_LC_VALUES if inv_lc not in available]
+            if missing_inv_lc:
+                missing.append(
+                    f"{label}, n={n}: "
+                    + ", ".join(f"1/{inv_lc}" for inv_lc in missing_inv_lc)
+                )
+
+    if missing:
+        raise RuntimeError("Incomplete Kramer boundary pressure data: " + "; ".join(missing))
 
 
 def values_for_series(
@@ -108,10 +144,12 @@ def add_reference_line(
     h_values: np.ndarray,
     slope: float,
     series: list[tuple[np.ndarray, np.ndarray]],
-    linestyle: str = "-",
 ) -> None:
-    values = [y for _, y in series]
-    positive = [value[np.isfinite(value) & (value > 0.0)] for value in values if value.size]
+    positive = [
+        y[np.isfinite(y) & (y > 0.0)]
+        for _, y in series
+        if y.size and np.any(np.isfinite(y) & (y > 0.0))
+    ]
     if not positive:
         return
 
@@ -147,10 +185,10 @@ def add_reference_line(
         h_values,
         y_ref,
         color="black",
-        linestyle=linestyle,
-        linewidth=1.0,
-        label=rf"$\mathcal{{O}}(h^{{{slope:g}}})$",
-        zorder=6,
+        linestyle=":",
+        linewidth=1.15,
+        zorder=5,
+        label="_nolegend_",
     )
 
 
@@ -161,35 +199,31 @@ def plot_panel(
     panel_label: str,
     case: str,
     k: int | None,
-    metric_name: str,
     slope: float,
-    extra_slopes: tuple[float, ...],
     show_xlabel: bool,
 ) -> None:
-    plotted_values: list[np.ndarray] = []
     plotted_series: list[tuple[np.ndarray, np.ndarray]] = []
 
     for n in N_VALUES:
-        x, y = values_for_series(records, case=case, n=n, k=k, metric_name=metric_name)
-        if x.size == 0:
-            continue
+        for metric_name, _, linestyle in BOUNDARIES:
+            x, y = values_for_series(records, case=case, n=n, k=k, metric_name=metric_name)
+            if x.size == 0:
+                continue
 
-        ax.loglog(
-            x,
-            y,
-            color="black",
-            marker=MARKERS.get(n, "o"),
-            linestyle="None",
-            markersize=4.2,
-            label="_nolegend_",
-            zorder=7,
-        )
-        plotted_values.append(y)
-        plotted_series.append((x, y))
+            ax.loglog(
+                x,
+                y,
+                color=COLORS[n],
+                marker=MARKERS[n],
+                linestyle=linestyle,
+                linewidth=1.15,
+                markersize=4.2,
+                zorder=8,
+                label="_nolegend_",
+            )
+            plotted_series.append((x, y))
 
-    add_reference_line(ax, H_VALUES, slope, plotted_series, linestyle="-")
-    for extra_slope in extra_slopes:
-        add_reference_line(ax, H_VALUES, extra_slope, plotted_series, linestyle="-")
+    add_reference_line(ax, H_VALUES, slope, plotted_series)
 
     ax.set_xlim(H_VALUES[-1] * 0.82, H_VALUES[0] * 1.18)
     ax.set_xticks(H_VALUES)
@@ -199,111 +233,102 @@ def plot_panel(
     else:
         ax.set_xticklabels([])
         ax.set_xlabel("")
+
     ax.grid(True, which="major", color="0.78", linewidth=0.45)
     ax.grid(True, which="minor", color="0.88", linewidth=0.25)
     ax.set_axisbelow(True)
     ax.tick_params(axis="both", which="both", direction="in", labelsize=8)
     ax.text(0.02, 0.98, f"({panel_label})", transform=ax.transAxes, ha="left", va="top", fontsize=7.5)
-    ax.legend(
-        loc="lower right",
-        frameon=True,
-        framealpha=0.9,
-        facecolor="white",
-        edgecolor="0.85",
-        fontsize=6.6,
-        handlelength=1.6,
-        borderpad=0.25,
-        labelspacing=0.25,
+    ax.text(
+        0.96,
+        0.06,
+        rf"$\mathcal{{O}}(h^{{{slope:g}}})$",
+        transform=ax.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=7.2,
+        bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.78, "pad": 1.2},
     )
 
 
 def main() -> None:
     records = read_metrics()
-    if not records:
-        raise FileNotFoundError(f"No benchmark_metrics.h5 files found in {METRICS_ROOT}")
+    validate_records(records)
 
-    fig, axes = plt.subplots(4, 3, figsize=(8.3, 11.0), sharex=False)
+    fig, axes = plt.subplots(2, 3, figsize=(8.3, 5.7), sharex=False)
 
     columns = (
-        ("Delta-Function", None),
-        ("Smooth (k=2)", 2),
-        ("Smooth (k=8)", 8),
+        ("Delta-Function", None, 0.5),
+        ("Smooth (k=2)", 2, 2.0),
+        ("Smooth (k=8)", 8, 2.0),
     )
-    panel_labels = np.array([["a", "b", "c"], ["d", "e", "f"], ["g", "h", "i"], ["j", "k", "l"]])
-
-    row_specs = (
-        ("case1", "v_l2_norm", 1.5, r"$E_{L_2}^{\mathrm{rel}}(\mathbf{u})$"),
-        ("case1", "p_l2_norm", 0.5, r"$E_{L_2}^{\mathrm{rel}}(p)$"),
-        ("case3", "v_l2_norm", 1.5, r"$E_{L_2}^{\mathrm{rel}}(\mathbf{u})$"),
-        ("case3", "p_l2_norm", 0.5, r"$E_{L_2}^{\mathrm{rel}}(p)$"),
+    rows = (
+        ("Free-Slip", "case1", "case2"),
+        ("Zero-Slip", "case3", "case4"),
     )
+    panel_labels = np.array([["a", "b", "c"], ["d", "e", "f"]])
 
-    for row, (delta_case, metric_name, delta_slope, ylabel) in enumerate(row_specs):
-        for col, (title, k) in enumerate(columns):
-            if k is None:
-                case = delta_case
-                slope = delta_slope
-            else:
-                case = "case2" if delta_case == "case1" else "case4"
-                slope = 2.0
-            extra_slopes = ()
-
+    for row, (row_label, delta_case, smooth_case) in enumerate(rows):
+        for col, (title, k, slope) in enumerate(columns):
+            case = delta_case if k is None else smooth_case
             plot_panel(
                 axes[row, col],
                 records,
                 panel_label=panel_labels[row, col],
                 case=case,
                 k=k,
-                metric_name=metric_name,
                 slope=slope,
-                extra_slopes=extra_slopes,
-                show_xlabel=row == 3,
+                show_xlabel=row == 1,
             )
-            if col == 0:
-                axes[row, col].set_ylabel(ylabel, fontsize=9)
-            if row in (0, 2):
+            if row == 0:
                 axes[row, col].set_title(title, fontsize=10, pad=4)
-
-    fig.text(0.53, 0.965, "Free-Slip", ha="center", va="center", fontsize=18)
-    fig.text(0.53, 0.515, "Zero-Slip", ha="center", va="center", fontsize=18)
+            if col == 0:
+                axes[row, col].set_ylabel(
+                    row_label + "\n" + r"$E_{L_2,\Gamma}^{\mathrm{rel}}(p)$",
+                    fontsize=9,
+                )
 
     fig.subplots_adjust(
         left=0.105,
         right=0.985,
-        bottom=0.13,
-        top=0.93,
-        wspace=0.32,
-        hspace=0.1,
+        bottom=0.22,
+        top=0.925,
+        wspace=0.30,
+        hspace=0.14,
     )
 
-    # Open visual space between the two boundary-condition groups, matching the paper layout.
-    for ax in axes[2:, :].flat:
-        pos = ax.get_position()
-        ax.set_position([pos.x0, pos.y0 - 0.035, pos.width, pos.height])
-
-    marker_handles = [
+    n_handles = [
         Line2D(
             [0],
             [0],
-            color="black",
+            color=COLORS[n],
             marker=MARKERS[n],
-            linestyle="None",
+            linestyle="-",
+            linewidth=1.15,
             markersize=5,
             label=rf"$n={n}$",
         )
         for n in N_VALUES
     ]
+    boundary_handles = [
+        Line2D([0], [0], color="black", linestyle=linestyle, linewidth=1.15, label=label)
+        for _, label, linestyle in BOUNDARIES
+    ]
+
+    handles = n_handles + boundary_handles
     fig.legend(
-        marker_handles,
-        [handle.get_label() for handle in marker_handles],
+        handles,
+        [handle.get_label() for handle in handles],
         loc="lower center",
-        ncol=3,
+        ncol=5,
         frameon=True,
         framealpha=0.95,
         facecolor="white",
         edgecolor="0.85",
-        fontsize=8.5,
-        bbox_to_anchor=(0.545, 0.03),
+        fontsize=8.0,
+        bbox_to_anchor=(0.545, 0.055),
+        columnspacing=1.1,
+        handlelength=1.8,
     )
 
     fig.savefig(OUTPUT_FILE, bbox_inches="tight")

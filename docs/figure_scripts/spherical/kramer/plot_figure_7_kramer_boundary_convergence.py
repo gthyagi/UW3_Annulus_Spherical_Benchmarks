@@ -187,7 +187,7 @@ def main() -> None:
         groups,
         "v_l2_norm_upper",
         3.0,
-        r"$\|e_\mathbf{u}\|_{L_2,\mathrm{outer}}$",
+        r"$E_{L_2,\Gamma_{\mathrm{outer}}}^{\mathrm{rel}}(\mathbf{u})$",
         "a)",
     )
     plot_panel(
@@ -196,7 +196,7 @@ def main() -> None:
         groups,
         "v_l2_norm_lower",
         3.0,
-        r"$\|e_\mathbf{u}\|_{L_2,\mathrm{inner}}$",
+        r"$E_{L_2,\Gamma_{\mathrm{inner}}}^{\mathrm{rel}}(\mathbf{u})$",
         "b)",
     )
     plot_panel(
@@ -205,7 +205,7 @@ def main() -> None:
         groups,
         "sigma_rr_l2_norm_upper",
         2.0,
-        r"$\|e_{\sigma_{rr}}\|_{L_2,\mathrm{outer}}$",
+        r"$E_{L_2,\Gamma_{\mathrm{outer}}}^{\mathrm{rel}}(\sigma_{rr})$",
         "c)",
     )
     plot_panel(
@@ -214,12 +214,12 @@ def main() -> None:
         groups,
         "sigma_rr_l2_norm_lower",
         2.0,
-        r"$\|e_{\sigma_{rr}}\|_{L_2,\mathrm{inner}}$",
+        r"$E_{L_2,\Gamma_{\mathrm{inner}}}^{\mathrm{rel}}(\sigma_{rr})$",
         "d)",
     )
 
-    axes[0, 0].set_title("Outer Surface", fontsize=12, fontweight="bold")
-    axes[0, 1].set_title("Inner Surface", fontsize=12, fontweight="bold")
+    axes[0, 0].set_title("Outer boundary", fontsize=12, fontweight="bold")
+    axes[0, 1].set_title("Inner boundary", fontsize=12, fontweight="bold")
     for ax in axes[-1, :]:
         ax.set_xlabel(r"$h$")
 

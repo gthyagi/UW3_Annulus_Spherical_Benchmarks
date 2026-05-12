@@ -137,7 +137,7 @@ def plot_boundary_panel(
         )
 
     ax.set_yscale("log")
-    ax.set_ylabel(r"$E_{L_2}(p|_{\Gamma})$")
+    ax.set_ylabel(r"$E_{L_2,\Gamma}(p)$")
     ax.set_title(boundary_label, fontsize=11)
     ax.set_xticks(x)
     ax.set_xticklabels([label for _, _, _, label in ELEMENTS], rotation=22, ha="right")

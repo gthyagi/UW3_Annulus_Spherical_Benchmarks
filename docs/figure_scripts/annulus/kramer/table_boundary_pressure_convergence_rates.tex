@@ -1,0 +1,34 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=0.65in]{geometry}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{newtxtext,newtxmath}
+
+\pagestyle{empty}
+
+\begin{document}
+
+\begin{table}[p]
+\centering
+\caption{Least-squares convergence rates for the relative pressure error on the inner and outer boundaries, \(E_{L_2,\Gamma}^{\mathrm{rel}}(p)\).}
+\label{tab:kramer_annulus_boundary_pressure_lsq_rates}
+\small
+\setlength{\tabcolsep}{7pt}
+\begin{tabular}{lcccccc}
+\toprule
+\multirow{2}{*}{Case} & \multicolumn{2}{c}{$n=2$} & \multicolumn{2}{c}{$n=8$} & \multicolumn{2}{c}{$n=32$} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+ & inner & outer & inner & outer & inner & outer \\
+\midrule
+Free-slip, delta-function forcing & 2.20 & 3.34 & 1.86 & 2.85 & 2.31 & 2.33 \\
+Free-slip, smooth forcing ($k=2$) & 1.64 & 2.12 & 1.85 & 2.20 & 1.90 & 2.01 \\
+Free-slip, smooth forcing ($k=8$) & 1.65 & 2.01 & 1.81 & 2.05 & 1.88 & 1.99 \\
+Zero-slip, delta-function forcing & 2.15 & 2.87 & 2.00 & 2.45 & 2.53 & 2.11 \\
+Zero-slip, smooth forcing ($k=2$) & 1.63 & 1.56 & 1.89 & 1.87 & 1.92 & 1.92 \\
+Zero-slip, smooth forcing ($k=8$) & 1.65 & 1.96 & 1.88 & 1.95 & 1.91 & 1.91 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}

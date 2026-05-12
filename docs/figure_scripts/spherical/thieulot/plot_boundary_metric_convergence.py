@@ -176,7 +176,7 @@ def main() -> None:
             "sigma_rr_l2_norm_lower": {"linestyle": "-", "label": "inner"},
             "sigma_rr_l2_norm_upper": {"linestyle": "--", "label": "outer"},
         },
-        ylabel=r"$|\sigma_{rr} - \sigma_{rr}^{ana}|_2$",
+        ylabel=r"$E_{L_2,\Gamma}^{\mathrm{rel}}(\sigma_{rr})$",
         legend_loc="lower right",
         show_legend=False,
     )
@@ -191,7 +191,7 @@ def main() -> None:
             "p_l2_norm_lower_abs": {"linestyle": "-", "label": "inner"},
             "p_l2_norm_upper_abs": {"linestyle": "--", "label": "outer"},
         },
-        ylabel=r"$|p - p^{ana}|_2$",
+        ylabel=r"$E_{L_2,\Gamma}(p)$",
         legend_loc="lower right",
         show_legend=True,
     )

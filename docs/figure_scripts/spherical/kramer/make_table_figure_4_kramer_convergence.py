@@ -151,9 +151,9 @@ def table_for_case_group(
         group_header.append(rf"\multicolumn{{4}}{{c}}{{$l={l_val},\,m={m_val},\,k={k_val}$}}")
         sub_header.extend(
             [
-                r"$|e_v|_2$",
+                r"$E_{L_2}^{\mathrm{rel}}(\mathbf{u})$",
                 "rate",
-                r"$|e_p|_2$",
+                r"$E_{L_2}^{\mathrm{rel}}(p)$",
                 "rate",
             ]
         )

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a LaTeX convergence table for Kramer annulus Figure 3 metrics."""
+"""Create LaTeX tables for Kramer annulus boundary pressure convergence."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import numpy as np
 
 METRICS_ROOT = Path("/Volumes/seagate4_1/output/annulus/kramer/latest")
 OUTPUT_DIR = Path(__file__).resolve().parent
-OUTPUT_TEX = OUTPUT_DIR / "table_figure_3_kramer_annulus_convergence.tex"
+OUTPUT_TEX = OUTPUT_DIR / "table_boundary_pressure_convergence.tex"
 
 H_VALUES = tuple(1.0 / inv_lc for inv_lc in (8, 16, 32, 64, 128, 256))
 H_LABELS = ("1/8", "1/16", "1/32", "1/64", "1/128", "1/256")
@@ -26,6 +26,11 @@ TABLE_SPECS = (
     ("case3", None, "Zero-slip, delta-function forcing"),
     ("case4", 2, r"Zero-slip, smooth forcing ($k=2$)"),
     ("case4", 8, r"Zero-slip, smooth forcing ($k=8$)"),
+)
+
+BOUNDARIES = (
+    ("p_l2_norm_lower", "inner"),
+    ("p_l2_norm_upper", "outer"),
 )
 
 DIR_PATTERN = re.compile(
@@ -42,14 +47,14 @@ class MetricRecord:
     h: float
     n: int
     k: int | None
-    v_l2_norm: float
-    p_l2_norm: float
+    p_l2_norm_lower: float
+    p_l2_norm_upper: float
 
 
 def read_scalar(h5f: h5py.File, name: str) -> float:
     value = h5f[name][()]
     if isinstance(value, bytes):
-        return value.decode()
+        return float(value.decode())
     return float(np.asarray(value))
 
 
@@ -76,8 +81,8 @@ def read_metrics() -> list[MetricRecord]:
                     h=h,
                     n=int(read_scalar(h5f, "n")),
                     k=None if match.group("k") is None else int(read_scalar(h5f, "k")),
-                    v_l2_norm=read_scalar(h5f, "v_l2_norm"),
-                    p_l2_norm=read_scalar(h5f, "p_l2_norm"),
+                    p_l2_norm_lower=read_scalar(h5f, "p_l2_norm_lower"),
+                    p_l2_norm_upper=read_scalar(h5f, "p_l2_norm_upper"),
                 )
             )
 
@@ -85,6 +90,23 @@ def read_metrics() -> list[MetricRecord]:
         raise FileNotFoundError(f"No benchmark_metrics.h5 files found in {METRICS_ROOT}")
 
     return records
+
+
+def validate_records(records: list[MetricRecord]) -> None:
+    missing: list[str] = []
+    for case, k, title in TABLE_SPECS:
+        for n in N_VALUES:
+            available = {
+                record.h
+                for record in records
+                if record.case == case and record.k == k and record.n == n
+            }
+            missing_h = [label for h, label in zip(H_VALUES, H_LABELS) if h not in available]
+            if missing_h:
+                missing.append(f"{title}, n={n}: {', '.join(missing_h)}")
+
+    if missing:
+        raise RuntimeError("Incomplete Kramer boundary pressure data: " + "; ".join(missing))
 
 
 def latex_num(value: float) -> str:
@@ -127,7 +149,14 @@ def values_for_series(
     return np.array([values_by_h.get(h, np.nan) for h in H_VALUES], dtype=float)
 
 
-def table_for_spec(records: list[MetricRecord], case: str, k: int | None, title: str) -> str:
+def table_for_spec(
+    records: list[MetricRecord],
+    *,
+    case: str,
+    k: int | None,
+    title: str,
+    label: str | None,
+) -> str:
     column_spec = "c" + "cccc" * len(N_VALUES)
     header_cmidrules = []
     for group_idx in range(len(N_VALUES)):
@@ -141,9 +170,9 @@ def table_for_spec(records: list[MetricRecord], case: str, k: int | None, title:
         group_header.append(rf"\multicolumn{{4}}{{c}}{{$n={n}$}}")
         sub_header.extend(
             [
-                r"$E_{L_2}^{\mathrm{rel}}(\mathbf{u})$",
+                r"$E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$",
                 "rate",
-                r"$E_{L_2}^{\mathrm{rel}}(p)$",
+                r"$E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$",
                 "rate",
             ]
         )
@@ -151,40 +180,39 @@ def table_for_spec(records: list[MetricRecord], case: str, k: int | None, title:
     lines = [
         r"\begin{table}[p]",
         r"\centering",
-        rf"\caption{{{title}.}}",
-        r"\tiny",
-        r"\setlength{\tabcolsep}{1.7pt}",
-        r"\resizebox{\linewidth}{!}{%",
-        rf"\begin{{tabular}}{{{column_spec}}}",
-        r"\toprule",
-        " & ".join(group_header) + r" \\",
-        "\n".join(header_cmidrules),
-        " & ".join(sub_header) + r" \\",
-        r"\midrule",
+        rf"\caption{{Boundary pressure convergence for {title}.}}",
     ]
+    if label:
+        lines.append(rf"\label{{{label}}}")
+    lines.extend(
+        [
+            r"\tiny",
+            r"\setlength{\tabcolsep}{1.7pt}",
+            r"\resizebox{\linewidth}{!}{%",
+            rf"\begin{{tabular}}{{{column_spec}}}",
+            r"\toprule",
+            " & ".join(group_header) + r" \\",
+            "\n".join(header_cmidrules),
+            " & ".join(sub_header) + r" \\",
+            r"\midrule",
+        ]
+    )
 
     series_values = []
     for n in N_VALUES:
-        velocity = values_for_series(records, case=case, k=k, n=n, metric_name="v_l2_norm")
-        pressure = values_for_series(records, case=case, k=k, n=n, metric_name="p_l2_norm")
-        series_values.append(
-            (
-                velocity,
-                pairwise_rates(velocity),
-                pressure,
-                pairwise_rates(pressure),
-            )
-        )
+        inner = values_for_series(records, case=case, k=k, n=n, metric_name="p_l2_norm_lower")
+        outer = values_for_series(records, case=case, k=k, n=n, metric_name="p_l2_norm_upper")
+        series_values.append((inner, pairwise_rates(inner), outer, pairwise_rates(outer)))
 
     for h_idx, h_label in enumerate(H_LABELS):
         row = [rf"${h_label}$"]
-        for velocity, velocity_rates, pressure, pressure_rates in series_values:
+        for inner, inner_rates, outer, outer_rates in series_values:
             row.extend(
                 [
-                    latex_num(velocity[h_idx]),
-                    latex_rate(velocity_rates[h_idx]),
-                    latex_num(pressure[h_idx]),
-                    latex_rate(pressure_rates[h_idx]),
+                    latex_num(inner[h_idx]),
+                    latex_rate(inner_rates[h_idx]),
+                    latex_num(outer[h_idx]),
+                    latex_rate(outer_rates[h_idx]),
                 ]
             )
         lines.append(" & ".join(row) + r" \\")
@@ -202,10 +230,16 @@ def table_for_spec(records: list[MetricRecord], case: str, k: int | None, title:
 
 
 def make_latex(records: list[MetricRecord]) -> str:
-    tables = "\n".join(
-        table_for_spec(records, case=case, k=k, title=title)
-        for case, k, title in TABLE_SPECS
-    )
+    table_blocks = []
+    for idx, (case, k, title) in enumerate(TABLE_SPECS):
+        label = None
+        if idx == 0:
+            label = "tab:kramer_annulus_boundary_pressure_start"
+        elif idx == len(TABLE_SPECS) - 1:
+            label = "tab:kramer_annulus_boundary_pressure_end"
+        table_blocks.append(table_for_spec(records, case=case, k=k, title=title, label=label))
+
+    tables = "\n".join(table_blocks)
     return rf"""\documentclass[11pt,a4paper]{{article}}
 
 \usepackage[margin=0.45in]{{geometry}}
@@ -232,6 +266,7 @@ def make_latex(records: list[MetricRecord]) -> str:
 
 def main() -> None:
     records = read_metrics()
+    validate_records(records)
     OUTPUT_TEX.write_text(make_latex(records), encoding="utf-8")
     print(f"Wrote {OUTPUT_TEX}")
 

@@ -231,16 +231,16 @@ def make_latex(records: list[MetricRecord]) -> str:
         "Case 1 boundary velocity convergence.",
         "v_l2_norm_upper",
         "v_l2_norm_lower",
-        r"|e_v|_{2,\mathrm{outer}}",
-        r"|e_v|_{2,\mathrm{inner}}",
+        r"E_{L_2,\Gamma_{\mathrm{outer}}}^{\mathrm{rel}}(\mathbf{u})",
+        r"E_{L_2,\Gamma_{\mathrm{inner}}}^{\mathrm{rel}}(\mathbf{u})",
     )
     stress_table = tables_for_metric(
         records,
         r"Case 1 boundary radial-stress convergence.",
         "sigma_rr_l2_norm_upper",
         "sigma_rr_l2_norm_lower",
-        r"|e_{\sigma_{rr}}|_{2,\mathrm{outer}}",
-        r"|e_{\sigma_{rr}}|_{2,\mathrm{inner}}",
+        r"E_{L_2,\Gamma_{\mathrm{outer}}}^{\mathrm{rel}}(\sigma_{rr})",
+        r"E_{L_2,\Gamma_{\mathrm{inner}}}^{\mathrm{rel}}(\sigma_{rr})",
     )
     return rf"""\documentclass[11pt,a4paper]{{article}}
 

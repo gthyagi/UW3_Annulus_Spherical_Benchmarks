@@ -1,0 +1,172 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=0.45in]{geometry}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{siunitx}
+\usepackage{newtxtext,newtxmath}
+
+\pagestyle{empty}
+
+\sisetup{
+  scientific-notation = true,
+  round-mode = places,
+  round-precision = 3,
+}
+
+\begin{document}
+
+\begin{table}[p]
+\centering
+\caption{Boundary pressure convergence for Free-slip, delta-function forcing.}
+\label{tab:kramer_annulus_boundary_pressure_start}
+\tiny
+\setlength{\tabcolsep}{1.7pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{ccccccccccccc}
+\toprule
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$n=2$} & \multicolumn{4}{c}{$n=8$} & \multicolumn{4}{c}{$n=32$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+ & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate \\
+\midrule
+$1/8$ & \num{5.158133e-02} & -- & \num{1.342207e-01} & -- & \num{1.737976e-01} & -- & \num{2.171208e-01} & -- & \num{1.180133e+03} & -- & \num{1.548033e+00} & -- \\
+$1/16$ & \num{4.631587e-03} & 3.48 & \num{1.003677e-02} & 3.74 & \num{3.850337e-02} & 2.17 & \num{1.966374e-02} & 3.46 & \num{3.982831e+01} & 4.89 & \num{2.732320e-01} & 2.50 \\
+$1/32$ & \num{6.687326e-04} & 2.79 & \num{2.278952e-04} & 5.46 & \num{1.030884e-02} & 1.90 & \num{1.385591e-03} & 3.83 & \num{2.906966e+01} & 0.45 & \num{3.781225e-02} & 2.85 \\
+$1/64$ & \num{1.621260e-04} & 2.04 & \num{1.611748e-05} & 3.82 & \num{2.696008e-03} & 1.93 & \num{2.747400e-04} & 2.33 & \num{4.797979e+00} & 2.60 & \num{8.805240e-03} & 2.10 \\
+$1/128$ & \num{5.337603e-05} & 1.60 & \num{3.195058e-06} & 2.33 & \num{7.823140e-04} & 1.79 & \num{5.125731e-05} & 2.42 & \num{8.869667e-01} & 2.44 & \num{2.043133e-03} & 2.11 \\
+$1/256$ & \num{2.316470e-05} & 1.20 & \num{2.649688e-06} & 0.27 & \num{2.790175e-04} & 1.49 & \num{1.037067e-05} & 2.31 & \num{2.290369e-01} & 1.95 & \num{4.887728e-04} & 2.06 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{Boundary pressure convergence for Free-slip, smooth forcing ($k=2$).}
+\tiny
+\setlength{\tabcolsep}{1.7pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{ccccccccccccc}
+\toprule
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$n=2$} & \multicolumn{4}{c}{$n=8$} & \multicolumn{4}{c}{$n=32$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+ & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate \\
+\midrule
+$1/8$ & \num{4.735636e-03} & -- & \num{2.634990e-03} & -- & \num{8.290504e-02} & -- & \num{2.171782e-02} & -- & \num{8.060484e-01} & -- & \num{3.270558e-01} & -- \\
+$1/16$ & \num{1.275588e-03} & 1.89 & \num{7.300012e-04} & 1.85 & \num{2.320850e-02} & 1.84 & \num{5.715267e-03} & 1.93 & \num{2.842541e-01} & 1.50 & \num{8.607730e-02} & 1.93 \\
+$1/32$ & \num{3.786702e-04} & 1.75 & \num{1.521950e-04} & 2.26 & \num{6.144433e-03} & 1.92 & \num{1.295096e-03} & 2.14 & \num{7.580935e-02} & 1.91 & \num{2.126984e-02} & 2.02 \\
+$1/64$ & \num{1.151240e-04} & 1.72 & \num{3.106889e-05} & 2.29 & \num{1.590626e-03} & 1.95 & \num{2.881516e-04} & 2.17 & \num{1.893309e-02} & 2.00 & \num{5.295069e-03} & 2.01 \\
+$1/128$ & \num{4.012181e-05} & 1.52 & \num{5.858681e-06} & 2.41 & \num{4.490401e-04} & 1.82 & \num{5.861472e-05} & 2.30 & \num{4.732411e-03} & 2.00 & \num{1.285889e-03} & 2.04 \\
+$1/256$ & \num{1.684299e-05} & 1.25 & \num{2.262585e-06} & 1.37 & \num{1.486505e-04} & 1.59 & \num{1.042410e-05} & 2.49 & \num{1.249424e-03} & 1.92 & \num{3.198978e-04} & 2.01 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{Boundary pressure convergence for Free-slip, smooth forcing ($k=8$).}
+\tiny
+\setlength{\tabcolsep}{1.7pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{ccccccccccccc}
+\toprule
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$n=2$} & \multicolumn{4}{c}{$n=8$} & \multicolumn{4}{c}{$n=32$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+ & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate \\
+\midrule
+$1/8$ & \num{6.826080e-03} & -- & \num{2.364757e-02} & -- & \num{1.074962e-01} & -- & \num{4.756817e-02} & -- & \num{7.758575e-01} & -- & \num{3.640835e-01} & -- \\
+$1/16$ & \num{1.904857e-03} & 1.84 & \num{6.816367e-03} & 1.79 & \num{3.123605e-02} & 1.78 & \num{1.344798e-02} & 1.82 & \num{2.785584e-01} & 1.48 & \num{9.791731e-02} & 1.89 \\
+$1/32$ & \num{5.593688e-04} & 1.77 & \num{1.630361e-03} & 2.06 & \num{8.341832e-03} & 1.90 & \num{3.187853e-03} & 2.08 & \num{7.630106e-02} & 1.87 & \num{2.440389e-02} & 2.00 \\
+$1/64$ & \num{1.679860e-04} & 1.74 & \num{3.968055e-04} & 2.04 & \num{2.173742e-03} & 1.94 & \num{7.612825e-04} & 2.07 & \num{1.905818e-02} & 2.00 & \num{6.120317e-03} & 2.00 \\
+$1/128$ & \num{5.710156e-05} & 1.56 & \num{9.509314e-05} & 2.06 & \num{6.298764e-04} & 1.79 & \num{1.781736e-04} & 2.10 & \num{4.763318e-03} & 2.00 & \num{1.494675e-03} & 2.03 \\
+$1/256$ & \num{2.342654e-05} & 1.29 & \num{2.332436e-05} & 2.03 & \num{2.213359e-04} & 1.51 & \num{4.042777e-05} & 2.14 & \num{1.273900e-03} & 1.90 & \num{3.759561e-04} & 1.99 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{Boundary pressure convergence for Zero-slip, delta-function forcing.}
+\tiny
+\setlength{\tabcolsep}{1.7pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{ccccccccccccc}
+\toprule
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$n=2$} & \multicolumn{4}{c}{$n=8$} & \multicolumn{4}{c}{$n=32$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+ & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate \\
+\midrule
+$1/8$ & \num{5.086238e-02} & -- & \num{1.149825e-01} & -- & \num{9.646724e-02} & -- & \num{1.390972e-01} & -- & \num{9.128167e+00} & -- & \num{4.352163e-01} & -- \\
+$1/16$ & \num{4.372097e-03} & 3.54 & \num{8.507949e-03} & 3.76 & \num{1.833888e-02} & 2.40 & \num{1.275494e-02} & 3.45 & \num{4.602360e-01} & 4.31 & \num{8.025921e-02} & 2.44 \\
+$1/32$ & \num{5.737149e-04} & 2.93 & \num{2.435193e-04} & 5.13 & \num{4.635449e-03} & 1.98 & \num{1.172893e-03} & 3.44 & \num{5.963821e-02} & 2.95 & \num{1.507639e-02} & 2.41 \\
+$1/64$ & \num{1.416620e-04} & 2.02 & \num{3.575094e-05} & 2.77 & \num{1.162997e-03} & 1.99 & \num{2.776245e-04} & 2.08 & \num{1.434060e-02} & 2.06 & \num{4.046642e-03} & 1.90 \\
+$1/128$ & \num{5.559098e-05} & 1.35 & \num{1.469005e-05} & 1.28 & \num{3.074614e-04} & 1.92 & \num{7.805791e-05} & 1.83 & \num{3.799241e-03} & 1.92 & \num{1.055142e-03} & 1.94 \\
+$1/256$ & \num{2.686622e-05} & 1.05 & \num{7.011324e-06} & 1.07 & \num{9.180995e-05} & 1.74 & \num{2.722304e-05} & 1.52 & \num{9.883834e-04} & 1.94 & \num{2.696758e-04} & 1.97 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{Boundary pressure convergence for Zero-slip, smooth forcing ($k=2$).}
+\tiny
+\setlength{\tabcolsep}{1.7pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{ccccccccccccc}
+\toprule
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$n=2$} & \multicolumn{4}{c}{$n=8$} & \multicolumn{4}{c}{$n=32$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+ & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate \\
+\midrule
+$1/8$ & \num{4.857638e-03} & -- & \num{1.379498e-03} & -- & \num{5.340233e-02} & -- & \num{1.479174e-02} & -- & \num{7.785529e-01} & -- & \num{2.149460e-01} & -- \\
+$1/16$ & \num{1.294813e-03} & 1.91 & \num{4.015009e-04} & 1.78 & \num{1.533297e-02} & 1.80 & \num{4.142363e-03} & 1.84 & \num{1.819598e-01} & 2.10 & \num{5.468795e-02} & 1.97 \\
+$1/32$ & \num{3.567146e-04} & 1.86 & \num{1.006359e-04} & 2.00 & \num{4.166776e-03} & 1.88 & \num{1.025736e-03} & 2.01 & \num{4.943409e-02} & 1.88 & \num{1.498742e-02} & 1.87 \\
+$1/64$ & \num{1.073123e-04} & 1.73 & \num{3.249288e-05} & 1.63 & \num{1.092311e-03} & 1.93 & \num{2.639736e-04} & 1.96 & \num{1.386051e-02} & 1.83 & \num{4.101097e-03} & 1.87 \\
+$1/128$ & \num{3.996213e-05} & 1.43 & \num{1.396564e-05} & 1.22 & \num{2.843878e-04} & 1.94 & \num{7.405928e-05} & 1.83 & \num{3.679954e-03} & 1.91 & \num{1.056268e-03} & 1.96 \\
+$1/256$ & \num{1.791868e-05} & 1.16 & \num{6.716130e-06} & 1.06 & \num{7.849060e-05} & 1.86 & \num{2.437404e-05} & 1.60 & \num{9.589876e-04} & 1.94 & \num{2.723635e-04} & 1.96 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{Boundary pressure convergence for Zero-slip, smooth forcing ($k=8$).}
+\label{tab:kramer_annulus_boundary_pressure_end}
+\tiny
+\setlength{\tabcolsep}{1.7pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{ccccccccccccc}
+\toprule
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$n=2$} & \multicolumn{4}{c}{$n=8$} & \multicolumn{4}{c}{$n=32$} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+ & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{inner}}^{\mathrm{rel}}(p)$ & rate & $E_{L_2,\Gamma_\mathrm{outer}}^{\mathrm{rel}}(p)$ & rate \\
+\midrule
+$1/8$ & \num{6.522552e-03} & -- & \num{1.390278e-02} & -- & \num{5.546864e-02} & -- & \num{2.746414e-02} & -- & \num{7.676181e-01} & -- & \num{2.326914e-01} & -- \\
+$1/16$ & \num{1.743909e-03} & 1.90 & \num{3.944563e-03} & 1.82 & \num{1.605658e-02} & 1.79 & \num{7.903965e-03} & 1.80 & \num{1.735338e-01} & 2.15 & \num{6.018092e-02} & 1.95 \\
+$1/32$ & \num{4.737188e-04} & 1.88 & \num{9.516079e-04} & 2.05 & \num{4.371528e-03} & 1.88 & \num{1.924494e-03} & 2.04 & \num{4.771190e-02} & 1.86 & \num{1.643963e-02} & 1.87 \\
+$1/64$ & \num{1.401752e-04} & 1.76 & \num{2.449206e-04} & 1.96 & \num{1.149311e-03} & 1.93 & \num{4.913875e-04} & 1.97 & \num{1.346453e-02} & 1.83 & \num{4.497327e-03} & 1.87 \\
+$1/128$ & \num{5.144735e-05} & 1.45 & \num{6.225929e-05} & 1.98 & \num{3.013386e-04} & 1.93 & \num{1.266088e-04} & 1.96 & \num{3.586164e-03} & 1.91 & \num{1.156446e-03} & 1.96 \\
+$1/256$ & \num{2.287460e-05} & 1.17 & \num{1.613994e-05} & 1.95 & \num{8.529999e-05} & 1.82 & \num{3.425952e-05} & 1.89 & \num{9.354494e-04} & 1.94 & \num{2.978960e-04} & 1.96 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\end{document}

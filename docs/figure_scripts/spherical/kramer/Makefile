@@ -5,11 +5,12 @@ TEX_FILES := \
 	figure_2_kramer_rho_ana.tex \
 	table_figure_4_kramer_convergence.tex \
 	table_figure_7_kramer_boundary_convergence.tex \
+	kramer_spherical_benchmark_article.tex \
 	kramer_spherical_benchmark_report.tex
 
-.PHONY: all figures tables report clean
+.PHONY: all figures tables article report clean
 
-all: figures tables report clean
+all: figures tables article report clean
 
 figures:
 	$(LATEXMK) -pdf -interaction=nonstopmode figure_2_kramer_rho_ana.tex
@@ -24,6 +25,9 @@ tables:
 
 report:
 	$(LATEXMK) -pdf -interaction=nonstopmode kramer_spherical_benchmark_report.tex
+
+article:
+	$(LATEXMK) -pdf -interaction=nonstopmode kramer_spherical_benchmark_article.tex
 
 clean:
 	$(LATEXMK) -c $(TEX_FILES)
