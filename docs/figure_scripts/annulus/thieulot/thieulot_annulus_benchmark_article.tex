@@ -299,8 +299,7 @@ This enables systematic evaluation of numerical performance across increasingly 
 
 \subsection{UW3 Formulation}
 
-The benchmark is implemented in \href{https://github.com/underworldcode/underworld3}{Underworld3}
-(\citetalias{Moresi2025}), a finite-element
+The benchmark is implemented in \citetalias{Moresi2025}, a finite-element
 geodynamics framework built on PETSc \citep{osti_2337606} with symbolic problem specification
 in Python. The incompressible Stokes equations are assembled from SymPy
 expressions for the viscosity, body force, velocity, pressure, and
@@ -426,15 +425,21 @@ consecutive refinements. For uniform mesh refinement with
 \subsection{Convergence Behaviour}
 
 The convergence behaviour for all tested discretisations is shown in \figref{fig:thieulot_annulus_convergence}.
-The \(P_2\times P_1\) Taylor--Hood discretisation exhibits approximately third-order velocity convergence and second-order pressure convergence, consistent with theoretical expectations for smooth Stokes solutions.
+The \(P_2\times P_1\) Taylor--Hood discretisation exhibits approximately third-order velocity convergence and 
+second-order pressure convergence, consistent with theoretical expectations for smooth Stokes solutions.
 
-The higher-order \(P_3\times P_2\) discretisation achieves approximately fourth-order velocity convergence and third-order pressure convergence on coarse-to-intermediate mesh resolutions.
-At the finest resolutions, convergence rates begin to plateau, likely reflecting accumulated effects from geometry approximation, quadrature errors, and solver tolerances.
+The higher-order \(P_3\times P_2\) discretisation achieves approximately fourth-order velocity convergence and 
+third-order pressure convergence on coarse-to-intermediate mesh resolutions.
+At the finest resolutions, convergence rates begin to plateau, likely reflecting accumulated effects 
+from geometry approximation, quadrature errors, and solver tolerances.
 
 The lower-order discretisations show reduced robustness.
-The \(P_1\times P_0\) pair fails to produce reliable convergence behaviour for this benchmark, while the equal-order \(P_1\times P_1\) discretisation produces acceptable velocity convergence but weaker and less consistent pressure convergence.
-The discontinuous-pressure \(P_2\times P_0\) pair gives approximately second-order velocity convergence and first-order pressure convergence, whereas \(P_2\times P_{-1}\) gives near second-order velocity convergence but poor pressure convergence over the available mesh refinements.
-These observations are consistent with established finite-element theory for incompressible Stokes flow \citep{boffi2013,thieulot2025}.
+The \(P_1\times P_0\) pair fails to produce reliable convergence behaviour for this benchmark.
+The equal-order \(P_1\times P_1\) pair gives approximately second-order velocity convergence but only 
+first-order to slightly superlinear pressure convergence.
+The discontinuous-pressure \(P_2\times P_0\) pair gives approximately second-order velocity convergence 
+and first-order pressure convergence, whereas \(P_2\times P_{-1}\) gives near second-order velocity convergence 
+but poor pressure convergence over the available mesh refinements.
 
 \begin{figure}[H]
     \centering
@@ -448,11 +453,27 @@ These observations are consistent with established finite-element theory for inc
 
 \subsection{Boundary Pressure Recovery}
 
-Pressure profiles extracted along the inner and outer annulus boundaries are compared against analytical solutions in \figref{fig:thieulot_annulus_boundary_pressure}.
-The higher-order Taylor--Hood discretisations reproduce the analytical pressure distributions accurately across the annulus boundaries, including extrema near regions of high azimuthal variation.
-Pressure discrepancies are most pronounced for lower-order discretisations and become increasingly visible for larger \(k\), where sharper angular pressure gradients must be resolved.
+Boundary pressure is examined because it directly contributes to the
+normal stress and traction acting on the annulus boundaries. While
+domain-integrated pressure errors quantify global convergence behaviour,
+boundary pressure recovery provides a more stringent assessment of
+pressure interpolation accuracy, element-pair stability, and geometric
+representation of the curved domain.
 
-Because the benchmark includes non-trivial pressure variation directly on curved boundaries, these comparisons provide a stringent test of both pressure interpolation quality and curved-domain numerical accuracy.
+Pressure profiles extracted along the inner and outer annulus boundaries
+are compared against the analytical solutions in
+\figref{fig:thieulot_annulus_boundary_pressure}. The higher-order
+Taylor--Hood discretisations reproduce the analytical pressure
+distributions with high accuracy across both boundaries, including the
+pressure extrema associated with strong azimuthal variations. In
+contrast, discrepancies are more evident for lower-order
+discretisations and become increasingly pronounced at larger harmonic
+orders \(k\), where sharper angular pressure gradients must be resolved.
+
+Because the benchmark contains non-trivial pressure variations directly
+on curved boundaries, these comparisons provide a demanding test of both
+pressure interpolation quality and numerical accuracy in curved-domain
+finite-element discretisations.
 
 \begin{figure}[H]
     \centering
@@ -476,7 +497,8 @@ consistent with the volume pressure convergence observed for this element pair.
 
 \section{Discussion}
 
-The present results demonstrate that Underworld3 reproduces the analytical annulus benchmark solution with convergence behaviour consistent with finite-element theory.
+The present results demonstrate that UW3 reproduces the analytical annulus benchmark 
+solution with convergence behaviour consistent with finite-element theory.
 The benchmark additionally highlights several important numerical considerations.
 
 \tabref{tab:observed_convergence_rates} summarises the observed convergence
@@ -496,6 +518,11 @@ Petrov--Galerkin, Galerkin least-squares, or related stabilised mixed methods, c
 restore well-posedness and recover the smooth-solution target rates
 \(E_{L_2}^{\mathrm{rel}}(\mathbf{u})/E_{L_2}^{\mathrm{rel}}(p)=2/1\)
 \citep{Hughes_1986,Brezzi_1988}.
+For this particular smooth benchmark, the unstabilised \(P_1\times P_1\) pair
+nevertheless produces approximately second-order velocity convergence and
+roughly first-order pressure convergence. These rates should therefore be
+interpreted as benchmark-specific observed behaviour, not as convergence
+guaranteed by a stable mixed finite-element method.
 The \(P_2\times P_0\) pair is inf-sup stable, but is non-standard and
 approximation-unbalanced: the constant pressure space limits the expected
 pressure convergence to first order and the velocity convergence to second order
@@ -674,29 +701,59 @@ First, higher-order mixed discretisations provide substantially improved pressur
 This is particularly important in geodynamics applications where pressure gradients strongly influence buoyancy-driven flow and dynamic topography.
 
 Second, curved geometries remain sensitive to geometric approximation order.
-Although linear geometry representation was sufficient to recover theoretical convergence trends for the present benchmark, higher-order curved geometry representations may become increasingly important for extremely fine meshes or strongly curved spherical-shell problems.
+Although linear geometry representation was sufficient to recover theoretical convergence trends for the present benchmark, higher-order 
+curved geometry representations may become increasingly important for extremely fine meshes or strongly curved spherical-shell problems.
 
 Third, equal-order discretisations continue to exhibit weaker pressure robustness relative to stable Taylor--Hood formulations.
 This behaviour aligns with expectations from the Ladyzhenskaya--Babuska--Brezzi stability condition.
 
-The benchmark therefore provides a valuable verification framework not only for Underworld3, but also for future development of curved-element geometries, advanced boundary-condition implementations, and spherical-shell finite-element formulations.
+The benchmark therefore provides a valuable verification framework not only for UW3, but also for future development of curved-element 
+geometries, advanced boundary-condition implementations, and spherical-shell finite-element formulations.
 
 \conclusions
 
-We have presented a verification study of the Thieulot--Puckett annulus Stokes benchmark using Underworld3.
-The benchmark provides a stringent test of incompressible Stokes flow in curved geometries through the combination of radial gravity, coordinate-dependent forcing, tangential boundary velocity conditions, and non-trivial pressure variation on curved annulus boundaries.
+We have presented a verification study of the
+\citetalias{thieulot2018} annulus Stokes benchmark using
+\citetalias{Moresi2025}. The benchmark provides a comprehensive test
+for incompressible Stokes solvers in curved geometries by combining
+radial gravity, coordinate-dependent forcing, tangential velocity
+boundary conditions, pressure nullspace treatment, and non-trivial
+pressure variation along curved annulus boundaries.
 
-The principal findings are:
+The main observations from this study are:
 \begin{enumerate}
-  \item Higher-order Taylor--Hood discretisations reproduce the expected smooth-solution convergence hierarchy.
-  \item The \(P_2\times P_1\) discretisation achieves approximately third-order velocity and second-order pressure convergence.
-  \item The \(P_2\times P_0\) discretisation achieves approximately second-order velocity and first-order pressure convergence.
-  \item The \(P_3\times P_2\) discretisation achieves approximately fourth-order velocity and third-order pressure convergence before fine-resolution error saturation.
-  \item Lower-order discretisations exhibit weaker pressure robustness and reduced convergence quality.
-  \item Underworld3 accurately reproduces analytical Stokes solutions in curved annular geometries.
+  \item The Taylor--Hood discretisations recover the expected
+  convergence behaviour for smooth solutions.
+  
+  \item The \(P_2\times P_1\) discretisation achieves approximately
+  third-order velocity convergence and second-order pressure
+  convergence.
+  
+  \item The \(P_3\times P_2\) discretisation achieves approximately
+  fourth-order velocity convergence and third-order pressure
+  convergence before reaching fine-resolution error saturation.
+  
+  \item The \(P_2\times P_0\) discretisation exhibits approximately
+  second-order velocity convergence and first-order pressure
+  convergence, consistent with its piecewise-constant pressure
+  approximation.
+  
+  \item The unstabilised lower-order and non-standard element pairs
+  show reduced pressure robustness. In particular, the observed
+  \(P_1\times P_1\) convergence rates should be interpreted as
+  benchmark-specific behaviour rather than rates associated with an
+  inf--sup stable formulation.
+  
+  \item Boundary pressure recovery provides an additional measure of
+  pressure accuracy on curved boundaries, where pressure contributes
+  directly to normal stress and traction.
 \end{enumerate}
 
-These results establish the Thieulot--Puckett annulus benchmark as an effective verification framework for Underworld3 annulus and spherical-shell geodynamics applications.
+These results demonstrate that UW3 accurately reproduces the analytical
+annulus Stokes solution for stable mixed finite-element
+discretisations. The study also demonstrates that \citetalias{thieulot2018} 
+provides a robust verification benchmark for curved-domain 
+geodynamics simulations in UW3.
 
 %% The following commands are for the statements about the availability of data sets and/or software code corresponding to the manuscript.
 %% It is strongly recommended to make use of these sections in case data sets and/or software code have been part of your research the article is based on.
