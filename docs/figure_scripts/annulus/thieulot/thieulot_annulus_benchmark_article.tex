@@ -85,6 +85,10 @@
 
 \graphicspath{{./}}
 \emergencystretch=2em
+\defcitealias{thieulot2018}{TP2018}
+\defcitealias{Moresi2025}{UW3}
+\newcommand{\figref}[1]{\hyperref[#1]{Fig.~\ref*{#1}}}
+\newcommand{\tabref}[1]{\hyperref[#1]{Table~\ref*{#1}}}
 
 \begin{document}
 
@@ -132,8 +136,10 @@
 
 
 \begin{abstract}
-We reproduce the annulus Stokes benchmark of \citet{thieulot2018} (TP2018) using
-Underworld3 (UW3). The benchmark describes incompressible isoviscous Stokes flow
+We reproduce the annulus Stokes benchmark of \citet{thieulot2018}
+(hereafter TP2018) using
+the \href{https://github.com/underworldcode/underworld3}{Underworld3} (hereafter UW3)
+framework \citep{Moresi2025}. The benchmark describes incompressible isoviscous Stokes flow
 in a cylindrical annulus with tangential velocity boundary conditions imposed on
 both the inner and outer boundaries, driven by radially directed gravity and
 analytically prescribed buoyancy forcing that generates convection cells
@@ -176,7 +182,7 @@ velocity--pressure coupling, incompressibility preservation, boundary condition
 implementation, and the accurate representation of curved geometries
 \citep{kramer2021,davies2022}.
 
-The annulus benchmark introduced by TP2018 provides an exact analytical solution
+The annulus benchmark introduced by \citetalias{thieulot2018} provides an exact analytical solution
 for incompressible isoviscous Stokes flow in a cylindrical shell subjected to
 radially directed gravity. The benchmark was specifically designed for
 geodynamics applications and has since been widely used for verification of
@@ -189,8 +195,9 @@ These characteristics make the benchmark particularly well suited for assessing
 finite-element formulations in annulus and curved-domain mantle convection
 problems.
 
-In this study, we reproduce the TP2018 annulus
-benchmark to verify the curved-domain finite-element implementations in UW3. We
+In this study, we reproduce the \citetalias{thieulot2018} annulus
+benchmark to verify the curved-domain finite-element implementations in
+\citetalias{Moresi2025}. We
 evaluate the convergence and accuracy of several mixed finite-element
 discretisations, including both lower-order and higher-order
 velocity--pressure element pairs. Numerical results are compared against the
@@ -222,7 +229,7 @@ where \(\mathbf{u}\) is velocity, \(p\) is pressure, \(\rho\) is density, and \(
 
 \section{Analytical Benchmark Solution}
 
-Following \citet{thieulot2018}, the analytical velocity field in polar coordinates is defined as
+Following \citetalias{thieulot2018}, the analytical velocity field in polar coordinates is defined as
 \begin{subequations}
 \begin{align}
   v_\theta(r,\theta) &= f(r)\cos(k\theta), \\
@@ -292,23 +299,39 @@ This enables systematic evaluation of numerical performance across increasingly 
 
 \subsection{UW3 Formulation}
 
-The benchmark is implemented in Underworld3 (UW3), a next-generation
-geodynamics framework built on PETSc and symbolic problem specification
-in Python. The incompressible Stokes system is discretised using the
-finite-element method and assembled through symbolic expressions defined
-with SymPy. The resulting linear systems are solved using PETSc Krylov
-subspace solvers and preconditioners.
+The benchmark is implemented in \href{https://github.com/underworldcode/underworld3}{Underworld3}
+(\citetalias{Moresi2025}), a finite-element
+geodynamics framework built on PETSc \citep{osti_2337606} with symbolic problem specification
+in Python. The incompressible Stokes equations are assembled from SymPy
+expressions for the viscosity, body force, velocity, pressure, and
+boundary data, and the resulting saddle-point systems are solved with
+PETSc Krylov methods and preconditioners.
 
-To remove the pressure gauge ambiguity inherent to incompressible Stokes
-flow, a constant-pressure nullspace is supplied to PETSc during the solve.
-Following solution, the domain-average pressure is removed from the
-numerical solution prior to error evaluation and comparison with the
-analytical benchmark solution.
+The pressure in the incompressible Stokes equations is determined only up
+to an additive constant unless a pressure reference value or mean-pressure
+constraint is imposed. This gauge freedom remains even when the velocity
+is prescribed on the annulus boundaries, because adding a constant to the
+pressure does not change the pressure gradient in the momentum equation.
+Accordingly, a constant-pressure nullspace is supplied to PETSc during
+the solve. After solution, the domain-average pressure is subtracted from
+the numerical field so that pressure errors are evaluated in the same
+zero-mean gauge as the analytical benchmark solution.
 
-The annulus domain is discretised using unstructured triangular meshes
-generated with progressively refined nominal cell sizes. All simulations
-reported in this study employ linear geometric representation of the
-curved annulus boundaries.
+The annulus is discretised using unstructured triangular meshes generated
+with progressively refined characteristic cell sizes. The calculations reported
+here use a linear geometric representation of the curved inner and outer
+annulus boundaries; the effect of this geometric approximation is
+therefore included in the measured discretisation error.
+
+UW3 uses Gmsh \citep{Geuzaine2009} as the backend for mesh generation. In Gmsh, the
+characteristic cell size specifies the target local mesh length used
+during mesh generation. It controls the intended edge length of the
+triangular elements, but the generated mesh still contains a distribution
+of element sizes because the mesher must also satisfy the geometric
+boundary representation and element-quality constraints. In the
+convergence plots, \(h\) denotes this prescribed characteristic cell size,
+rather than an exact maximum or average element diameter measured after
+meshing.
 
 \subsection{Finite-Element Discretisations}
 
@@ -330,7 +353,9 @@ Velocity space & Pressure space & Description \\
 \end{table}
 
 The quadrature degree is chosen according to the highest polynomial order present in the discretisation.
-For smooth incompressible Stokes solutions, stable Taylor--Hood-type discretisations are expected to exhibit velocity convergence of order \(p+1\) and pressure convergence of order \(p\) for a \(P_{p}\times P_{p-1}\) discretisation \citep{girault1986,boffi2013}.
+For smooth incompressible Stokes solutions, stable Taylor--Hood-type discretisations are expected to exhibit 
+velocity convergence of order \(p+1\) and pressure convergence of order \(p\) for a \(P_{p}\times P_{p-1}\) 
+discretisation \citep{girault1986,boffi2013}.
 
 \subsection{Error Metrics}
 
@@ -400,7 +425,7 @@ consecutive refinements. For uniform mesh refinement with
 
 \subsection{Convergence Behaviour}
 
-The convergence behaviour for all tested discretisations is shown in Fig.~\ref{fig:thieulot_annulus_convergence}.
+The convergence behaviour for all tested discretisations is shown in \figref{fig:thieulot_annulus_convergence}.
 The \(P_2\times P_1\) Taylor--Hood discretisation exhibits approximately third-order velocity convergence and second-order pressure convergence, consistent with theoretical expectations for smooth Stokes solutions.
 
 The higher-order \(P_3\times P_2\) discretisation achieves approximately fourth-order velocity convergence and third-order pressure convergence on coarse-to-intermediate mesh resolutions.
@@ -423,7 +448,7 @@ These observations are consistent with established finite-element theory for inc
 
 \subsection{Boundary Pressure Recovery}
 
-Pressure profiles extracted along the inner and outer annulus boundaries are compared against analytical solutions in Fig.~\ref{fig:thieulot_annulus_boundary_pressure}.
+Pressure profiles extracted along the inner and outer annulus boundaries are compared against analytical solutions in \figref{fig:thieulot_annulus_boundary_pressure}.
 The higher-order Taylor--Hood discretisations reproduce the analytical pressure distributions accurately across the annulus boundaries, including extrema near regions of high azimuthal variation.
 Pressure discrepancies are most pronounced for lower-order discretisations and become increasingly visible for larger \(k\), where sharper angular pressure gradients must be resolved.
 
@@ -437,7 +462,7 @@ Because the benchmark includes non-trivial pressure variation directly on curved
 \end{figure}
 
 The corresponding absolute boundary pressure errors for the \(P_2\times P_1\)
-discretisation are shown in Fig.~\ref{fig:thieulot_annulus_boundary_pressure_convergence}.
+discretisation are shown in \figref{fig:thieulot_annulus_boundary_pressure_convergence}.
 Both inner- and outer-boundary errors decrease at approximately second order,
 consistent with the volume pressure convergence observed for this element pair.
 
@@ -454,7 +479,7 @@ consistent with the volume pressure convergence observed for this element pair.
 The present results demonstrate that Underworld3 reproduces the analytical annulus benchmark solution with convergence behaviour consistent with finite-element theory.
 The benchmark additionally highlights several important numerical considerations.
 
-Table~\ref{tab:observed_convergence_rates} summarises the observed convergence
+\tabref{tab:observed_convergence_rates} summarises the observed convergence
 rates for the three harmonic benchmark cases for which analytical solutions are
 available. The optimal-rate column reports the smooth-solution reference rates
 used here; entries marked \(-/-\) have no optimal-rate claim in this comparison,
@@ -502,7 +527,7 @@ Pair & Status in standard Galerkin form & Route to stable use & Expected rate \\
 \subsection{Boundary Pressure Error Asymmetry}
 
 The inner- and outer-boundary pressure errors in
-Fig.~\ref{fig:thieulot_annulus_boundary_pressure_convergence} are not expected to
+\figref{fig:thieulot_annulus_boundary_pressure_convergence} are not expected to
 be equal, even though the analytical pressure has zero signed integral on each
 boundary. With \(\rho_0=0\), the analytical boundary pressure is
 \begin{equation}
@@ -516,7 +541,7 @@ and therefore
   =
   0.
 \end{equation}
-The error plotted in Fig.~\ref{fig:thieulot_annulus_boundary_pressure_convergence}
+The error plotted in \figref{fig:thieulot_annulus_boundary_pressure_convergence}
 is instead an absolute boundary \(L_2\) error,
 \begin{equation}
   E_{L_2,\Gamma_r}(p)
@@ -619,7 +644,7 @@ Replacing \(n\) by a discrete normal \(n_h\) perturbs the pressure contribution
 by approximately \(-p(n_h-n)\). Higher-order curved geometry reduces this
 normal and boundary-location error, and should therefore reduce boundary
 pressure errors most strongly where \(|h'(r)|\) and \(|h(r)|\) are largest.
-Table~\ref{tab:boundary_pressure_error_mechanisms} summarises the main terms
+\tabref{tab:boundary_pressure_error_mechanisms} summarises the main terms
 controlling the inner--outer error difference.
 
 \begin{table}[H]
