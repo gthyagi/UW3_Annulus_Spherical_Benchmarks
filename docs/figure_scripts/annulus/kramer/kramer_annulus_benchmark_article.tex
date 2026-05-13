@@ -42,10 +42,12 @@
 }
 
 \emergencystretch=2em
+\defcitealias{kramer2021}{K2021}
+\defcitealias{Moresi2025}{UW3}
 
 \begin{document}
 
-\title{Kramer Annulus Stokes Benchmark Using Underworld3}
+\title{Incompressible Stokes Flow Annulus Benchmark Using Underworld3}
 
 \Author[1][gthyagi@gmail.com]{Thyagarajulu}{Gollapalli}
 \Author[1]{Underworld}{Team}
@@ -66,52 +68,95 @@
 \maketitle
 
 \begin{abstract}
-We reproduce the annulus benchmark of \citet{kramer2021} using Underworld3
-(UW3). The benchmark solves incompressible, isoviscous Stokes flow in a
-two-dimensional cylindrical shell with analytical forcing and analytical
-velocity and pressure solutions. It tests curved boundaries, pressure
-normalisation, free-slip and zero-slip velocity conditions, and both smooth and
-interface-localised density forcing. The UW3 calculations use
-\(P_2\times P_1\) Taylor--Hood finite elements on refined annulus meshes with
-nominal cell sizes \(h=1/8,\ldots,1/256\). Errors are measured using relative
-volume \(L_2\) norms for velocity and pressure. Smooth forcing cases recover
-approximately second-order pressure convergence and systematic second-order or
-better velocity convergence over the tested refinement range. Delta-function
-forcing cases show reduced but regular convergence, with velocity rates near
-\(O(h^{1.5})\) and pressure rates near \(O(h^{0.5})\), consistent with the
-reduced regularity of interface-localised buoyancy forcing. These results
-verify the UW3 annulus Stokes implementation for curved-shell geometry and for
-both boundary-condition families considered in the Kramer benchmark.
+We reproduce the annulus benchmark of \citet{kramer2021}
+(hereafter \citetalias{kramer2021}) using
+\href{https://github.com/underworldcode/underworld3}{Underworld3}
+(hereafter UW3; \citealp{Moresi2025}). The benchmark considers incompressible,
+isoviscous Stokes flow in an annulus with
+analytical velocity and pressure solutions derived from prescribed
+buoyancy forcing. The benchmark includes both free-slip and zero-slip
+velocity boundary conditions, together with smooth and
+interface-localised density forcing.
+The UW3 calculations employ \(P_2\times P_1\) Taylor--Hood finite
+elements on progressively refined annulus meshes. Numerical accuracy is
+evaluated using relative volume \(L_2\)-norm errors for velocity and
+pressure. For smooth forcing cases, the solutions recover approximately
+second-order pressure convergence together with systematic second-order
+or higher velocity convergence across the tested refinement range.
+Cases involving delta-function forcing exhibit reduced but consistent
+convergence behaviour, with velocity convergence rates approaching
+\(O(h^{1.5})\) and pressure convergence rates approaching
+\(O(h^{0.5})\), consistent with the reduced regularity associated with
+interface-localised buoyancy forcing.
+These results verify the UW3 annulus Stokes implementation for
+curved-shell geometries under both free-slip and zero-slip boundary
+conditions considered in \citetalias{kramer2021}.
 \end{abstract}
 
 \introduction
 
-Analytical benchmarks are central to verification of geodynamic Stokes-flow
-codes because they separate discretisation and implementation errors from
-uncertainty in the reference solution. Annulus benchmarks are particularly useful
-for mantle-convection software: they include curved boundaries and polar
-coordinate forcing while remaining cheaper and easier to inspect than full
-spherical-shell calculations.
+Finite-element modelling has become an essential tool in
+geodynamics for investigating mantle convection and related
+solid-Earth processes in geometries that more closely
+represent planetary interiors. In particular, cylindrical
+annulus and spherical-shell domains are widely used because
+they naturally incorporate radial gravity and curved
+boundaries while avoiding some of the limitations of
+Cartesian approximations
+(e.g. \citealp{baumgardner1985,jarvis1993,zhong2000,tackley2008,davies2022}).
+Accurate numerical treatment of incompressible Stokes flow
+in such geometries requires careful consideration of
+mixed finite-element stability, pressure nullspaces, curved
+boundary representation, and boundary-condition
+implementation. These issues become especially important
+when modelling free-slip boundaries and sharp density
+contrasts, both of which commonly arise in geodynamical
+applications.
 
-The analytical solutions of \citet{kramer2021} provide a family of mantle-flow
-benchmarks in cylindrical and spherical shells. In the cylindrical annulus, the
-solutions include free-slip and zero-slip boundary conditions, smooth volumetric
-forcing, and delta-function forcing on an internal circular interface. This
-combination exercises several aspects of a finite-element Stokes implementation:
-velocity--pressure coupling, pressure gauge removal, curved-domain integration,
-normal and tangential boundary constraints, and the treatment of fields with
-limited regularity.
+Benchmarking and verification therefore play a central role
+in the development and validation of geodynamical modelling
+software. Community benchmark studies are widely used to
+assess numerical accuracy, convergence behaviour, and solver
+robustness across different finite-element discretisations
+and software frameworks
+(e.g. \citealp{blankenbach1989,busse1994,king2010,tosi2015,thieulot2018,kramer2021,thieulot2022}).
+Benchmarks in curved annulus geometries are particularly
+valuable because they provide analytical solutions that
+enable direct evaluation of velocity, pressure, and
+boundary-condition accuracy in geometries relevant to
+regional and global mantle dynamics.
 
-Here we summarise the UW3 reproduction of the Kramer annulus benchmark. The
-article is based on the corresponding UW3 benchmark report and uses only the
-existing generated figures and tables. The goal is to document the mathematical
-setup, numerical choices, error definitions, and observed convergence behaviour
-in a concise Copernicus-style manuscript.
+In this study, we reproduce the annulus benchmark of
+\citetalias{kramer2021} using \citetalias{Moresi2025}. The benchmark considers
+incompressible isoviscous Stokes flow in an annulus with analytical velocity and pressure
+solutions derived from prescribed buoyancy forcing. The
+benchmark includes both free-slip and no-slip velocity
+boundary conditions together with smooth and
+interface-localised density forcing. The smooth forcing
+cases assess convergence behaviour for regular analytical
+solutions, while the interface-localised forcing cases
+provide a more stringent test involving reduced solution
+regularity and sharp buoyancy variations across internal
+interfaces.
+
+We investigate the convergence behaviour and numerical
+accuracy of the UW3 annulus Stokes implementation using
+\(P_2\times P_1\) Taylor--Hood finite elements on
+progressively refined annulus meshes. Numerical solutions
+are compared against the analytical benchmark solutions
+using relative \(L_2\)-norm errors for velocity and pressure.
+Particular attention is given to the implementation of
+free-slip boundary conditions and the convergence behaviour
+associated with smooth and interface-localised forcing
+cases. The results provide verification of UW3 for
+curved-domain annulus Stokes flow and demonstrate the
+effectiveness of the Kramer et al. benchmark for assessing
+finite-element accuracy in annulus geometries.
 
 \section{Governing Equations and Benchmark Solution}
 
-The benchmark solves the steady incompressible Stokes equations in a
-two-dimensional annulus \(\Omega=\{(r,\theta):R_-\leq r\leq R_+\}\):
+The benchmark solves the steady incompressible Stokes equations in an
+annulus \(\Omega=\{(r,\theta):R_-\leq r\leq R_+\}\):
 \begin{subequations}
 \begin{align}
   -\nabla\cdot\boldsymbol{\sigma} &= \rho\mathbf{g}, \\
@@ -132,7 +177,7 @@ where \(\mathbf{u}\) is velocity, \(p\) is pressure, \(\rho\) is density, and
 \end{equation}
 with constant viscosity \(\eta\).
 
-Following \citet{kramer2021}, the annulus radii are
+Following \citetalias{kramer2021}, the annulus radii are
 \[
   R_- = 1.22,
   \qquad
@@ -153,13 +198,13 @@ wavenumber. Delta-function cases use an interface forcing proportional to
   \delta(r-R_{\mathrm{int}})\cos(n\theta).
 \end{equation}
 The full analytical velocity and pressure fields are those derived by
-\citet{kramer2021}; the UW3 implementation evaluates these closed-form
+\citetalias{kramer2021}; the \citetalias{Moresi2025} implementation evaluates these closed-form
 solutions to define the forcing, impose the benchmark boundary conditions, and
 measure numerical error.
 
 \section{Numerical Setup}
 
-The UW3 calculations use \(P_2\times P_1\) Taylor--Hood elements, with
+The \citetalias{Moresi2025} calculations use \(P_2\times P_1\) Taylor--Hood elements, with
 quadratic velocity and continuous linear pressure. This mixed pair is a standard
 choice for incompressible Stokes flow and is expected to provide robust pressure
 behaviour for smooth solutions \citep{girault1986,boffi2013}. The pressure
@@ -169,21 +214,20 @@ determines pressure only up to an additive constant.
 The verification suite contains four benchmark groups (Table~\ref{tab:cases}).
 Cases 1 and 2 use free-slip boundaries, while Cases 3 and 4 use zero-slip
 boundaries. Cases 1 and 3 use delta-function forcing on the internal interface;
-Cases 2 and 4 use smooth volumetric forcing. The tested nominal mesh sizes are
-\(h=1/8,\ldots,1/256\).
+Cases 2 and 4 use smooth volumetric forcing.
 
 \begin{table}[H]
 \centering
-\caption{Kramer annulus benchmark cases used in the UW3 verification runs.}
+\caption{Benchmark cases used in the \citetalias{Moresi2025} verification runs.}
 \label{tab:cases}
-\begin{tabular}{cllll}
+\begin{tabular}{clll}
 \toprule
-Case & Forcing & Boundary condition & Parameters & Resolutions \\
+Case & Forcing & Boundary condition & Parameters \\
 \midrule
-1 & Delta function & Free slip & \(n=2,8,32\) & \(1/8\)--\(1/256\) \\
-2 & Smooth & Free slip & \(n=2,8,32;\ k=2,8\) & \(1/8\)--\(1/256\) \\
-3 & Delta function & Zero slip & \(n=2,8,32\) & \(1/8\)--\(1/256\) \\
-4 & Smooth & Zero slip & \(n=2,8,32;\ k=2,8\) & \(1/8\)--\(1/256\) \\
+1 & Delta function & Free slip & \(n=2,8,32\) \\
+2 & Smooth & Free slip & \(n=2,8,32;\ k=2,8\) \\
+3 & Delta function & Zero slip & \(n=2,8,32\) \\
+4 & Smooth & Zero slip & \(n=2,8,32;\ k=2,8\) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -242,9 +286,9 @@ solution becomes better resolved.
 The delta-function forcing cases exhibit lower rates. Velocity convergence
 approaches \(O(h^{1.5})\), while pressure convergence approaches \(O(h^{0.5})\)
 for both free-slip and zero-slip boundaries. This behaviour is expected for the
-Kramer benchmark because the Green's-function solution associated with
+\citetalias{kramer2021} benchmark because the Green's-function solution associated with
 interface-localised forcing is less regular than the smooth volumetric-forcing
-solution \citep{kramer2021}. The reduced pressure rate is therefore interpreted
+solution. The reduced pressure rate is therefore interpreted
 as a property of the benchmark solution regularity rather than as a failure of
 the Stokes solver.
 
@@ -426,10 +470,10 @@ angular structure.
 
 The delta-function cases are more demanding because the forcing is concentrated
 on an internal circular interface. The slower convergence rates are consistent
-with the reference Kramer solutions and with the expectation that pressure is
+with the reference \citetalias{kramer2021} solutions and with the expectation that pressure is
 especially sensitive to reduced regularity in mixed Stokes discretisations.
 Importantly, the free-slip and zero-slip variants show the same qualitative
-rates, indicating that the UW3 boundary-condition implementations behave
+rates, indicating that the \citetalias{Moresi2025} boundary-condition implementations behave
 consistently across both benchmark families.
 
 The benchmark is therefore a useful intermediate verification problem between
@@ -440,10 +484,10 @@ remaining compact enough for routine convergence testing.
 
 \conclusions
 
-We have presented a Copernicus-style summary of the UW3 Kramer annulus Stokes
+We have presented a Copernicus-style summary of the \citetalias{Moresi2025} Kramer annulus Stokes
 benchmark. The main findings are:
 \begin{enumerate}
-  \item UW3 reproduces the analytical annulus solutions of \citet{kramer2021}
+  \item \citetalias{Moresi2025} reproduces the analytical annulus solutions of \citetalias{kramer2021}
   for both free-slip and zero-slip velocity boundary conditions.
   \item Smooth forcing cases show approximately second-order pressure
   convergence and systematic second-order or better velocity convergence over
@@ -455,7 +499,7 @@ benchmark. The main findings are:
   element behaviour in curved geodynamic domains.
 \end{enumerate}
 
-These results verify the UW3 implementation for cylindrical-shell Stokes flow
+These results verify the \citetalias{Moresi2025} implementation for annulus Stokes flow
 with analytical Kramer forcing and provide a compact reference for future
 annulus and spherical-shell benchmark comparisons.
 
