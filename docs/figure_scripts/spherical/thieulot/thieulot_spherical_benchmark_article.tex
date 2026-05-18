@@ -44,10 +44,12 @@
 }
 
 \emergencystretch=2em
+\defcitealias{thieulot2017}{T2017}
+\defcitealias{Moresi2025}{UW3}
 
 \begin{document}
 
-\title{Spherical-shell Stokes flow benchmark using Underworld3}
+\title{Spherical-Shell Stokes Flow Benchmark Using Underworld3}
 
 \Author[1][gthyagi@gmail.com]{Thyagarajulu}{Gollapalli}
 \Author[1]{Underworld}{Team}
@@ -69,55 +71,65 @@
 
 \begin{abstract}
 We reproduce the analytical spherical-shell Stokes benchmark of
-\citet{thieulot2017} using Underworld3 (UW3). The benchmark describes
-three-dimensional incompressible viscous flow in a spherical shell with
-tangential velocity on both radial boundaries, radial gravity, and a
-power-law radial viscosity. We consider the two reference cases used by
-\citet{thieulot2017}: \(m=-1\), for which the viscosity is constant, and
-\(m=3\), for which the viscosity varies by a factor of 16 across the shell.
-The UW3 calculations use a \(P_2P_1\) Taylor--Hood finite-element
-discretisation on successively refined meshes with nominal cell size
-\(h=1/8,\ldots,1/128\). Velocity and pressure are evaluated using relative
-volume \(L_2\)-norm errors, and radial normal stress is evaluated using
-relative boundary \(L_2\)-norm errors on the inner and outer spherical
-surfaces. The calculations recover the expected asymptotic behaviour for
-smooth Stokes solutions, with approximately third-order velocity convergence
-and second-order pressure convergence. Boundary radial normal-stress and
-boundary pressure errors also approach second-order convergence at the finest
-resolutions. These results verify the UW3 curved-domain Stokes discretisation
-and provide a compact spherical-shell test for velocity, pressure, and
-boundary-stress post-processing.
+\citet{thieulot2017} (hereafter \citetalias{thieulot2017}) using
+\href{https://github.com/underworldcode/underworld3}{Underworld3}
+(hereafter \citetalias{Moresi2025}; \citealp{Moresi2025}). The benchmark
+describes incompressible viscous Stokes flow in a spherical shell with
+radially directed gravity, tangential velocity boundary conditions, and a
+power-law radial viscosity. We consider the two reference cases of
+\citetalias{thieulot2017}: \(m=-1\), for which the viscosity is constant, and
+\(m=3\), for which the viscosity varies radially across the shell. The
+\citetalias{Moresi2025} calculations use a \(P_2\times P_1\) Taylor--Hood
+finite-element discretisation on progressively refined spherical-shell meshes.
+Velocity and pressure accuracy is evaluated using relative volume
+\(L_2\)-norm errors, while radial normal stress and pressure on the inner and
+outer spherical boundaries are evaluated using boundary \(L_2\)-norm measures.
+The calculations recover the expected smooth-solution convergence hierarchy,
+with approximately third-order velocity convergence and second-order pressure
+convergence. Boundary radial normal-stress and boundary pressure errors also
+approach second-order convergence at the finest resolutions. These results
+verify the \citetalias{Moresi2025} spherical-shell Stokes implementation and
+provide a compact test for velocity, pressure, and boundary-stress
+post-processing in curved three-dimensional geometry.
 \end{abstract}
 
 \introduction
 
-Incompressible Stokes flow in spherical shells is a core numerical problem in
-global mantle-convection and planetary-interior modelling. Verification in this
-geometry is more demanding than in Cartesian boxes because the discretisation
-must handle curved boundaries, a pressure nullspace, spherical-coordinate
-forcing, radial viscosity variation, and stress quantities evaluated on
-non-planar surfaces.
+Accurate solution of the incompressible Stokes equations is central to global
+mantle-convection and planetary-interior modelling. Spherical-shell
+calculations are more representative of global mantle flow than Cartesian
+boxes, but they also test numerical implementations more strongly. The
+discretisation must handle curved inner and outer boundaries, radial gravity,
+pressure gauge freedom, radial viscosity variation, tangential boundary
+conditions, and stress quantities evaluated on non-planar surfaces.
 
-Analytical benchmarks are useful because they separate discretisation and
-implementation errors from differences between numerical codes. The benchmark
-of \citet{thieulot2017} provides a closed-form solution for viscous
-incompressible flow in a spherical shell. The solution is axisymmetric, has no
-normal flow on the inner and outer boundaries, uses a radial power-law
-viscosity, and supplies analytical expressions for density, velocity, pressure,
-body force, and the stress tensor. It therefore tests the Stokes solve and the
-post-processing of stress-derived boundary quantities. Related analytical
-solutions and finite-element verification studies in curved shell geometries
-have been presented by \citet{kramer2021} and \citet{davies2022}, while
-boundary normal stress remains a standard diagnostic in spherical geodynamics
-benchmarks \citep{zhong1993,zhong2008,liu2019}.
+Analytical benchmarks provide a direct way to measure discretisation error.
+Unlike code-to-code comparisons, they supply a fixed reference velocity and
+pressure field, so convergence rates can be evaluated under systematic mesh
+refinement. This is especially useful for geodynamic Stokes solvers because the
+same test exercises velocity--pressure coupling, incompressibility, boundary
+condition implementation, pressure normalisation, curved-domain integration,
+and stress recovery.
 
-Here we convert the existing UW3 spherical benchmark report into a concise
-Copernicus-style article. The aim is to document the governing equations, the
-analytical benchmark structure, the numerical setup, the error metrics, and the
-observed convergence of velocity, pressure, and boundary stress using the
-existing UW3 figures and tables.
+The spherical-shell benchmark introduced by \citetalias{thieulot2017} provides
+a closed-form solution for viscous incompressible Stokes flow with radially
+directed gravity and power-law radial viscosity. The solution is axisymmetric,
+has no normal flow on the inner and outer boundaries, and supplies analytical
+expressions for density, velocity, pressure, body force, and the full stress
+tensor. Related analytical shell-flow solutions and finite-element verification
+studies have been developed by \citet{kramer2021} and \citet{davies2022}, while
+boundary normal stress has long been used as a diagnostic in spherical
+geodynamics benchmarks \citep{zhong1993,zhong2008,liu2019}.
 
-\section{Governing equations and benchmark solution}
+In this study, we use \citetalias{thieulot2017} to verify the spherical-shell
+Stokes implementation in \citetalias{Moresi2025}. The article documents the
+governing equations, analytical benchmark structure, numerical setup, error
+metrics, and observed convergence of velocity, pressure, boundary pressure, and
+radial normal stress. The focus is on whether a \(P_2\times P_1\)
+Taylor--Hood discretisation recovers the expected smooth-solution convergence
+hierarchy in curved three-dimensional geometry.
+
+\section{Governing Equations and Benchmark Solution}
 
 The benchmark solves the steady incompressible Stokes equations
 \begin{subequations}
@@ -142,7 +154,7 @@ with pressure \(p\), viscosity \(\mu\), and strain-rate tensor
   \frac{1}{2}\left(\nabla\mathbf{u}+\nabla\mathbf{u}^{T}\right).
 \end{equation}
 
-Following \citet{thieulot2017}, spherical coordinates
+Following \citetalias{thieulot2017}, spherical coordinates
 \((r,\theta,\phi)\) are used, with \(\theta\) the polar angle and \(\phi\) the
 azimuth. All fields are independent of \(\phi\). The tangential velocity
 components are prescribed in the separable form
@@ -185,41 +197,47 @@ For \(m\ne -1\), the radial velocity function is obtained from
 \end{equation}
 with \(\alpha\), \(\beta\), and the integration constant in \(g(r)\) chosen so
 that \(g(R_1)=g(R_2)=0\). The \(m=-1\) case has the corresponding logarithmic
-radial function given by \citet{thieulot2017}. In both cases the density follows
-from the radial Stokes
-balance after substituting the analytical velocity, pressure, viscosity, and
-gravity fields. This construction yields the closed-form density, velocity,
-pressure, body force, and stress tensor used for the UW3 error calculations.
+radial function given by \citetalias{thieulot2017}. In both cases the density
+follows from the radial Stokes balance after substituting the analytical
+velocity, pressure, viscosity, and gravity fields. This construction yields the
+closed-form density, velocity, pressure, body force, and stress tensor used for
+the \citetalias{Moresi2025} error calculations.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.92\linewidth]{figure_2_thieulot_analytical.pdf}
-    \caption{Analytical density, velocity magnitude, and pressure fields for
-    the spherical Thieulot benchmark. The upper row shows the \(m=-1\) case,
+    \caption{Analytical density, velocity magnitude, and pressure fields. The upper row shows
+    the \(m=-1\) case,
     and the lower row shows the \(m=3\) case.}
     \label{fig:thieulot_analytical_fields}
 \end{figure}
 
 Figure~\ref{fig:thieulot_analytical_fields} illustrates the analytical fields
-used for verification. Both cases satisfy the no-normal-flow condition on the
+used for verification. Both cases satisfy the zero-normal-flow condition on the
 inner and outer boundaries while retaining non-zero tangential velocity. The
 \(m=3\) case uses the same shell geometry but introduces stronger radial
 viscosity variation, making pressure and stress recovery more demanding than in
 the constant-viscosity case.
 
-\section{Numerical setup}
+\section{Numerical Setup}
 
-The benchmark is implemented in UW3 using the finite-element method. The
-reported calculations use a \(P_2P_1\) Taylor--Hood element pair, with
-quadratic velocity and linear pressure. This pair is expected to give
-third-order velocity convergence and second-order pressure convergence in
-volume \(L_2\) norms for sufficiently smooth Stokes solutions
-\citep{girault1986,boffi2013}. Mesh resolution is reported using the nominal
-cell size \(h=1/8,\ldots,1/128\). The analytical velocity is imposed on both
-spherical boundaries, and the pressure nullspace is handled by comparing
-mean-adjusted numerical and analytical pressure fields.
+The benchmark is implemented in \citetalias{Moresi2025}, a finite-element
+geodynamics framework built on PETSc \citep{osti_2337606} with symbolic problem
+specification in Python. The spherical-shell meshes are generated through the
+Gmsh meshing backend \citep{Geuzaine2009}. The reported calculations use a
+\(P_2\times P_1\) Taylor--Hood element pair, with quadratic velocity and
+continuous linear pressure. For sufficiently smooth Stokes solutions, this
+mixed pair is expected to give third-order velocity convergence and
+second-order pressure convergence in volume \(L_2\) norms
+\citep{girault1986,boffi2013}.
 
-\section{Error metrics}
+Mesh resolution is reported using the characteristic cell size
+\(h=1/8,\ldots,1/128\). The analytical velocity is imposed on both spherical
+boundaries. The pressure is determined only up to an additive constant, so the
+numerical and analytical pressure fields are compared after applying the same
+mean-pressure gauge.
+
+\section{Error Metrics}
 
 For a numerical quantity \(q_h\) and analytical field \(q^*\), the relative
 volume error is
@@ -227,8 +245,8 @@ volume error is
   E_{L_2}^{\mathrm{rel}}(q)
   =
   \left(
-  \frac{\int_\Omega |q_h-q^*|^2\,d\Omega}
-       {\int_\Omega |q^*|^2\,d\Omega}
+  \frac{\int_\Omega |q_h-q^*|^2\,\mathrm{d}\Omega}
+       {\int_\Omega |q^*|^2\,\mathrm{d}\Omega}
   \right)^{1/2}.
 \end{equation}
 This metric is used for velocity and pressure. Boundary diagnostics are
@@ -238,8 +256,8 @@ evaluated on the inner and outer spherical surfaces, denoted
   E_{L_2,\Gamma}^{\mathrm{rel}}(q)
   =
   \left(
-  \frac{\int_\Gamma |q_h-q^*|^2\,d\Gamma}
-       {\int_\Gamma |q^*|^2\,d\Gamma}
+  \frac{\int_\Gamma |q_h-q^*|^2\,\mathrm{d}\Gamma}
+       {\int_\Gamma |q^*|^2\,\mathrm{d}\Gamma}
   \right)^{1/2}.
 \end{equation}
 Absolute boundary pressure errors use the corresponding unnormalised measure
@@ -247,7 +265,7 @@ Absolute boundary pressure errors use the corresponding unnormalised measure
   E_{L_2,\Gamma}(p)
   =
   \left(
-  \int_\Gamma |p_h-p^*|^2\,d\Gamma
+  \int_\Gamma |p_h-p^*|^2\,\mathrm{d}\Gamma
   \right)^{1/2}.
 \end{equation}
 Observed convergence rates between two consecutive mesh sizes \(h_1\) and
@@ -270,14 +288,14 @@ Observed convergence rates between two consecutive mesh sizes \(h_1\) and
     \centering
     \includegraphics[width=0.98\linewidth]{figures_4_5_thieulot_convergence.pdf}
     \caption{Convergence of the volume \(L_2\)-norm velocity and pressure
-    errors for the \(P_2P_1\) discretisation.}
+    errors for the \(P_2\times P_1\) discretisation.}
     \label{fig:thieulot_velocity_pressure_convergence}
 \end{figure}
 
 \begin{benchmarklandscape}
 \begin{table}[p]
 \centering
-\caption{Spherical Thieulot benchmark convergence for $m=-1$ and $m=3$.}
+\caption{Spherical-shell \citetalias{thieulot2017} benchmark convergence for $m=-1$ and $m=3$.}
 \label{tab:thieulot_velocity_pressure_rates}
 \benchmarktablefont
 \setlength{\tabcolsep}{4.7pt}
@@ -313,13 +331,13 @@ $1/128$ & \num{1.432e-06} & 3.03 & \num{5.986e-04}  & 2.20 & \num{8.816e-06}  & 
 The velocity and pressure errors are shown in
 Fig.~\ref{fig:thieulot_velocity_pressure_convergence} and
 Table~\ref{tab:thieulot_velocity_pressure_rates}. The velocity error approaches
-\(O(h^3)\) for both \(m=-1\) and \(m=3\). The pressure error approaches
-\(O(h^2)\) at the finest resolutions, with more irregular coarse-grid rates in
-the variable-viscosity case. This behaviour is consistent with the expected
-Taylor--Hood convergence hierarchy and with the convergence reported by
-\citet{thieulot2017}.
+\(O(h^3)\) for both \(m=-1\) and \(m=3\), while the pressure error approaches
+\(O(h^2)\) at the finest resolutions. The pressure rates are less regular on
+the coarsest meshes, particularly for the variable-viscosity case, but the
+refined-mesh trend is consistent with the expected Taylor--Hood hierarchy and
+with the convergence behaviour reported by \citetalias{thieulot2017}.
 
-\subsection{Boundary stress and pressure}
+\subsection{Boundary Stress and Pressure}
 
 \begin{figure}[H]
     \centering
@@ -333,7 +351,7 @@ Taylor--Hood convergence hierarchy and with the convergence reported by
 \begin{benchmarklandscape}
 \begin{table}[p]
 \centering
-\caption{Spherical Thieulot benchmark convergence for boundary $\sigma_{rr}$ errors.}
+\caption{Spherical-shell \citetalias{thieulot2017} benchmark convergence for boundary $\sigma_{rr}$ errors.}
 \label{tab:thieulot_sigma_rr_rates}
 \benchmarktablefont
 \setlength{\tabcolsep}{4.5pt}
@@ -367,7 +385,8 @@ $1/128$ & \num{1.126e-03} & 1.96 & \num{3.811e-05} & 2.07 & \num{2.684e-03} & 1.
 
 \begin{table}[p]
 \centering
-\caption{Spherical Thieulot benchmark convergence for absolute boundary pressure errors.}
+\caption{Spherical-shell \citetalias{thieulot2017} benchmark convergence for absolute boundary pressure errors.}
+\label{tab:thieulot_boundary_pressure_rates}
 \benchmarktablefont
 \setlength{\tabcolsep}{4.5pt}
 \fitwidth{%
@@ -399,33 +418,36 @@ $1/128$ & \num{1.528e-02} & 1.96 & \num{3.162e-04} & 2.01 & \num{8.757e-03} & 2.
 \end{table}
 \end{benchmarklandscape}
 
-Although \citet{thieulot2017} derive the full stress tensor, the published
-benchmark focuses on velocity and pressure convergence. Here the radial normal
-stress, \(\sigma_{rr}\), is included as an additional diagnostic because normal
-stress on spherical boundaries is important for dynamic-topography and surface
-loading calculations. Figure~\ref{fig:thieulot_sigma_rr_convergence} and
-Table~\ref{tab:thieulot_sigma_rr_rates} show that \(\sigma_{rr}\) errors
-approach approximately second-order convergence on both shell boundaries for
-both viscosity cases. The boundary pressure errors show the same asymptotic
-trend.
+Although \citetalias{thieulot2017} derive the full stress tensor, the published
+benchmark focuses primarily on velocity and pressure convergence. Here the
+radial normal stress, \(\sigma_{rr}\), is included as an additional diagnostic
+because normal stress on spherical boundaries is important for dynamic
+topography and surface-loading calculations. Figure~\ref{fig:thieulot_sigma_rr_convergence}
+and Tables~\ref{tab:thieulot_sigma_rr_rates}--\ref{tab:thieulot_boundary_pressure_rates}
+show that \(\sigma_{rr}\) and boundary pressure errors approach approximately
+second-order convergence on both shell boundaries for both viscosity cases.
+The inner-boundary error constants are generally larger than the outer-boundary
+constants, but the asymptotic slopes are consistent across the two surfaces.
 
 \section{Discussion}
 
-The results verify three aspects of the UW3 spherical-shell Stokes
-implementation. First, the \(P_2P_1\) discretisation recovers the theoretical
-smooth-solution hierarchy: velocity converges one order faster than pressure in
-the \(L_2\) norm. Second, the same rates are obtained for both constant and
-radially variable viscosity, although the \(m=3\) case has larger error
-constants and stronger pre-asymptotic pressure behaviour. Third, the boundary
-radial normal-stress diagnostic converges at roughly second order, consistent
-with related spherical-shell stress verification studies \citep{kramer2021}.
+The results verify three aspects of the \citetalias{Moresi2025}
+spherical-shell Stokes implementation. First, the \(P_2\times P_1\)
+discretisation recovers the smooth-solution hierarchy: velocity converges one
+order faster than pressure in the \(L_2\) norm. Second, comparable rates are
+obtained for both constant and radially variable viscosity, although the
+\(m=3\) case has larger error constants and stronger pre-asymptotic pressure
+behaviour. Third, the boundary radial normal-stress diagnostic converges at
+roughly second order, consistent with related spherical-shell stress
+verification studies \citep{kramer2021}.
 
 The boundary error magnitudes differ between the inner and outer surfaces. This
 does not indicate a failure of the benchmark. The relative norms are normalised
-separately on two surfaces with different radii, different analytical stress
-amplitudes, different curvature, and different local combinations of pressure
-and deviatoric-stress error. The verification criterion is therefore the
-asymptotic slope, not equality of the error constants.
+separately on two surfaces with different radii, analytical stress amplitudes,
+curvatures, and local combinations of pressure and deviatoric-stress error. The
+absolute pressure errors show the same behaviour because the pressure trace is
+sampled on geometrically distinct surfaces. The relevant verification criterion
+is therefore the asymptotic slope, not equality of the error constants.
 
 The benchmark is deliberately compact but still probes several practical issues
 for spherical geodynamics solvers: curved boundary representation, pressure
@@ -435,16 +457,17 @@ a useful regression test alongside annulus and Cartesian Stokes benchmarks.
 
 \conclusions
 
-We have presented a Copernicus-style verification article for the UW3
-implementation of the Thieulot spherical-shell Stokes benchmark. The benchmark
+We have presented a verification study of the \citetalias{thieulot2017}
+spherical-shell Stokes benchmark using \citetalias{Moresi2025}. The benchmark
 uses analytical velocity, pressure, density, viscosity, and stress fields in a
-curved three-dimensional shell. For the \(P_2P_1\) Taylor--Hood discretisation,
-UW3 recovers approximately \(O(h^3)\) velocity convergence and \(O(h^2)\)
-pressure convergence for both the \(m=-1\) and \(m=3\) cases. Boundary radial
-normal-stress and boundary pressure diagnostics also approach second-order
-convergence at the finest resolutions. These results support the use of the
-spherical Thieulot benchmark as a production verification case for UW3 velocity,
-pressure, and boundary-stress post-processing.
+curved three-dimensional shell. For the \(P_2\times P_1\) Taylor--Hood
+discretisation, \citetalias{Moresi2025} recovers approximately \(O(h^3)\)
+velocity convergence and \(O(h^2)\) pressure convergence for both the \(m=-1\)
+and \(m=3\) cases. Boundary radial normal-stress and boundary pressure
+diagnostics also approach second-order convergence at the finest resolutions.
+These results support the use of the \citetalias{thieulot2017} spherical-shell
+benchmark as a production verification case for \citetalias{Moresi2025}
+velocity, pressure, and boundary-stress post-processing.
 
 \bibliographystyle{copernicus}
 \bibliography{thieulot_spherical_benchmark_article_refs}

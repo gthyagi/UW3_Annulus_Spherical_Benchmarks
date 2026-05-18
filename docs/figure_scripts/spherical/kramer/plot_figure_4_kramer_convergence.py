@@ -231,7 +231,6 @@ def plot_panel(
 
     if case in ("case2", "case4") and metric_name == "v_l2_norm":
         add_reference_slope(ax, 2.0, plotted_values, linestyle="-")
-        add_reference_slope(ax, 3.0, plotted_values, linestyle="--")
     else:
         slope_key = "velocity_slope" if metric_name == "v_l2_norm" else "pressure_slope"
         add_reference_slope(ax, CASE_INFO[case][slope_key], plotted_values)

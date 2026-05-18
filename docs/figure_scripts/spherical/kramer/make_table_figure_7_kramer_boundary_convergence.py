@@ -136,7 +136,7 @@ def table_for_metric_group(
     group_header = [r"\multirow{2}{*}{$h$}"]
     sub_header = [""]
     for l_val, m_val, k_val in metric_groups:
-        group_header.append(rf"\multicolumn{{4}}{{c}}{{$l={l_val},\,m={m_val},\,k={k_val}$}}")
+        group_header.append(rf"\multicolumn{{4}}{{c}}{{$l={l_val},\,m={m_val}$}}")
         sub_header.extend(
             [
                 rf"${upper_label}$",

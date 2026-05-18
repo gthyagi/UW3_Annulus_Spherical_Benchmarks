@@ -44,10 +44,12 @@
 }
 
 \emergencystretch=2em
+\defcitealias{kramer2021}{K2021}
+\defcitealias{Moresi2025}{UW3}
 
 \begin{document}
 
-\title{Verification of Underworld3 spherical-shell Stokes flow with the Kramer benchmark}
+\title{Spherical-Shell Stokes Flow Benchmark Using Underworld3}
 
 \Author[1][gthyagi@gmail.com]{Thyagarajulu}{Gollapalli}
 \Author[1]{Underworld}{Team}
@@ -69,51 +71,70 @@
 
 \begin{abstract}
 We reproduce the spherical-shell Stokes benchmarks of \citet{kramer2021}
-using Underworld3 (UW3). The benchmarks provide analytical velocity and
-pressure solutions for incompressible, isoviscous mantle flow in a
-three-dimensional spherical shell and include both smooth volumetric density
-forcing and delta-function forcing on an internal spherical interface. We test
-free-slip and zero-slip boundary conditions on tetrahedral spherical-shell
-meshes with a \(P_2\times P_1\) Taylor--Hood discretisation. Numerical velocity,
-pressure, boundary velocity, and radial normal-stress errors are compared with
-the analytical fields using relative \(L_2\)-norm metrics. Smooth pressure
-errors converge at approximately second order, while smooth velocity errors
-converge closer to second order than to the ideal third-order \(P_2\) rate.
-Delta-function cases show the expected reduced rates, approximately
-\(O(h^{1.5})\) for velocity and \(O(h^{0.5})\) for pressure. Boundary velocity
-and radial-stress diagnostics decrease systematically but show stronger
-pre-asymptotic and regularity effects. The results verify the main spherical
-Kramer benchmark trends in UW3 and identify smooth-case velocity convergence
-and boundary stress recovery as the principal targets for further curved-shell
-verification.
+(hereafter \citetalias{kramer2021}) using
+\href{https://github.com/underworldcode/underworld3}{Underworld3}
+(hereafter \citetalias{Moresi2025}; \citealp{Moresi2025}). The benchmark
+suite provides analytical velocity and pressure solutions for incompressible,
+isoviscous Stokes flow in a spherical shell and includes both smooth
+volumetric density forcing and delta-function forcing on an internal spherical
+interface. We test free-slip and zero-slip boundary conditions on tetrahedral
+spherical-shell meshes with a \(P_2\times P_1\) Taylor--Hood discretisation.
+Numerical velocity, pressure, boundary velocity, and radial normal-stress
+errors are compared with the analytical fields using relative \(L_2\)-norm
+metrics. Smooth pressure errors converge at approximately second order, while
+smooth velocity errors converge closer to second order than to the ideal
+third-order \(P_2\) rate. Delta-function cases show the expected reduced
+rates, approximately \(O(h^{1.5})\) for velocity and \(O(h^{0.5})\) for
+pressure. Boundary velocity and radial normal-stress diagnostics decrease
+systematically but show stronger pre-asymptotic and regularity effects. These
+results verify the principal \citetalias{kramer2021} spherical-shell benchmark
+trends in \citetalias{Moresi2025} and identify smooth-case velocity
+convergence and boundary stress recovery as useful diagnostics for further
+curved-shell verification.
 \end{abstract}
 
 \introduction
 
-Analytical Stokes benchmarks are central to verifying geodynamic finite-element
-codes because they test velocity--pressure coupling, incompressibility,
-boundary-condition enforcement, pressure normalisation, and stress recovery
-without relying on code-to-code comparison. These issues are especially
-important in spherical geometry, where curved boundaries and spherical harmonic
-forcing interact with mesh geometry and boundary quadrature.
+Global mantle-convection and planetary-interior models commonly solve the
+incompressible Stokes equations in spherical-shell geometry. In this setting,
+verification is more demanding than in Cartesian boxes because the numerical
+method must represent curved inner and outer boundaries, radial gravity,
+spherical harmonic structure, pressure gauge freedom, free-slip and zero-slip
+velocity conditions, and stress quantities evaluated on non-planar surfaces
+\citep[e.g.][]{baumgardner1985,zhong2000,tackley2008,zhong2008}. These
+features make spherical-shell Stokes benchmarks a necessary step between
+simple manufactured tests and production geodynamics calculations.
 
-The benchmark solutions of \citet{kramer2021} extend geodynamic Stokes
-verification to cylindrical and spherical shells. In the spherical case they
-provide exact solutions for smooth density forcing and for singular forcing on
-an internal interface. This distinction is useful: the smooth cases test the
-asymptotic behaviour expected for polynomial finite elements, while the
-delta-function cases deliberately reduce solution regularity and therefore test
-whether the numerical method reproduces the weaker rates predicted by the
-benchmark.
+Benchmarking has a long history in mantle-convection modelling, beginning
+with code-to-code comparisons for canonical Cartesian and spherical-shell
+problems \citep[e.g.][]{blankenbach1989,busse1994,zhong2008,tosi2015}. Such
+comparisons are useful for community consistency, but analytical solutions
+provide a stricter verification target because velocity, pressure, stress, and
+derived boundary quantities can be compared directly with known fields. This
+is particularly important for mixed finite-element Stokes solvers, where
+velocity--pressure coupling, incompressibility, pressure normalisation,
+boundary-condition enforcement, curved-domain integration, and stress recovery
+can each affect the observed convergence.
 
-Here we present a concise UW3 verification article for the spherical Kramer
-benchmark. The calculations use existing benchmark outputs only; no figures or
-tables are regenerated. The manuscript follows the structure of the annulus
-Copernicus-style verification article and condenses the corresponding Kramer
-spherical report into the governing equations, benchmark definition, numerical
-setup, error metrics, results, discussion, and conclusions.
+The analytical solutions of \citetalias{kramer2021} were designed for this
+purpose. They extend shell-flow verification to both annulus and spherical
+geometries and include free-slip and zero-slip boundary conditions. The
+spherical cases considered here separate smooth volumetric density forcing
+from delta-function forcing on an internal spherical interface. This separation
+is useful numerically: the smooth cases test the asymptotic convergence
+expected for polynomial finite elements, while the delta-function cases
+intentionally reduce solution regularity and test whether the method recovers
+the weaker rates predicted by the benchmark.
 
-\section{Governing equations and benchmark solution}
+Here we use the spherical-shell solutions of \citetalias{kramer2021} to verify
+the \citetalias{Moresi2025} Stokes implementation. The calculations use
+\(P_2\times P_1\) Taylor--Hood elements on progressively refined
+spherical-shell meshes. We compare numerical velocity, pressure, boundary
+velocity, and radial normal stress with the analytical fields using
+\(L_2\)-norm errors, and we assess how the observed convergence changes
+between smooth and interface-localised forcing.
+
+\section{Governing Equations and Benchmark Solution}
 
 The calculations solve the steady incompressible Stokes equations
 \begin{subequations}
@@ -152,7 +173,7 @@ interface
 \begin{equation}
   R_{\mathrm{int}}=2.0=\frac{R_-+R_+}{2}.
 \end{equation}
-Following \citet{kramer2021}, the forcing is expressed with spherical
+Following \citetalias{kramer2021}, the forcing is expressed with spherical
 harmonics \(Y_l^m\). Smooth cases prescribe
 \begin{equation}
   \rho(r,\theta,\phi)
@@ -167,22 +188,22 @@ proportional to
   \delta(r-R_{\mathrm{int}})Y_l^m(\theta,\phi).
 \end{equation}
 The corresponding analytical velocity and pressure fields are the spherical
-shell solutions derived by \citet{kramer2021}. In this verification exercise
+shell solutions derived by \citetalias{kramer2021}. In this verification exercise
 they are used as exact reference fields for volume and boundary error
 evaluation.
 
-\begin{table}[t]
+\begin{table}[H]
 \centering
-\caption{Kramer spherical benchmark cases used in the UW3 verification runs.}
+\caption{Spherical \citetalias{kramer2021} benchmark cases used in the \citetalias{Moresi2025} verification runs.}
 \label{tab:kramer_cases}
 \begin{tabular}{clll}
 \toprule
-Case & Forcing & Boundary condition & \((l,m,k)\) values \\
+Case & Forcing & Boundary condition & Parameters \\
 \midrule
-1 & Delta-function & Free-slip & \((2,1,3)\), \((2,2,3)\), \((4,2,5)\), \((4,4,5)\), \((8,4,9)\), \((8,8,9)\) \\
-2 & Smooth & Free-slip & same as Case 1 \\
-3 & Delta-function & Zero-slip & same as Case 1 \\
-4 & Smooth & Zero-slip & same as Case 1 \\
+1 & Delta-function & Free-slip & \((l,m)=(2,1)\), \((2,2)\), \((4,2)\), \((4,4)\), \((8,4)\), \((8,8)\) \\
+2 & Smooth & Free-slip & \((l,m,k)=(2,1,3)\), \((2,2,3)\), \((4,2,5)\), \((4,4,5)\), \((8,4,9)\), \((8,8,9)\) \\
+3 & Delta-function & Zero-slip & same \((l,m)\) values as Case 1 \\
+4 & Smooth & Zero-slip & same \((l,m,k)\) values as Case 2 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -191,42 +212,51 @@ Figure~\ref{fig:kramer_density_fields} shows the analytical density fields used
 for the smooth and delta-function forcing families. Increasing \(l\) and \(m\)
 increases the angular complexity of the solution, while increasing \(k\) in the
 smooth cases concentrates density variation toward the outer boundary. The
-delta-function cases are less regular because the forcing is localised on
-\(R_{\mathrm{int}}\).
+delta-function cases do not use \(k\); they are less regular because the
+forcing is localised on \(R_{\mathrm{int}}\).
 
-\begin{figure}[t]
+\begin{figure}[H]
     \centering
     \includegraphics[width=0.98\linewidth]{figure_2_kramer_rho_ana.pdf}
-    \caption{Analytical density fields. The upper row shows smooth forcing and
-    the lower row shows delta-function forcing on \(R_{\mathrm{int}}=2.0\).
-    Columns correspond to \((l,m,k)=(2,1,3)\), \((4,2,5)\), and \((8,4,9)\).}
+    \caption{Analytical density fields. The upper row shows smooth forcing
+    labelled by \((l,m,k)\). The lower row shows delta-function forcing on
+    \(R_{\mathrm{int}}=2.0\), labelled only by \((l,m)\) because the delta
+    forcing does not depend on the smooth radial exponent \(k\).}
     \label{fig:kramer_density_fields}
 \end{figure}
 
-\section{Numerical setup}
+\section{Numerical Setup}
 
-The UW3 calculations use quadratic velocity and linear pressure finite elements
-on tetrahedral spherical-shell meshes, i.e. a \(P_2\times P_1\) Taylor--Hood
-pair. The mesh sizes are
+The benchmark is implemented in \citetalias{Moresi2025}, a finite-element
+geodynamics framework built on PETSc \citep{osti_2337606} with symbolic problem
+specification in Python. The spherical-shell meshes are generated through the
+Gmsh meshing backend \citep{Geuzaine2009}. The calculations use quadratic
+velocity and continuous linear pressure finite elements on tetrahedral meshes,
+i.e. a \(P_2\times P_1\) Taylor--Hood pair. For sufficiently smooth Stokes
+solutions, this mixed pair is expected to give third-order velocity
+convergence and second-order pressure convergence in volume \(L_2\) norms
+\citep{girault1986,boffi2013}.
+
+Mesh resolution is reported using the characteristic cell size
 \[
   h=1/8,\;1/16,\;1/32,\;1/64 .
 \]
 Free-slip boundary conditions are imposed weakly, while zero-slip cases use
 essential velocity constraints. Solver tolerances are chosen so that the
 reported errors are dominated by discretisation rather than by linear-solver
-residuals. As in any incompressible Stokes solve, the pressure is determined
-only up to an additive constant; the numerical pressure is normalised before
-comparison with the analytical reference pressure.
+residuals. The pressure is determined only up to an additive constant, so the
+numerical and analytical pressure fields are compared after applying the same
+mean-pressure gauge.
 
-\section{Error metrics}
+\section{Error Metrics}
 
-Volume errors are measured with relative \(L_2\) norms. For a scalar or vector
-quantity \(q\), with analytical reference \(q^*\), the error is
+Volume errors are measured with relative \(L_2\) norms. For a numerical scalar
+or vector quantity \(q_h\), with analytical reference \(q^*\), the error is
 \begin{equation}
   E_{L_2}^{\mathrm{rel}}(q)
   =
   \left(
-  \frac{\int_\Omega |q-q^*|^2\,\mathrm{d}\Omega}
+  \frac{\int_\Omega |q_h-q^*|^2\,\mathrm{d}\Omega}
        {\int_\Omega |q^*|^2\,\mathrm{d}\Omega}
   \right)^{1/2}.
 \end{equation}
@@ -239,7 +269,7 @@ surface. We write these surfaces as \(\Gamma_{\mathrm{inner}}\) and
   E_{L_2,\Gamma}^{\mathrm{rel}}(q)
   =
   \left(
-  \frac{\int_\Gamma |q-q^*|^2\,\mathrm{d}\Gamma}
+  \frac{\int_\Gamma |q_h-q^*|^2\,\mathrm{d}\Gamma}
        {\int_\Gamma |q^*|^2\,\mathrm{d}\Gamma}
   \right)^{1/2}.
 \end{equation}
@@ -254,122 +284,38 @@ here.
 
 \section{Results}
 
-\subsection{Volume velocity and pressure errors}
+\subsection{Volume Velocity and Pressure Errors}
 
 For smooth Stokes solutions, a \(P_2\times P_1\) Taylor--Hood method with
 accurately represented curved geometry is expected to approach third-order
 velocity convergence and second-order pressure convergence in the \(L_2\) norm
-\citep{girault1986,boffi2013}. The UW3 smooth spherical cases reproduce the
-second-order pressure trend but do not reach the ideal third-order velocity
-rate over the tested resolutions. Case 2, with smooth forcing and free-slip
-boundaries, gives velocity rates mostly between 1.9 and 2.1. Case 4, with
-smooth forcing and zero-slip boundaries, is similarly close to second order,
-apart from higher coarse-grid pre-asymptotic rates for some higher spherical
-harmonics.
+\citep{girault1986,boffi2013}. The \citetalias{Moresi2025} smooth spherical
+cases reproduce the second-order pressure trend but do not reach the ideal
+third-order velocity rate over the tested resolutions. Case 2, with smooth
+forcing and free-slip boundaries, gives velocity rates mostly between 1.9 and
+2.1. Case 4, with smooth forcing and zero-slip boundaries, is similarly close
+to second order, apart from higher coarse-grid pre-asymptotic rates for some
+higher spherical harmonics.
 
 The delta-function cases reproduce the reduced regularity trend reported by
-\citet{kramer2021}. In Cases 1 and 3, the finest-grid velocity rates are close
-to \(O(h^{1.5})\), while pressure rates are close to \(O(h^{0.5})\). This
-behaviour is expected because the interface-localised forcing limits the
-regularity of both velocity gradients and pressure. It is therefore a benchmark
-feature rather than a solver failure.
+\citetalias{kramer2021}. In Cases 1 and 3, the finest-grid velocity rates are
+close to \(O(h^{1.5})\), while pressure rates are close to \(O(h^{0.5})\).
+This behaviour is expected because the interface-localised forcing limits the
+regularity of both velocity gradients and pressure. It is therefore a
+benchmark feature rather than a solver failure.
 
-\begin{figure}[t]
+\begin{figure}[H]
     \centering
     \includegraphics[height=0.72\textheight,keepaspectratio]{figure_4_kramer_spherical_convergence.pdf}
-    \caption{Velocity and pressure convergence for the four spherical Kramer
-    cases. Reference slopes distinguish smooth-solution expectations from the
-    reduced rates associated with delta-function forcing.}
+    \caption{Velocity and pressure convergence. Reference slopes distinguish smooth-solution expectations from the
+    reduced rates associated with delta-function forcing. Note that all cases
+    with smooth forcing are run at \(k=l+1\).}
     \label{fig:kramer_velocity_pressure_convergence}
 \end{figure}
 
-The numerical values and pairwise rates for Fig.~\ref{fig:kramer_velocity_pressure_convergence}
-are included as existing benchmark tables after the main text.
-
-\subsection{Boundary velocity and radial normal stress}
-
-Boundary metrics are evaluated on the inner and outer spherical surfaces for
-Case 1, the free-slip delta-function benchmark. Boundary velocity errors fall
-rapidly on the coarse refinements, with outer-boundary rates near third to
-fourth order. On the finest refinement the inner-boundary velocity rates reduce
-to approximately 2.3--2.6, while the outer boundary remains higher for the
-lower spherical harmonics.
-
-The radial normal stress \(\sigma_{rr}\) is more sensitive than velocity because
-it combines pressure and velocity-gradient errors and is then evaluated on a
-curved boundary. The stress errors decrease systematically but show more
-variable rates than the volume norms. Coarse-grid rates are partly
-pre-asymptotic, whereas finest-grid rates are closer to first-to-second order.
-This is consistent with the singular forcing, continuous pressure
-approximation, derivative recovery, boundary quadrature, and weak free-slip
-enforcement all contributing to the boundary stress error.
-
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=0.98\linewidth]{figure_7_kramer_boundary_convergence.pdf}
-    \caption{Boundary velocity and radial normal-stress convergence on the
-    inner and outer spherical boundaries for Case 1.}
-    \label{fig:kramer_boundary_convergence}
-\end{figure}
-
-The corresponding boundary velocity and radial normal-stress values are
-included as existing benchmark tables after the main text.
-
-\section{Discussion}
-
-The UW3 calculations reproduce the primary Kramer spherical benchmark
-distinction between smooth and delta-function forcing. Smooth pressure
-converges close to the expected \(O(h^2)\) rate, and delta-function forcing
-reduces velocity and pressure convergence to the expected approximate
-\(O(h^{1.5})\) and \(O(h^{0.5})\) trends. These results indicate that the
-analytical forcing, pressure normalisation, and mixed Stokes solve are
-implemented consistently.
-
-The main discrepancy from the ideal smooth-solution expectation is velocity:
-the smooth cases converge closer to second order than to the third-order
-\(P_2\) \(L_2\) rate obtained by \citet{kramer2021} with curved/isoparametric
-Fluidity calculations. The pressure result narrows the likely explanation. The
-Stokes solve and smooth forcing are behaving consistently, but geometry
-representation, boundary-condition enforcement, quadrature, mesh quality, or
-the interaction among these terms appears to limit the velocity error before
-the polynomial interpolation rate is reached.
-
-The boundary results are intentionally more demanding than volume norms.
-Radial normal stress contains pressure directly and velocity derivatives
-through \(2\eta\boldsymbol{\varepsilon}(\mathbf{u})\), so it inherits pressure
-regularity limits and derivative-recovery errors. Differences between inner and
-outer boundary errors are therefore expected because the surfaces have
-different radii, analytical amplitudes, quadrature weights, and sensitivity to
-mesh geometry. Higher \((l,m)\) values further increase angular gradients and
-delay asymptotic behaviour.
-
-\conclusions
-
-We have produced a Copernicus-style verification article for the UW3
-implementation of the Kramer spherical Stokes benchmark. The principal
-conclusions are:
-\begin{enumerate}
-  \item UW3 reproduces the expected contrast between smooth volumetric forcing
-  and delta-function interface forcing in a spherical shell.
-  \item Smooth pressure errors converge at approximately second order for the
-  \(P_2\times P_1\) Taylor--Hood discretisation.
-  \item Smooth velocity errors converge robustly but remain closer to second
-  order than to the ideal third-order \(P_2\) \(L_2\) rate over the tested
-  resolutions.
-  \item Delta-function cases show the expected reduced convergence rates,
-  approximately \(O(h^{1.5})\) for velocity and \(O(h^{0.5})\) for pressure.
-  \item Boundary velocity and radial normal-stress errors decrease
-  systematically, with stress recovery showing the strongest sensitivity to
-  singular forcing and curved-boundary post-processing.
-\end{enumerate}
-Overall, the benchmark supports UW3 spherical-shell Stokes verification while
-identifying smooth-case velocity convergence and boundary stress recovery as
-the most useful next diagnostics for curved geometry and boundary-condition
-development.
-
-\clearpage
-\section*{Benchmark tables}
-Tables~\ref{tab:kramer_spherical_volume_convergence_start}--\ref{tab:kramer_spherical_volume_convergence_end} list the volume velocity and pressure errors and pairwise rates for the spherical Kramer cases. Tables~\ref{tab:kramer_spherical_boundary_convergence_start}--\ref{tab:kramer_spherical_boundary_convergence_end} list the Case 1 boundary velocity and radial normal-stress errors.
+The numerical values and pairwise rates for
+Fig.~\ref{fig:kramer_velocity_pressure_convergence} are listed in
+Tables~\ref{tab:kramer_spherical_volume_convergence_start}--\ref{tab:kramer_spherical_volume_convergence_end}.
 
 \begin{benchmarklandscape}
 \begin{table}[p]
@@ -381,7 +327,7 @@ Tables~\ref{tab:kramer_spherical_volume_convergence_start}--\ref{tab:kramer_sphe
 \fitwidth{%
 \begin{tabular}{ccccccccccccc}
 \toprule
-\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=2,\,m=1,\,k=3$} & \multicolumn{4}{c}{$l=2,\,m=2,\,k=3$} & \multicolumn{4}{c}{$l=4,\,m=2,\,k=5$} \\
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=2,\,m=1$} & \multicolumn{4}{c}{$l=2,\,m=2$} & \multicolumn{4}{c}{$l=4,\,m=2$} \\
 \cmidrule(lr){2-5}
 \cmidrule(lr){6-9}
 \cmidrule(lr){10-13}
@@ -404,7 +350,7 @@ $1/64$ & \num{3.053e-03} & 1.50 & \num{1.321e-01} & 0.50 & \num{3.052e-03} & 1.5
 \fitwidth{%
 \begin{tabular}{ccccccccccccc}
 \toprule
-\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=4,\,m=4,\,k=5$} & \multicolumn{4}{c}{$l=8,\,m=4,\,k=9$} & \multicolumn{4}{c}{$l=8,\,m=8,\,k=9$} \\
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=4,\,m=4$} & \multicolumn{4}{c}{$l=8,\,m=4$} & \multicolumn{4}{c}{$l=8,\,m=8$} \\
 \cmidrule(lr){2-5}
 \cmidrule(lr){6-9}
 \cmidrule(lr){10-13}
@@ -473,7 +419,7 @@ $1/64$ & \num{5.702e-05} & 1.96 & \num{3.803e-04} & 2.01 & \num{7.478e-05} & 1.9
 \fitwidth{%
 \begin{tabular}{ccccccccccccc}
 \toprule
-\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=2,\,m=1,\,k=3$} & \multicolumn{4}{c}{$l=2,\,m=2,\,k=3$} & \multicolumn{4}{c}{$l=4,\,m=2,\,k=5$} \\
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=2,\,m=1$} & \multicolumn{4}{c}{$l=2,\,m=2$} & \multicolumn{4}{c}{$l=4,\,m=2$} \\
 \cmidrule(lr){2-5}
 \cmidrule(lr){6-9}
 \cmidrule(lr){10-13}
@@ -496,7 +442,7 @@ $1/64$ & \num{1.434e-02} & 1.50 & \num{1.135e-01} & 0.50 & \num{1.434e-02} & 1.5
 \fitwidth{%
 \begin{tabular}{ccccccccccccc}
 \toprule
-\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=4,\,m=4,\,k=5$} & \multicolumn{4}{c}{$l=8,\,m=4,\,k=9$} & \multicolumn{4}{c}{$l=8,\,m=8,\,k=9$} \\
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=4,\,m=4$} & \multicolumn{4}{c}{$l=8,\,m=4$} & \multicolumn{4}{c}{$l=8,\,m=8$} \\
 \cmidrule(lr){2-5}
 \cmidrule(lr){6-9}
 \cmidrule(lr){10-13}
@@ -557,6 +503,40 @@ $1/64$ & \num{1.028e-04} & 2.02 & \num{3.026e-04} & 2.01 & \num{1.130e-04} & 2.1
 \end{tabular}%
 }
 \end{table}
+\end{benchmarklandscape}
+
+\subsection{Boundary Velocity and Radial Normal Stress}
+
+Boundary metrics are evaluated on the inner and outer spherical surfaces for
+Case 1, the free-slip delta-function benchmark. This is the most demanding of
+the tested boundary diagnostics because the forcing is singular and the
+free-slip condition is imposed on curved boundaries. Boundary velocity errors
+fall rapidly on the coarse refinements, with outer-boundary rates near third to
+fourth order. On the finest refinement the inner-boundary velocity rates reduce
+to approximately 2.3--2.6, while the outer boundary remains higher for the
+lower spherical harmonics.
+
+The radial normal stress \(\sigma_{rr}\) is more sensitive than velocity because
+it combines pressure and velocity-gradient errors and is then evaluated on a
+curved boundary. The stress errors decrease systematically but show more
+variable rates than the volume norms. Coarse-grid rates are partly
+pre-asymptotic, whereas finest-grid rates are closer to first-to-second order.
+This is consistent with the singular forcing, continuous pressure
+approximation, derivative recovery, boundary quadrature, and weak free-slip
+enforcement all contributing to the boundary stress error.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\linewidth]{figure_7_kramer_boundary_convergence.pdf}
+    \caption{Boundary velocity and radial normal-stress convergence on the
+    inner and outer spherical boundaries for Case 1.}
+    \label{fig:kramer_boundary_convergence}
+\end{figure}
+
+The corresponding boundary velocity and radial normal-stress values are listed
+in Tables~\ref{tab:kramer_spherical_boundary_convergence_start}--\ref{tab:kramer_spherical_boundary_convergence_end}.
+
+\begin{benchmarklandscape}
 
 \begin{table}[p]
 \centering
@@ -567,7 +547,7 @@ $1/64$ & \num{1.028e-04} & 2.02 & \num{3.026e-04} & 2.01 & \num{1.130e-04} & 2.1
 \fitwidth{%
 \begin{tabular}{ccccccccccccc}
 \toprule
-\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=2,\,m=1,\,k=3$} & \multicolumn{4}{c}{$l=2,\,m=2,\,k=3$} & \multicolumn{4}{c}{$l=4,\,m=2,\,k=5$} \\
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=2,\,m=1$} & \multicolumn{4}{c}{$l=2,\,m=2$} & \multicolumn{4}{c}{$l=4,\,m=2$} \\
 \cmidrule(lr){2-5}
 \cmidrule(lr){6-9}
 \cmidrule(lr){10-13}
@@ -590,7 +570,7 @@ $1/64$ & \num{1.653e-05} & 4.06 & \num{5.257e-05} & 2.58 & \num{1.654e-05} & 4.0
 \fitwidth{%
 \begin{tabular}{ccccccccccccc}
 \toprule
-\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=4,\,m=4,\,k=5$} & \multicolumn{4}{c}{$l=8,\,m=4,\,k=9$} & \multicolumn{4}{c}{$l=8,\,m=8,\,k=9$} \\
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=4,\,m=4$} & \multicolumn{4}{c}{$l=8,\,m=4$} & \multicolumn{4}{c}{$l=8,\,m=8$} \\
 \cmidrule(lr){2-5}
 \cmidrule(lr){6-9}
 \cmidrule(lr){10-13}
@@ -613,7 +593,7 @@ $1/64$ & \num{2.976e-05} & 3.51 & \num{9.631e-05} & 2.46 & \num{5.715e-05} & 2.8
 \fitwidth{%
 \begin{tabular}{ccccccccccccc}
 \toprule
-\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=2,\,m=1,\,k=3$} & \multicolumn{4}{c}{$l=2,\,m=2,\,k=3$} & \multicolumn{4}{c}{$l=4,\,m=2,\,k=5$} \\
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=2,\,m=1$} & \multicolumn{4}{c}{$l=2,\,m=2$} & \multicolumn{4}{c}{$l=4,\,m=2$} \\
 \cmidrule(lr){2-5}
 \cmidrule(lr){6-9}
 \cmidrule(lr){10-13}
@@ -637,7 +617,7 @@ $1/64$ & \num{6.125e-05} & 2.25 & \num{3.258e-04} & 1.76 & \num{6.364e-05} & 2.2
 \fitwidth{%
 \begin{tabular}{ccccccccccccc}
 \toprule
-\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=4,\,m=4,\,k=5$} & \multicolumn{4}{c}{$l=8,\,m=4,\,k=9$} & \multicolumn{4}{c}{$l=8,\,m=8,\,k=9$} \\
+\multirow{2}{*}{$h$} & \multicolumn{4}{c}{$l=4,\,m=4$} & \multicolumn{4}{c}{$l=8,\,m=4$} & \multicolumn{4}{c}{$l=8,\,m=8$} \\
 \cmidrule(lr){2-5}
 \cmidrule(lr){6-9}
 \cmidrule(lr){10-13}
@@ -652,6 +632,61 @@ $1/64$ & \num{9.866e-05} & 1.44 & \num{6.942e-04} & 1.78 & \num{1.547e-04} & 2.1
 }
 \end{table}
 \end{benchmarklandscape}
+
+\section{Discussion}
+
+The \citetalias{Moresi2025} calculations reproduce the primary
+\citetalias{kramer2021} spherical-shell benchmark distinction between smooth
+and delta-function forcing. Smooth pressure converges close to the expected
+\(O(h^2)\) rate, and delta-function forcing reduces velocity and pressure
+convergence to the expected approximate \(O(h^{1.5})\) and \(O(h^{0.5})\)
+trends. These results indicate that the analytical forcing, pressure
+normalisation, and mixed Stokes solve are implemented consistently.
+
+The main discrepancy from the ideal smooth-solution expectation is velocity:
+the smooth cases converge closer to second order than to the third-order
+\(P_2\) \(L_2\) rate obtained by \citetalias{kramer2021} with curved/isoparametric
+Fluidity calculations. The pressure result narrows the likely explanation. The
+Stokes solve and smooth forcing are behaving consistently, but geometry
+representation, boundary-condition enforcement, quadrature, mesh quality, or
+the interaction among these terms appears to limit the velocity error before
+the polynomial interpolation rate is reached.
+
+The boundary results are intentionally more demanding than volume norms.
+Radial normal stress contains pressure directly and velocity derivatives
+through \(2\eta\boldsymbol{\varepsilon}(\mathbf{u})\), so it inherits pressure
+regularity limits and derivative-recovery errors. Differences between inner and
+outer boundary errors are therefore expected because the surfaces have
+different radii, analytical amplitudes, quadrature weights, and sensitivity to
+mesh geometry. Higher \((l,m)\) values further increase angular gradients and
+delay asymptotic behaviour.
+
+\conclusions
+
+We have presented a verification study of the \citetalias{kramer2021}
+spherical-shell Stokes benchmark using \citetalias{Moresi2025}. The benchmark
+tests smooth and delta-function forcing, free-slip and zero-slip boundary
+conditions, volume velocity and pressure errors, and boundary velocity and
+radial normal-stress diagnostics. The principal conclusions are:
+\begin{enumerate}
+  \item \citetalias{Moresi2025} reproduces the expected contrast between
+  smooth volumetric forcing and delta-function interface forcing in a
+  spherical shell.
+  \item Smooth pressure errors converge at approximately second order for the
+  \(P_2\times P_1\) Taylor--Hood discretisation.
+  \item Smooth velocity errors converge robustly but remain closer to second
+  order than to the ideal third-order \(P_2\) \(L_2\) rate over the tested
+  resolutions.
+  \item Delta-function cases show the expected reduced convergence rates,
+  approximately \(O(h^{1.5})\) for velocity and \(O(h^{0.5})\) for pressure.
+  \item Boundary velocity and radial normal-stress errors decrease
+  systematically, with stress recovery showing the strongest sensitivity to
+  singular forcing and curved-boundary post-processing.
+\end{enumerate}
+Overall, the benchmark supports \citetalias{Moresi2025} spherical-shell Stokes
+verification while identifying smooth-case velocity convergence and boundary
+stress recovery as the most useful next diagnostics for curved geometry and
+boundary-condition development.
 
 \bibliographystyle{copernicus}
 \bibliography{kramer_spherical_benchmark_article_refs}

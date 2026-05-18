@@ -131,6 +131,12 @@ def chunked_groups(groups: list[tuple[int, int, int]]) -> list[list[tuple[int, i
     ]
 
 
+def group_heading(case: str, l_val: int, m_val: int, k_val: int) -> str:
+    if case in ("case1", "case3"):
+        return rf"$l={l_val},\,m={m_val}$"
+    return rf"$l={l_val},\,m={m_val},\,k={k_val}$"
+
+
 def table_for_case_group(
     records: list[MetricRecord],
     case: str,
@@ -148,7 +154,7 @@ def table_for_case_group(
     group_header = [r"\multirow{2}{*}{$h$}"]
     sub_header = [""]
     for l_val, m_val, k_val in groups:
-        group_header.append(rf"\multicolumn{{4}}{{c}}{{$l={l_val},\,m={m_val},\,k={k_val}$}}")
+        group_header.append(rf"\multicolumn{{4}}{{c}}{{{group_heading(case, l_val, m_val, k_val)}}}")
         sub_header.extend(
             [
                 r"$E_{L_2}^{\mathrm{rel}}(\mathbf{u})$",

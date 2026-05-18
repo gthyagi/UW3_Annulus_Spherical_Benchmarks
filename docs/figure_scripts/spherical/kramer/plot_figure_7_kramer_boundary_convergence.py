@@ -186,7 +186,7 @@ def main() -> None:
         records,
         groups,
         "v_l2_norm_upper",
-        3.0,
+        2.0,
         r"$E_{L_2,\Gamma_{\mathrm{outer}}}^{\mathrm{rel}}(\mathbf{u})$",
         "a)",
     )
@@ -195,7 +195,7 @@ def main() -> None:
         records,
         groups,
         "v_l2_norm_lower",
-        3.0,
+        2.0,
         r"$E_{L_2,\Gamma_{\mathrm{inner}}}^{\mathrm{rel}}(\mathbf{u})$",
         "b)",
     )
