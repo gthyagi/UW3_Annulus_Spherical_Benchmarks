@@ -130,7 +130,7 @@ In this study, we reproduce the annulus benchmark of
 \citetalias{kramer2021} using \citetalias{Moresi2025}. The benchmark considers
 incompressible isoviscous Stokes flow in an annulus with analytical velocity and pressure
 solutions derived from prescribed buoyancy forcing. The
-benchmark includes both free-slip and no-slip velocity
+benchmark includes both free-slip and zero-slip velocity
 boundary conditions together with smooth and
 interface-localised density forcing. The smooth forcing
 cases assess convergence behaviour for regular analytical
@@ -150,7 +150,7 @@ free-slip boundary conditions and the convergence behaviour
 associated with smooth and interface-localised forcing
 cases. The results provide verification of UW3 for
 curved-domain annulus Stokes flow and demonstrate the
-effectiveness of the Kramer et al. benchmark for assessing
+effectiveness of the \citetalias{kramer2021} benchmark for assessing
 finite-element accuracy in annulus geometries.
 
 \section{Governing Equations and Benchmark Solution}
@@ -234,10 +234,10 @@ volumetric forcing distributed throughout the domain.
 \toprule
 Case & Forcing & Boundary condition & Parameters \\
 \midrule
-1 & Delta function & Free slip & \(n=2,8,32\) \\
-2 & Smooth & Free slip & \(n=2,8,32;\ k=2,8\) \\
-3 & Delta function & Zero slip & \(n=2,8,32\) \\
-4 & Smooth & Zero slip & \(n=2,8,32;\ k=2,8\) \\
+Case1 & Delta function & Free slip & \(n=2,8,32\) \\
+Case2 & Smooth & Free slip & \(n=2,8,32;\ k=2,8\) \\
+Case3 & Delta function & Zero slip & \(n=2,8,32\) \\
+Case4 & Smooth & Zero slip & \(n=2,8,32;\ k=2,8\) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -252,7 +252,7 @@ cases.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.98\linewidth]{figure_1_kramer_annulus_rho_ana.pdf}
-    \caption{Analytical density perturbations for the Kramer annulus benchmark.
+    \caption{Analytical density perturbations.
     The upper row shows smooth forcing and the lower row shows delta-function
     forcing. Columns correspond to increasing azimuthal complexity.}
     \label{fig:density}
@@ -273,6 +273,16 @@ error is
 \end{equation}
 Thus the table and figure labels use \(E_{L_2}^{\mathrm{rel}}(\mathbf{u})\)
 for velocity and \(E_{L_2}^{\mathrm{rel}}(p)\) for pressure.
+For pressure errors restricted to an annulus boundary \(\Gamma\), we use
+\begin{equation}
+  E_{L_2,\Gamma}^{\mathrm{rel}}(p)
+  =
+  \left(
+  \frac{\int_{\Gamma}|p_h-p^*|^2\,\mathrm{d}\Gamma}
+       {\int_{\Gamma}|p^*|^2\,\mathrm{d}\Gamma}
+  \right)^{1/2},
+\end{equation}
+where \(\Gamma\) denotes either the inner or outer boundary.
 For two consecutive refinements with characteristic mesh sizes \(h_1\) and
 \(h_2\), the observed convergence rate is
 \begin{equation}
@@ -305,11 +315,32 @@ the Stokes solver.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.82\linewidth]{figure_3_kramer_annulus_convergence.pdf}
-    \caption{Velocity and pressure convergence for the four Kramer annulus
-    cases. Columns show delta-function forcing and smooth forcing with \(k=2\)
+    \caption{Velocity and pressure convergence. Columns show delta-function forcing and smooth forcing with \(k=2\)
     and \(k=8\). The upper block uses free-slip boundaries and the lower block
     uses zero-slip boundaries.}
     \label{fig:convergence}
+\end{figure}
+
+The convergence of pressure errors restricted to the inner and outer annulus
+boundaries is shown in Fig.~\ref{fig:boundary_pressure_convergence}. These
+boundary errors decrease close to the \(O(h^2)\) reference trend for the smooth
+forcing cases. The delta-function cases also show approximately second-order
+boundary pressure convergence, even though the corresponding volume pressure
+errors converge more slowly. This distinction occurs because the volume norm
+includes the reduced regularity introduced at the internal forcing interface,
+whereas the boundary norm samples the pressure trace on the inner and outer
+boundaries. The inner and outer boundary errors have different constants, as
+expected for annulus geometry because the radii, boundary constraints, and
+distance from the internal interface differ.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.88\linewidth]{figure_boundary_pressure_convergence.pdf}
+    \caption{Convergence of relative boundary pressure errors
+    \(E_{L_2,\Gamma}^{\mathrm{rel}}(p)\).
+    Solid curves denote the inner boundary and dashed curves denote the outer
+    boundary. Colours indicate azimuthal wavenumber \(n\).}
+    \label{fig:boundary_pressure_convergence}
 \end{figure}
 
 The numerical errors and pairwise convergence rates are provided in 
@@ -320,7 +351,7 @@ rate, pressure error, and pressure rate.
 \begin{benchmarklandscape}
 \begin{table}[p]
 \centering
-\caption{Free-slip, delta-function forcing.}
+\caption{Case1: Free-slip, delta-function forcing.}
 \label{tab:kramer_annulus_convergence_start}
 \benchmarktablefont
 \setlength{\tabcolsep}{3.2pt}
@@ -346,7 +377,7 @@ $1/256$ & \num{2.828e-04} & 1.50 & \num{5.512e-02} & 0.50 & \num{2.643e-04} & 1.
 
 \begin{table}[p]
 \centering
-\caption{Free-slip, smooth forcing ($k=2$).}
+\caption{Case2: Free-slip, smooth forcing ($k=2$).}
 \benchmarktablefont
 \setlength{\tabcolsep}{3.2pt}
 \fitwidth{%
@@ -371,7 +402,7 @@ $1/256$ & \num{2.704e-06} & 1.99 & \num{4.611e-06} & 1.99 & \num{2.359e-06} & 2.
 
 \begin{table}[p]
 \centering
-\caption{Free-slip, smooth forcing ($k=8$).}
+\caption{Case2: Free-slip, smooth forcing ($k=8$).}
 \benchmarktablefont
 \setlength{\tabcolsep}{3.2pt}
 \fitwidth{%
@@ -396,7 +427,7 @@ $1/256$ & \num{2.524e-06} & 1.96 & \num{1.154e-05} & 2.00 & \num{3.023e-06} & 1.
 
 \begin{table}[p]
 \centering
-\caption{Zero-slip, delta-function forcing.}
+\caption{Case3: Zero-slip, delta-function forcing.}
 \benchmarktablefont
 \setlength{\tabcolsep}{3.2pt}
 \fitwidth{%
@@ -421,7 +452,7 @@ $1/256$ & \num{1.439e-03} & 1.50 & \num{4.924e-02} & 0.50 & \num{5.281e-04} & 1.
 
 \begin{table}[p]
 \centering
-\caption{Zero-slip, smooth forcing ($k=2$).}
+\caption{Case4: Zero-slip, smooth forcing ($k=2$).}
 \benchmarktablefont
 \setlength{\tabcolsep}{3.2pt}
 \fitwidth{%
@@ -446,7 +477,7 @@ $1/256$ & \num{5.103e-06} & 2.00 & \num{4.351e-06} & 1.98 & \num{3.662e-06} & 2.
 
 \begin{table}[p]
 \centering
-\caption{Zero-slip, smooth forcing ($k=8$).}
+\caption{Case4: Zero-slip, smooth forcing ($k=8$).}
 \label{tab:kramer_annulus_convergence_end}
 \benchmarktablefont
 \setlength{\tabcolsep}{3.2pt}
@@ -489,6 +520,20 @@ Importantly, the free-slip and zero-slip variants show the same qualitative
 rates, indicating that the \citetalias{Moresi2025} boundary-condition implementations behave
 consistently across both benchmark families.
 
+The boundary pressure results provide a complementary diagnostic to the volume
+pressure error. They test how accurately the numerical pressure is represented
+where boundary tractions and normal stresses are evaluated. For the
+delta-function forcing cases, the boundary pressure can converge faster than
+the volume pressure because the singular forcing is located on an internal
+interface rather than on the boundary itself. The boundary trace is therefore a
+smoother quantity than the full-domain pressure field measured in the volume
+norm. The different inner and outer boundary error constants should not be
+interpreted as an inconsistency: the two boundaries have different radii,
+different geometric quadrature paths, and different distances from the internal
+forcing interface. Agreement in the observed trends across free-slip and
+zero-slip cases is the more relevant check of the boundary-condition and
+pressure-evaluation implementation.
+
 The benchmark is therefore a useful intermediate verification problem between
 Cartesian manufactured solutions and full spherical-shell mantle-convection
 calculations. It tests curved-domain Stokes assembly, pressure normalisation,
@@ -497,7 +542,7 @@ remaining compact enough for routine convergence testing.
 
 \conclusions
 
-We have presented a Copernicus-style summary of the \citetalias{Moresi2025} Kramer annulus Stokes
+We have presented summary of the \citetalias{Moresi2025} Kramer annulus Stokes
 benchmark. The main findings are:
 \begin{enumerate}
   \item \citetalias{Moresi2025} reproduces the analytical annulus solutions of \citetalias{kramer2021}

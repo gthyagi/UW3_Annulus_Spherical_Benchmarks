@@ -144,6 +144,8 @@ def add_reference_line(
     h_values: np.ndarray,
     slope: float,
     series: list[tuple[np.ndarray, np.ndarray]],
+    *,
+    linestyle: str = ":",
 ) -> None:
     positive = [
         y[np.isfinite(y) & (y > 0.0)]
@@ -185,7 +187,7 @@ def add_reference_line(
         h_values,
         y_ref,
         color="black",
-        linestyle=":",
+        linestyle=linestyle,
         linewidth=1.15,
         zorder=5,
         label="_nolegend_",
@@ -200,6 +202,7 @@ def plot_panel(
     case: str,
     k: int | None,
     slope: float,
+    extra_slopes: tuple[float, ...],
     show_xlabel: bool,
 ) -> None:
     plotted_series: list[tuple[np.ndarray, np.ndarray]] = []
@@ -223,7 +226,9 @@ def plot_panel(
             )
             plotted_series.append((x, y))
 
-    add_reference_line(ax, H_VALUES, slope, plotted_series)
+    add_reference_line(ax, H_VALUES, slope, plotted_series, linestyle=":")
+    for extra_slope in extra_slopes:
+        add_reference_line(ax, H_VALUES, extra_slope, plotted_series, linestyle="-.")
 
     ax.set_xlim(H_VALUES[-1] * 0.82, H_VALUES[0] * 1.18)
     ax.set_xticks(H_VALUES)
@@ -239,10 +244,14 @@ def plot_panel(
     ax.set_axisbelow(True)
     ax.tick_params(axis="both", which="both", direction="in", labelsize=8)
     ax.text(0.02, 0.98, f"({panel_label})", transform=ax.transAxes, ha="left", va="top", fontsize=7.5)
+    reference_label = "\n".join(
+        rf"$\mathcal{{O}}(h^{{{reference_slope:g}}})$"
+        for reference_slope in (slope, *extra_slopes)
+    )
     ax.text(
         0.96,
         0.06,
-        rf"$\mathcal{{O}}(h^{{{slope:g}}})$",
+        reference_label,
         transform=ax.transAxes,
         ha="right",
         va="bottom",
@@ -258,9 +267,9 @@ def main() -> None:
     fig, axes = plt.subplots(2, 3, figsize=(8.3, 5.7), sharex=False)
 
     columns = (
-        ("Delta-Function", None, 0.5),
-        ("Smooth (k=2)", 2, 2.0),
-        ("Smooth (k=8)", 8, 2.0),
+        ("Delta-Function", None, 2.0, ()),
+        ("Smooth (k=2)", 2, 2.0, ()),
+        ("Smooth (k=8)", 8, 2.0, ()),
     )
     rows = (
         ("Free-Slip", "case1", "case2"),
@@ -269,7 +278,7 @@ def main() -> None:
     panel_labels = np.array([["a", "b", "c"], ["d", "e", "f"]])
 
     for row, (row_label, delta_case, smooth_case) in enumerate(rows):
-        for col, (title, k, slope) in enumerate(columns):
+        for col, (title, k, slope, extra_slopes) in enumerate(columns):
             case = delta_case if k is None else smooth_case
             plot_panel(
                 axes[row, col],
@@ -278,6 +287,7 @@ def main() -> None:
                 case=case,
                 k=k,
                 slope=slope,
+                extra_slopes=extra_slopes,
                 show_xlabel=row == 1,
             )
             if row == 0:
@@ -326,7 +336,7 @@ def main() -> None:
         facecolor="white",
         edgecolor="0.85",
         fontsize=8.0,
-        bbox_to_anchor=(0.545, 0.055),
+        bbox_to_anchor=(0.545, 0.1),
         columnspacing=1.1,
         handlelength=1.8,
     )
