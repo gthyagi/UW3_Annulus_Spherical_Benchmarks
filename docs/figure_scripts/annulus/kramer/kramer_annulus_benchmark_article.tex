@@ -204,17 +204,27 @@ measure numerical error.
 
 \section{Numerical Setup}
 
-The \citetalias{Moresi2025} calculations use \(P_2\times P_1\) Taylor--Hood elements, with
-quadratic velocity and continuous linear pressure. This mixed pair is a standard
-choice for incompressible Stokes flow and is expected to provide robust pressure
-behaviour for smooth solutions \citep{girault1986,boffi2013}. The pressure
-nullspace is removed before error evaluation because incompressible Stokes flow
-determines pressure only up to an additive constant.
+All models use the \(P_2\times P_1\) Taylor--Hood
+mixed finite-element pair, with quadratic velocity and
+continuous linear pressure discretisations. This element pair is widely used for
+incompressible Stokes flow because it satisfies the
+Ladyzhenskaya--Babu\v{s}ka--Brezzi stability condition and
+provides robust pressure behaviour for smooth solutions
+\citep{girault1986,boffi2013,thieulot2022}. The Stokes
+system is solved using the finite-element implementation in
+UW3, with the constant-pressure nullspace removed prior to
+error evaluation, since incompressible Stokes flow
+determines pressure only up to an arbitrary additive
+constant.
 
-The verification suite contains four benchmark groups (Table~\ref{tab:cases}).
-Cases 1 and 2 use free-slip boundaries, while Cases 3 and 4 use zero-slip
-boundaries. Cases 1 and 3 use delta-function forcing on the internal interface;
-Cases 2 and 4 use smooth volumetric forcing.
+The benchmark suite consists of four case groups
+(Table~\ref{tab:cases}) that systematically examine the
+effects of boundary conditions and buoyancy forcing. Cases 1
+and 2 employ free-slip velocity boundary conditions, whereas
+Cases 3 and 4 use zero-slip boundaries. Cases 1 and 3
+consider interface-localised delta-function forcing applied
+along an internal boundary, while Cases 2 and 4 use smooth
+volumetric forcing distributed throughout the domain.
 
 \begin{table}[H]
 \centering
@@ -302,7 +312,10 @@ the Stokes solver.
     \label{fig:convergence}
 \end{figure}
 
-The numerical errors and pairwise convergence rates are provided in Tables~\ref{tab:kramer_annulus_convergence_start}--\ref{tab:kramer_annulus_convergence_end}. Each table groups three azimuthal wavenumbers and reports mesh size, velocity error, velocity rate, pressure error, and pressure rate.
+The numerical errors and pairwise convergence rates are provided in 
+Tables~\ref{tab:kramer_annulus_convergence_start}--\ref{tab:kramer_annulus_convergence_end}. 
+Each table groups three azimuthal wavenumbers and reports mesh size, velocity error, velocity 
+rate, pressure error, and pressure rate.
 
 \begin{benchmarklandscape}
 \begin{table}[p]
