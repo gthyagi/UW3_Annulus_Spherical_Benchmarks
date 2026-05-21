@@ -48,8 +48,8 @@ The correct spherical solve path is therefore:
 - The main spherical script matches the corrected debug driver at `m=3`, `1/8`:
   - `v_l2 ~ 3.99e-2`
   - `p_l2 ~ 3.59e-1`
-- The new regression test passes:
-  - [test_spherical_thieulot_bodyforce.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/tests/test_spherical_thieulot_bodyforce.py)
+- The body-force correction was previously checked with a regression test. The
+  standalone `tests/` directory has since been removed from the repository.
 
 ## Negative Results
 
@@ -72,4 +72,3 @@ The correct spherical solve path is therefore:
 - [ex_stokes_thieulot.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot.py)
 - [ex_stokes_thieulot_debug.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot_debug.py)
 - [thieulot_field_plots.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/thieulot_field_plots.py)
-- [test_spherical_thieulot_bodyforce.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/tests/test_spherical_thieulot_bodyforce.py)

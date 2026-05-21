@@ -1,55 +1,73 @@
 # Underworld3 Annulus and Spherical Benchmarks
 
-This repository is a reset workspace for **Underworld3** benchmark and validation scripts in:
+This repository contains Underworld3 benchmark and post processing scripts for:
 
-- 2D annulus geometries
-- 3D spherical shell geometries
+- annulus geometries
+- spherical-shell geometries
 
-Current status: the repo has been cleaned for a fresh restart, and benchmark content is being rebuilt progressively.
 
-## Underworld3 Branch Context
+## Underworld3 Environment
 
-This benchmark repository has been used with two Underworld3 branches:
+The current UW3 checkout is:
 
-- Legacy UW3 branch (historical compatibility):
-  - [jcg-meshvar2meshvar-fix](https://github.com/gthyagi/underworld3/tree/jcg-meshvar2meshvar-fix)
-- Latest UW3 branch (current development target):
-  - [feature/boundary-integrals](https://github.com/gthyagi/underworld3/tree/feature/boundary-integrals)
+```text
+/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest/underworld3
+```
 
-When comparing results, treat the legacy branch as baseline and validate migrated scripts against it.
+Use the repository helper to enter the configured pixi environment:
+
+```bash
+./activate_uw3.sh
+```
+
+An explicit pixi environment name can be supplied when needed:
+
+```bash
+./activate_uw3.sh amr-dev
+```
+
+The helper can also be sourced to activate the environment in the current
+shell:
+
+```bash
+source ./activate_uw3.sh
+```
 
 ## Repository Layout
 
 - `benchmarks/annulus/`
-  - Annulus benchmark scripts and annulus-specific temporary mesh/checkpoint folders.
+  - Current annulus Stokes benchmark scripts and plotting helpers.
 - `benchmarks/spherical/`
-  - Spherical benchmark scripts and spherical-specific temporary mesh/checkpoint folders.
+  - Current spherical-shell Stokes benchmark scripts and plotting helpers.
+- `production_scripts/`
+  - Batch and convergence-run helper scripts.
 - `docs/`
-  - Notes and workflow documentation.
+  - Benchmark notes, article sources, figures, and reference material.
 - `output/`
-  - Top-level generated outputs (optional shared output area).
-- `activate_uw3_legacy.sh`
-  - Helper to activate the legacy UW3 environment.
-- `activate_uw3_latest.sh`
-  - Helper to activate the latest UW3 environment.
+  - Optional shared output area for generated benchmark data.
+- `activate_uw3.sh`
+  - Helper to activate the current UW3 pixi environment.
 
 ## Major Benchmarks Included
 
 ### Annulus Benchmarks
 
-- **Thieulot annulus benchmark (legacy reference currently present)**
-  - `benchmarks/annulus/legacy/ex_stokes_thieulot_legacy.py`
-  - Manufactured analytical solution benchmark used for solver/error validation.
+- Thieulot--Puckett annulus Stokes benchmark:
+  - `benchmarks/annulus/ex_stokes_thieulot.py`
+- Kramer annulus Stokes benchmark:
+  - `benchmarks/annulus/ex_stokes_kramer.py`
 
 ### Spherical Benchmarks
 
-- Spherical benchmark scripts are being reintroduced in the new structure.
-- Existing material currently appears mostly as notebook checkpoints under:
-  - `benchmarks/spherical/.ipynb_checkpoints/`
+- Thieulot spherical-shell Stokes benchmark:
+  - `benchmarks/spherical/ex_stokes_thieulot.py`
+- Kramer spherical-shell Stokes benchmark:
+  - `benchmarks/spherical/ex_stokes_kramer.py`
 
 ## Typical Outputs
 
-Benchmark scripts usually write to case-specific `output/` directories, including:
+Benchmark scripts usually write to case-specific `output/` directories,
+including:
 
 - XDMF/HDF5 checkpoint data
 - mesh generation and Stokes solve timing files
@@ -61,20 +79,15 @@ Benchmark scripts usually write to case-specific `output/` directories, includin
 From this repository root:
 
 ```bash
-cd benchmarks/annulus/legacy
-python ex_stokes_thieulot_legacy.py --res 8 --vdegree 2 --pdegree 1
-```
-
-Activate environment helpers:
-
-```bash
-./activate_uw3_legacy.sh
-# or
-./activate_uw3_latest.sh
+./activate_uw3.sh
+python benchmarks/annulus/ex_stokes_thieulot.py --res 8 --vdegree 2 --pdegree 1
 ```
 
 ## Notes
 
-- This repo is currently in a rebuild phase after cleanup.
-- Keep generated artifacts (`.meshes`, `.ipynb_checkpoints`, `output`, `__pycache__`) untracked.
-- Re-add benchmark scripts incrementally and validate against the legacy branch baseline.
+- Keep generated artifacts untracked, including `.meshes/`,
+  `.ipynb_checkpoints/`, `output/`, and `__pycache__/`.
+- Prefer updating the current benchmark scripts over reintroducing duplicate
+  compatibility copies.
+- Document solver, mesh, and metric changes in the relevant benchmark notes or
+  figure-script article sources.

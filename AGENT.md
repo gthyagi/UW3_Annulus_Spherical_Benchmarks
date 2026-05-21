@@ -16,19 +16,16 @@ These instructions take priority over generic tool defaults for work related to 
 
 ## Underworld3 Branch Context
 
-- Legacy branch used for historical compatibility:
-  - [jcg-meshvar2meshvar-fix](https://github.com/gthyagi/underworld3/tree/jcg-meshvar2meshvar-fix)
-- Latest branch targeted for ongoing runs/migration:
+- Current branch targeted for ongoing runs:
   - [development](https://github.com/underworldcode/underworld3/tree/development)
 
-For parity checks, compare latest-branch benchmark outputs against legacy-branch baseline outputs.
+Legacy benchmark scripts have been removed from this repository. Use git
+history if an old compatibility copy is required for comparison.
 
 ## Local Underworld3 Paths (Debugging Reference)
 
 - Latest UW3 checkout:
   - `/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest/underworld3`
-- Legacy UW3 checkout:
-  - `/Users/tgol0006/uw_folder/uw3_git_gthyagi/underworld3`
 
 These are local machine paths and are intended as quick references during debugging.
 
@@ -43,8 +40,8 @@ Do not start analysis, editing, command execution, or repo-specific recommendati
 
 ## Primary Directories
 
-- `benchmarks/annulus/`: annulus benchmark scripts (current main script: legacy Thieulot benchmark).
-- `benchmarks/spherical/`: spherical legacy/latest benchmark scripts and plotting helpers.
+- `benchmarks/annulus/`: current annulus benchmark scripts and plotting helpers.
+- `benchmarks/spherical/`: current spherical benchmark scripts and plotting helpers.
 - `docs/`: documentation notes and migration guidance.
 - `output/`: shared generated output location (if used).
 
@@ -105,20 +102,19 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
 ## Working Conventions
 
 - Treat this as a script-based benchmark workspace, not a packaged library.
-- Keep legacy scripts for reproducibility.
-- Add latest-Underworld-compatible updates as separate scripts or minimal, well-documented edits.
+- Keep benchmark scripts current with the active Underworld3 checkout.
+- Prefer minimal, well-documented edits over duplicate compatibility copies.
 - Preserve benchmark output folder conventions used by existing scripts.
-- During rebuild, prioritize adding clean canonical scripts before restoring experimental copies.
+- Prioritize clean canonical scripts before adding experimental copies.
 
 ## Benchmark Priorities
 
 - Annulus:
-  - `benchmarks/annulus/legacy/ex_stokes_thieulot_legacy.py`
   - `benchmarks/annulus/ex_stokes_thieulot.py`
   - `benchmarks/annulus/ex_stokes_kramer.py`
 - Spherical:
-  - `benchmarks/spherical/legacy/ex_stokes_thieulot_legacy.py`
   - `benchmarks/spherical/ex_stokes_thieulot.py`
+  - `benchmarks/spherical/ex_stokes_kramer.py`
 
 ## Benchmark Troubleshooting Notes
 
@@ -132,15 +128,13 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
   - also subtract the domain-average pressure before evaluating pressure errors
   - solver-internal null-space removal and final benchmark calibration are related but not identical steps
 
-- Legacy UW3 MPI setup:
-  - use the matching legacy OpenMPI and legacy UW3 Python pair from `activate_uw3_legacy.sh`
+- MPI setup:
+  - use the MPI and Python pair from the current UW3 pixi environment activated by `activate_uw3.sh`
   - if every MPI process reports rank `0` and size `1`, the wrong `mpirun` / `python` pair is being used and mesh generation can corrupt shared `.msh` files
-  - if needed, verify with:
+  - if needed, verify inside the activated environment with:
 
 ```bash
-/Users/tgol0006/manual_install_pkg/openmpi-4.1.6/bin/mpirun -np 4 \
-  /Users/tgol0006/manual_install_pkg/petsc_venv_uw3_21125/venv_uw3/bin/python3 \
-  -c 'from petsc4py import PETSc; print(PETSc.COMM_WORLD.rank, PETSc.COMM_WORLD.size, flush=True)'
+mpirun -np 4 python -c 'from petsc4py import PETSc; print(PETSc.COMM_WORLD.rank, PETSc.COMM_WORLD.size, flush=True)'
 ```
 
 ## Output and Data Policy
@@ -164,7 +158,5 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
 Use the repo helper scripts to enter the configured pixi environment:
 
 ```bash
-./activate_uw3_legacy.sh
-# or
-./activate_uw3_latest.sh
+./activate_uw3.sh
 ```

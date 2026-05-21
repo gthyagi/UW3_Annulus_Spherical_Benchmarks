@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Activate Underworld3 pixi environment.
 # - Execute: opens a pixi subshell
-#     ./activate_uw_pixi_env.sh [env_name]
+#     ./activate_uw3.sh [env_name]
 # - Source: activates in current shell
-#     source ./activate_uw_pixi_env.sh [env_name]
+#     source ./activate_uw3.sh [env_name]
 
 set -euo pipefail
 
