@@ -13,6 +13,8 @@
 
 \newcommand{\OutputRoot}{/Volumes/seagate4_1/output/annulus/kramer/latest}
 \newcommand{\RhoColorbar}{case2_inv_lc_64_n_2_k_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche/rho_ana_cbhorz.pdf}
+\newcommand{\PanelLabelFont}{\fontsize{13.24}{15}\selectfont}
+\newcommand{\CaseLabelFont}{\fontsize{13.24}{15}\selectfont}
 
 \newcommand{\MissingPanel}[1]{%
   \begin{tikzpicture}
@@ -45,7 +47,7 @@
       fill opacity=0.88,
       text opacity=1,
       inner sep=1.5pt,
-      font=\bfseries\scriptsize
+      font=\PanelLabelFont
     ] at (img.north west) {#1};
     \node[
       anchor=center,
@@ -53,7 +55,8 @@
       fill opacity=0.86,
       text opacity=1,
       inner sep=1.5pt,
-      font=\scriptsize
+      align=center,
+      font=\CaseLabelFont
     ] at (img.center) {#4};
   \end{tikzpicture}%
 }
@@ -62,9 +65,9 @@
 
 \centering
 \begin{tabular}{ccc}
-\Panel{a)}{case2_inv_lc_64_n_2_k_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case2, $n=2,k=2$}{$n=2,\ k=2$} &
-\Panel{b)}{case2_inv_lc_64_n_8_k_8_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case2, $n=8,k=8$}{$n=8,\ k=8$} &
-\Panel{c)}{case2_inv_lc_64_n_32_k_8_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case2, $n=32,k=8$}{$n=32,\ k=8$} \\
+\Panel{a)}{case2_inv_lc_64_n_2_k_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case2, $n=2,k=2$}{\shortstack{$n=2$\\$k=2$}} &
+\Panel{b)}{case2_inv_lc_64_n_8_k_8_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case2, $n=8,k=8$}{\shortstack{$n=8$\\$k=8$}} &
+\Panel{c)}{case2_inv_lc_64_n_32_k_8_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case2, $n=32,k=8$}{\shortstack{$n=32$\\$k=8$}} \\
 \Panel{d)}{case1_inv_lc_64_n_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case1, $n=2$}{$n=2$} &
 \Panel{e)}{case1_inv_lc_64_n_8_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case1, $n=8$}{$n=8$} &
 \Panel{f)}{case1_inv_lc_64_n_32_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche}{case1, $n=32$}{$n=32$}
