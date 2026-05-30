@@ -81,11 +81,11 @@ From the repository root:
 ```bash
 ./activate_uw3.sh
 python benchmarks/annulus/ex_stokes_thieulot.py \
-  --uw_cellsize "1/32" \
-  --uw_k 4 \
-  --uw_vdegree 2 \
-  --uw_pdegree 1 \
-  --uw_pcont true
+  -uw_cellsize "1/32" \
+  -uw_k 4 \
+  -uw_vdegree 2 \
+  -uw_pdegree 1 \
+  -uw_pcont true
 ```
 
 For MPI runs, invoke the same script through `mpirun` or the relevant batch
@@ -93,11 +93,11 @@ script:
 
 ```bash
 mpirun -n 8 python benchmarks/spherical/ex_stokes_thieulot.py \
-  --uw_cellsize "1/8" \
-  --uw_m -1 \
-  --uw_vdegree 2 \
-  --uw_pdegree 1 \
-  --uw_pcont true
+  -uw_cellsize "1/8" \
+  -uw_m -1 \
+  -uw_vdegree 2 \
+  -uw_pdegree 1 \
+  -uw_pcont true
 ```
 
 Each script supports `--help`:
