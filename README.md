@@ -69,10 +69,10 @@ output/
 
 | Geometry | Benchmark | Script | Article |
 | --- | --- | --- | --- |
-| Annulus | Thieulot--Puckett | `benchmarks/annulus/ex_stokes_thieulot.py` | `docs/benchmarks_figures_and_articles/annulus/thieulot/thieulot_annulus_benchmark_article.pdf` |
-| Annulus | Kramer et al. | `benchmarks/annulus/ex_stokes_kramer.py` | `docs/benchmarks_figures_and_articles/annulus/kramer/kramer_annulus_benchmark_article.pdf` |
-| Spherical shell | Thieulot | `benchmarks/spherical/ex_stokes_thieulot.py` | `docs/benchmarks_figures_and_articles/spherical/thieulot/thieulot_spherical_benchmark_article.pdf` |
-| Spherical shell | Kramer et al. | `benchmarks/spherical/ex_stokes_kramer.py` | `docs/benchmarks_figures_and_articles/spherical/kramer/kramer_spherical_benchmark_article.pdf` |
+| Annulus | Thieulot--Puckett | `benchmarks/annulus/ex_stokes_thieulot.py` | [article PDF](https://github.com/gthyagi/UW3_Annulus_Spherical_Benchmarks/blob/main/docs/benchmarks_figures_and_articles/annulus/thieulot/thieulot_annulus_benchmark_article.pdf) |
+| Annulus | Kramer et al. | `benchmarks/annulus/ex_stokes_kramer.py` | [article PDF](https://github.com/gthyagi/UW3_Annulus_Spherical_Benchmarks/blob/main/docs/benchmarks_figures_and_articles/annulus/kramer/kramer_annulus_benchmark_article.pdf) |
+| Spherical shell | Thieulot | `benchmarks/spherical/ex_stokes_thieulot.py` | [article PDF](https://github.com/gthyagi/UW3_Annulus_Spherical_Benchmarks/blob/main/docs/benchmarks_figures_and_articles/spherical/thieulot/thieulot_spherical_benchmark_article.pdf) |
+| Spherical shell | Kramer et al. | `benchmarks/spherical/ex_stokes_kramer.py` | [article PDF](https://github.com/gthyagi/UW3_Annulus_Spherical_Benchmarks/blob/main/docs/benchmarks_figures_and_articles/spherical/kramer/kramer_spherical_benchmark_article.pdf) |
 
 ## Running a Benchmark
 
@@ -123,7 +123,7 @@ outputs.
 ## Documentation Products
 
 - Benchmark articles:
-  `docs/benchmarks_figures_and_articles/**/**/*_benchmark_article.pdf`
+  [docs/benchmarks_figures_and_articles](https://github.com/gthyagi/UW3_Annulus_Spherical_Benchmarks/tree/main/docs/benchmarks_figures_and_articles)
 - Combined analytical-field banner:
   `docs/benchmarks_banner_figure/combined_density_distribution_figures.pdf`
 - Blog-post draft:
