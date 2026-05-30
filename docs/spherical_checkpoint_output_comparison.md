@@ -170,7 +170,7 @@ Test setup:
 - spherical Thieulot benchmark
 - `8` MPI ranks
 - `uw_cellsize = 1/8`
-- temporary copied driver used only for testing
+- temporary copied script used only for testing
 
 ### File Sizes
 

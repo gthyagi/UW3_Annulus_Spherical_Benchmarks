@@ -16,10 +16,10 @@ The correct spherical solve path is therefore:
 
 ## Steps Taken
 
-1. Verified the analytical helper formulas in the spherical benchmark script and created an isolated debug driver:
+1. Verified the analytical helper formulas in the spherical benchmark script and created an isolated debug script:
    [ex_stokes_thieulot_debug.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot_debug.py)
 2. Validated the setup on cheap serial `m=-1` runs.
-3. Reproduced the bad `m=3` pressure behavior in the debug driver.
+3. Reproduced the bad `m=3` pressure behavior in the debug script.
 4. Checked gauge, pressure BC, quadrature, polynomial order, and pressure continuity variations.
 5. Derived the radial body-force coefficient independently from the spherical stress-divergence identity.
 6. Confirmed that the derived coefficient matches:
@@ -36,16 +36,16 @@ The correct spherical solve path is therefore:
 - `uw_pcont = True`, `False`
 - `uw_qdegree = 6`, `8`
 - `uw_vdegree/uw_pdegree = 2/1`, `3/2`
-- body-force sign flip in the debug driver
+- body-force sign flip in the debug script
 
 ## Positive Results
 
 - Restoring the `r**m` factor in the `m != -1` forcing while keeping the negative body-force sign fixes the main issue.
-- Cheap serial debug-driver results improved substantially:
+- Cheap serial debug-script results improved substantially:
   - `m=3`, `1/8`, before correction: `v_l2 ~ 7.01e-2`, `p_l2 ~ 3.09`
   - `m=3`, `1/8`, after correction: `v_l2 ~ 3.99e-2`, `p_l2 ~ 3.59e-1`
   - `m=1`, `1/8`, after correction: `v_l2 ~ 1.67e-2`, `p_l2 ~ 2.48e-1`
-- The main spherical script matches the corrected debug driver at `m=3`, `1/8`:
+- The main spherical script matches the corrected debug script at `m=3`, `1/8`:
   - `v_l2 ~ 3.99e-2`
   - `p_l2 ~ 3.59e-1`
 - The body-force correction was previously checked with a regression test. The

@@ -6,13 +6,13 @@ Test whether switching the normal definition in a natural normal-only boundary
 condition improves pressure on the inner spherical boundary, using the
 `essential` solution as the reference baseline.
 
-## Driver
+## Script
 
 Standalone script:
 
 `benchmarks/spherical/ex_stokes_thieulot_bc_normals.py`
 
-The main benchmark driver
+The main benchmark script
 `benchmarks/spherical/ex_stokes_thieulot.py`
 was not modified for this experiment.
 
@@ -37,8 +37,8 @@ The key normal-only term is:
 
 ## Steps Taken
 
-1. Added a dedicated standalone driver for boundary-normal experiments.
-2. Verified the driver on `m = -1` first.
+1. Added a dedicated standalone script for boundary-normal experiments.
+2. Verified the script on `m = -1` first.
 3. Repeated the same matrix for `m = 3`.
 4. Added a projected-normal variant as a third normal definition.
 5. Ran targeted `m = 3` PETSc-normal retests with:
@@ -52,7 +52,7 @@ The key normal-only term is:
 - continuous pressure
 - `uw_p_bc = False`
 - default pressure gauge: volume mean
-- serial solve with the standalone driver
+- serial solve with the standalone script
 - baseline natural penalty: `1e8`
 - baseline Stokes tolerance: `1e-5`
 
@@ -110,7 +110,7 @@ Neither change materially improved the PETSc-normal result.
 
 ## Positive Results
 
-- The standalone driver isolates the experiment cleanly from the production
+- The standalone script isolates the experiment cleanly from the production
   benchmark path.
 - `natural_full` matches the essential baseline very closely in both `m = -1`
   and `m = 3`.

@@ -773,7 +773,7 @@ else:
 # We still subtract the domain-average pressure after the solve so the reported
 # pressure field has a unique zero-mean gauge for benchmark comparisons.
 #
-# This benchmark driver follows the annulus Kramer path and newer UW examples:
+# This benchmark script follows the annulus Kramer path and newer UW examples:
 # for free-slip shells, enable the PETSc rigid-rotation nullspace during the
 # solve, then subtract the benchmark's selected rigid rotation mode from the
 # reported free-slip velocity field after the solve.

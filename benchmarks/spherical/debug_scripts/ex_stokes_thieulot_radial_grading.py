@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Standalone spherical Thieulot radial-grading experiment driver.
+Standalone spherical Thieulot radial-grading experiment script.
 
 This script keeps the analytical fields and Stokes formulation fixed and
 applies a purely radial mesh deformation to cluster nodes toward the inner
@@ -78,7 +78,7 @@ class GaugeMetrics:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Standalone spherical Thieulot radial-grading comparison driver.",
+        description="Standalone spherical Thieulot radial-grading comparison script.",
         allow_abbrev=False,
     )
     parser.add_argument("-uw_cellsize", default="1/8")

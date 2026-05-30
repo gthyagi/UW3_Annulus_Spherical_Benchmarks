@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Standalone spherical Thieulot pressure-anchor experiment driver.
+Standalone spherical Thieulot pressure-anchor experiment script.
 
 This script keeps the velocity boundary treatment fixed to the analytical
 essential BC and varies only how pressure is constrained. The goal is to
@@ -97,7 +97,7 @@ class CaseResult:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Standalone spherical Thieulot pressure-anchor comparison driver.",
+        description="Standalone spherical Thieulot pressure-anchor comparison script.",
         allow_abbrev=False,
     )
     parser.add_argument("-uw_cellsize", default="1/8")

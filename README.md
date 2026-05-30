@@ -4,9 +4,9 @@
 
 This repository contains Underworld3 benchmark studies for incompressible
 Stokes flow in annulus and spherical-shell geometries. The benchmark suite
-focuses on curved-domain geodynamics problems with analytical solutions,
+focuses on curved-domain with analytical solutions,
 including the Thieulot--Puckett and Kramer benchmark families. It includes the
-simulation drivers, production-run helpers, postprocessing scripts, convergence
+uw3 scripts for benchmarks, production-run helpers, postprocessing scripts, convergence
 figures, benchmark articles, and a technical blog-post draft.
 
 The main quantities reported by the benchmark articles are velocity and pressure
@@ -33,7 +33,7 @@ An explicit pixi environment name can be supplied when needed:
 ./activate_uw3.sh amr-dev
 ```
 
-The helper can also be sourced to activate the environment in the current shell:
+The helper can also be sourced to activate the environment in the current shell if uw3 already installed via pixi:
 
 ```bash
 source ./activate_uw3.sh
@@ -43,8 +43,8 @@ source ./activate_uw3.sh
 
 ```text
 benchmarks/
-  annulus/      Benchmark drivers and field-plot helpers for annulus cases.
-  spherical/    Benchmark drivers and field-plot helpers for spherical shells.
+  annulus/      Benchmark scripts and field-plot helpers for annulus cases.
+  spherical/    Benchmark scripts and field-plot helpers for spherical shells.
 
 production_scripts/
   annulus/      Batch/convergence submission helpers for annulus studies.
@@ -67,7 +67,7 @@ output/
 
 ## Benchmarks Included
 
-| Geometry | Benchmark | Driver | Article |
+| Geometry | Benchmark | Script | Article |
 | --- | --- | --- | --- |
 | Annulus | Thieulot--Puckett | `benchmarks/annulus/ex_stokes_thieulot.py` | `docs/benchmarks_figures_and_articles/annulus/thieulot/thieulot_annulus_benchmark_article.pdf` |
 | Annulus | Kramer et al. | `benchmarks/annulus/ex_stokes_kramer.py` | `docs/benchmarks_figures_and_articles/annulus/kramer/kramer_annulus_benchmark_article.pdf` |
@@ -88,7 +88,7 @@ python benchmarks/annulus/ex_stokes_thieulot.py \
   --uw_pcont true
 ```
 
-For MPI runs, invoke the same driver through `mpirun` or the relevant batch
+For MPI runs, invoke the same script through `mpirun` or the relevant batch
 script:
 
 ```bash
@@ -100,7 +100,7 @@ mpirun -n 8 python benchmarks/spherical/ex_stokes_thieulot.py \
   --uw_pcont true
 ```
 
-Each driver supports `--help`:
+Each script supports `--help`:
 
 ```bash
 python benchmarks/annulus/ex_stokes_thieulot.py --help
@@ -111,7 +111,7 @@ python benchmarks/annulus/ex_stokes_thieulot.py --help
 Benchmark runs write case-specific output directories containing some or all of:
 
 - mesh and field HDF5/XDMF output,
-- PETSc-reloadable checkpoint data when enabled by the driver,
+- PETSc-reloadable checkpoint data when enabled by the script,
 - `benchmark_metrics.h5` error and diagnostic summaries,
 - timing information,
 - generated PDF/PNG figures.
@@ -135,7 +135,7 @@ outputs.
   figure artifact.
 - Do not commit `.meshes/`, `.ipynb_checkpoints/`, `output/`, `__pycache__/`,
   or temporary LaTeX build files unless they are intentionally tracked.
-- Prefer updating the current benchmark drivers and article folders rather than
+- Prefer updating the current benchmark scripts and article folders rather than
   adding duplicate compatibility copies.
 - Record solver, mesh, and metric changes in the relevant benchmark article or
   plotting script.

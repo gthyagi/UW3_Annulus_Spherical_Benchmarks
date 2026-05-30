@@ -1,6 +1,6 @@
 # Spherical Thieulot Radial Grading
 
-Driver:
+Script:
 - [ex_stokes_thieulot_radial_grading.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot_radial_grading.py)
 
 Setup:

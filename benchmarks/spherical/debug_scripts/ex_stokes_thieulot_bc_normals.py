@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Standalone spherical Thieulot boundary-normal experiment driver.
+Standalone spherical Thieulot boundary-normal experiment script.
 
-This script is isolated from the main benchmark drivers. It is intended for
+This script is isolated from the main benchmark scripts. It is intended for
 testing how weak normal-only boundary conditions affect the pressure field on
 the spherical shell boundaries, with the essential-BC solution used as the
 reference baseline.
@@ -87,7 +87,7 @@ class CaseResult:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Standalone spherical Thieulot normal-BC comparison driver.",
+        description="Standalone spherical Thieulot normal-BC comparison script.",
         allow_abbrev=False,
     )
     parser.add_argument("-uw_cellsize", default="1/8")

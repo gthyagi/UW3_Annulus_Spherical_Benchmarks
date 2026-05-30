@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Standalone spherical Thieulot benchmark debug driver.
+Standalone spherical Thieulot benchmark debug script.
 
-This script is intentionally isolated from the main benchmark drivers so the
+This script is intentionally isolated from the main benchmark scripts so the
 `m = -1` and `m = 3` cases can be compared with a minimal, transparent setup.
 It preserves the same analytical solution and Stokes formulation as the current
 benchmark path, while adding pressure-focused diagnostics that are useful for
@@ -97,7 +97,7 @@ class ResidualDiagnostics:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Standalone spherical Thieulot debug driver.",
+        description="Standalone spherical Thieulot debug script.",
         allow_abbrev=False,
     )
     parser.add_argument("-uw_cellsize", default="1/8")

@@ -4,7 +4,7 @@
 
 Investigate why pressure remains inaccurate at the inner spherical boundary, even after the `m = 3` body-force bug was fixed, and determine which current Underworld features are viable for improving the pressure field.
 
-Relevant drivers:
+Relevant scripts:
 
 - [benchmarks/spherical/ex_stokes_thieulot.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot.py)
 - [benchmarks/spherical/ex_stokes_thieulot_bc_normals.py](/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/benchmarks/spherical/ex_stokes_thieulot_bc_normals.py)
@@ -24,7 +24,7 @@ The working hypothesis tested here was:
 
 ### 1. Normal-vector boundary-condition tests
 
-These were already completed in the separate normal-BC driver.
+These were already completed in the separate normal-BC script.
 
 Cases compared:
 
