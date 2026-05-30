@@ -58,7 +58,7 @@ docs/
     Combined analytical-field banner figure and paper-section material.
   benchmarks_blog_post/
     Technical blog-post draft for the benchmark suite.
-  benchmark_papers/
+  benchmarks_papers/
     Source papers and reference material.
 
 output/
@@ -127,7 +127,7 @@ outputs.
 - Combined analytical-field banner:
   `docs/benchmarks_banner_figure/combined_density_distribution_figures.pdf`
 - Blog-post draft:
-  `docs/benchmarks_blog_post/underworld3_annulus_spherical_stokes_benchmarks.md`
+  `docs/benchmarks_blog_post/blog_annulus_spherical_stokes_benchmarks.md`
 
 ## Housekeeping
 

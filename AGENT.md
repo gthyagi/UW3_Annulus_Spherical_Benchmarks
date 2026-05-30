@@ -50,8 +50,8 @@ Do not start analysis, editing, command execution, or repo-specific recommendati
 Use these PDFs as the primary benchmark references when checking formulas, expected fields, convergence behaviour, and boundary-condition intent.
 
 - Curved-shell benchmark suite:
-  - `docs/benchmark_papers/kramer_etal_gmd2021.pdf`
-  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/kramer_etal_gmd2021.pdf`
+  - `docs/benchmarks_papers/kramer_etal_gmd2021.pdf`
+  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmarks_papers/kramer_etal_gmd2021.pdf`
   - Scope:
     - analytical Stokes solutions in 2-D cylindrical shells and 3-D spherical shells
     - smooth polynomial forcing and delta-function forcing
@@ -63,8 +63,8 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
     - delta-function forcing can produce suboptimal convergence, especially for continuous-pressure discretisations
 
 - Spherical Thieulot benchmark:
-  - `docs/benchmark_papers/cedric_thieulot_se2017.pdf`
-  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/cedric_thieulot_se2017.pdf`
+  - `docs/benchmarks_papers/thieulot_se2017.pdf`
+  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmarks_papers/thieulot_se2017.pdf`
   - Scope:
     - analytical incompressible Stokes flow in a spherical shell
     - tangential velocity on inner/outer boundaries
@@ -76,8 +76,8 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
     - use this paper when checking spherical `m=-1` and `m=3` velocity, pressure, density/body-force, and `vrms` expressions
 
 - Nitsche free-slip implementation reference:
-  - `docs/benchmark_papers/sime_wilson_2020.pdf`
-  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/sime_wilson_2020.pdf`
+  - `docs/benchmarks_papers/sime_wilson_2020.pdf`
+  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmarks_papers/sime_wilson_2020.pdf`
   - Scope:
     - Nitsche weak imposition of free-slip / normal-velocity constraints for Stokes flow
     - curved-boundary treatment and robustness relative to pure penalty methods
@@ -88,8 +88,8 @@ Use these PDFs as the primary benchmark references when checking formulas, expec
     - read it together with UW's curved-boundary note at `/Users/tgol0006/uw_folder/uw3_git_gthyagi_latest/underworld3/docs/advanced/curved-boundary-conditions.md`
 
 - Annulus Thieulot benchmark:
-  - `docs/benchmark_papers/thieulot_puckett_2018.pdf`
-  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmark_papers/thieulot_puckett_2018.pdf`
+  - `docs/benchmarks_papers/thieulot_puckett_2018.pdf`
+  - Absolute path: `/Users/tgol0006/uw_folder/UW3_Annulus_Spherical_Benchmarks/docs/benchmarks_papers/thieulot_puckett_2018.pdf`
   - Scope:
     - analytical incompressible Stokes flow in a 2-D annulus
     - constant viscosity, inward radial gravity, tangential boundary flow
