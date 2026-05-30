@@ -2,7 +2,7 @@
 
 ![Analytical benchmark fields](docs/benchmarks_banner_figure/combined_density_distribution_figures.jpg)
 
-This repository contains Underworld3 verification benchmarks for incompressible
+This repository contains Underworld3 benchmark studies for incompressible
 Stokes flow in annulus and spherical-shell geometries. The benchmark suite
 focuses on curved-domain geodynamics problems with analytical solutions,
 including the Thieulot--Puckett and Kramer benchmark families. It includes the
