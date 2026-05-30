@@ -1,0 +1,994 @@
+%% Copernicus Publications Manuscript Preparation Template for LaTeX Submissions
+%% ---------------------------------
+%% This template should be used for copernicus.cls
+%% The class file and some style files are bundled in the Copernicus Latex Package, which can be downloaded from the different journal webpages.
+%% For further assistance please contact Copernicus Publications at: production@copernicus.org
+%% https://publications.copernicus.org/for_authors/manuscript_preparation.html
+
+
+%% Please use the following documentclass and journal abbreviations for preprints and final revised papers.
+
+%% 2-column papers and preprints
+\documentclass[gmd, manuscript]{copernicus}
+
+
+
+%% Journal abbreviations (please use the same for preprints and final revised papers)
+
+
+% Advances in Geosciences (adgeo)
+% Advances in Radio Science (ars)
+% Advances in Science and Research (asr)
+% Advances in Statistical Climatology, Meteorology and Oceanography (ascmo)
+% Aerosol Research (ar)
+% Annales Geophysicae (angeo)
+% Archives Animal Breeding (aab)
+% Atmospheric Chemistry and Physics (acp)
+% Atmospheric Measurement Techniques (amt)
+% Biogeosciences (bg)
+% Climate of the Past (cp)
+% DEUQUA Special Publications (deuquasp)
+% Earth Surface Dynamics (esurf)
+% Earth System Dynamics (esd)
+% Earth System Science Data (essd)
+% E&G Quaternary Science Journal (egqsj)
+% EGUsphere (egusphere) | This is only for EGUsphere preprints submitted without relation to an EGU journal.
+% Earth Observation (eo)
+% European Journal of Mineralogy (ejm)
+% Geochronology (gchron)
+% Geographica Helvetica (gh)
+% Geoscience Communication (gc)
+% Geoscientific Instrumentation, Methods and Data Systems (gi)
+% Geoscientific Model Development (gmd)
+% History of Geo- and Space Sciences (hgss)
+% Hydrology and Earth System Sciences (hess)
+% Journal of Bone and Joint Infection (jbji)
+% Journal of Environmentally Compatible Air Transport System (jecats)
+% Journal of Micropalaeontology (jm)
+% Journal of Sensors and Sensor Systems (jsss)
+% Magnetic Resonance (mr)
+% Mechanical Sciences (ms)
+% Natural Hazards and Earth System Sciences (nhess)
+% Nonlinear Processes in Geophysics (npg)
+% Ocean Science (os)
+% Polarforschung - Journal of the German Society for Polar Research (polf)
+% Proceedings of the International Association of Hydrological Sciences (piahs)
+% Proceedings of the International Ocean Drilling Programme (piodp)
+% Safety of Nuclear Waste Disposal (sand)
+% Scientific Drilling (sd)
+% SOIL (soil)
+% Solid Earth (se)
+% State of the Planet (sp)
+% The Cryosphere (tc)
+% Weather and Climate Dynamics (wcd)
+% Web Ecology (we)
+% Wind Energy Science (wes)
+
+
+%% \usepackage commands included in the copernicus.cls:
+%\usepackage[german, english]{babel}
+%\usepackage{tabularx}
+%\usepackage{cancel}
+%\usepackage{multirow}
+%\usepackage{supertabular}
+%\usepackage{algorithmic}
+%\usepackage{algorithm}
+%\usepackage{amsthm}
+%\usepackage{float}
+%\usepackage{subfig}
+%\usepackage{rotating}
+
+
+\usepackage{pdfpages}
+\usepackage{booktabs}
+\usepackage{pdflscape}
+
+\graphicspath{{./}}
+\emergencystretch=2em
+\defcitealias{thieulot2018}{TP2018}
+\defcitealias{Moresi2025}{UW3}
+\newcommand{\figref}[1]{\hyperref[#1]{Fig.~\ref*{#1}}}
+\newcommand{\tabref}[1]{\hyperref[#1]{Table~\ref*{#1}}}
+
+\begin{document}
+
+\title{Incompressible Stokes Flow Annulus Benchmark Using Underworld3}
+
+
+% \Author[affil]{given_name}{surname}
+
+\Author[1][gthyagi@gmail.com]{Thyagarajulu}{Gollapalli} %% correspondence author
+\Author[1]{Underworld}{Team}
+
+\affil[1]{Research School of Earth Sciences, Australian National University, Canberra, ACT, Australia}
+
+%% The [] brackets identify the author with the corresponding affiliation. 1, 2, 3, etc. should be inserted.
+
+%% If an author is deceased, please add \deceased[$Deceased date if applicable$]{$Author number$} (e.g. \deceased[13 November 2015]{2}) at the end of the affiliations. The author number depends on the placement of the author in the author list, e.g. the third author has number 3.
+
+
+%% If authors contributed equally, please add \equalcontrib{$Author numbers$} (e.g. \equalcontrib{1,3}) at the end of the affiliations. The author number depends on the placement of the author in the author list, e.g. the third author has number 3.
+
+
+
+
+\runningtitle{Annulus Stokes flow benchmark in Underworld3}
+
+\runningauthor{Gollapalli}
+
+
+
+
+
+\received{}
+\pubdiscuss{} %% only important for two-stage journals
+\revised{}
+\accepted{}
+\published{}
+
+%% These dates will be inserted by Copernicus Publications during the typesetting process.
+
+
+\firstpage{1}
+
+\maketitle
+
+
+
+\begin{abstract}
+We reproduce the annulus Stokes benchmark of \citet{thieulot2018}
+(hereafter TP2018) using
+the \href{https://github.com/underworldcode/underworld3}{Underworld3} (hereafter UW3)
+framework \citep{Moresi2025}. The benchmark describes incompressible isoviscous Stokes flow
+in an annulus with tangential velocity boundary conditions imposed on
+both the inner and outer boundaries, driven by radially directed gravity and
+analytically prescribed buoyancy forcing that generates convection cells
+parameterised by the harmonic number \(k\). We investigate the accuracy and
+convergence behaviour of several mixed finite-element discretisations, including
+\(P_1\times P_0\), \(P_1\times P_1\), \(P_2\times P_0\),
+\(P_2\times P_{-1}\), \(P_2\times P_1\), and \(P_3\times P_2\).
+Numerical solutions are evaluated against the analytical
+velocity and pressure fields using relative \(L_2\)-norm errors. The higher-order
+Taylor--Hood discretisations reproduce the expected convergence hierarchy for
+smooth Stokes solutions, with approximately third-order velocity and second-order
+pressure convergence for \(P_2\times P_1\), and fourth-order velocity and
+third-order pressure convergence for \(P_3\times P_2\). In contrast,
+lower-order discretisations exhibit reduced robustness, particularly in pressure
+recovery. These results demonstrate that UW3 accurately reproduces analytical
+Stokes solutions in curved geometries and provides a robust framework for future
+annulus geodynamics simulations.
+\end{abstract}
+
+
+% \copyrightstatement{TEXT} %% This section is optional and can be used for copyright transfers.
+
+
+\introduction
+
+Accurate numerical solution of the incompressible Stokes equations is fundamental
+to modelling mantle convection, lithospheric deformation, subduction dynamics,
+and planetary evolution. Many geodynamic applications require simulations in
+curved geometries, such as annulus, spherical cap, and full spherical shell.
+These geometries introduce additional numerical challenges associated with
+curved boundaries, pressure nullspaces, coordinate-dependent forcing terms, and
+tangential boundary conditions.
+
+Reproducing analytical benchmarks remains one of the most rigorous approaches
+for assessing the correctness of numerical implementations. Unlike code-to-code
+comparisons, analytical benchmarks enable direct quantification of
+discretisation errors and convergence rates. They are particularly valuable for
+geodynamic Stokes problems because they simultaneously assess
+velocity--pressure coupling, incompressibility preservation, boundary condition
+implementation, and the accurate representation of curved geometries
+\citep{kramer2021,davies2022}.
+
+The annulus benchmark introduced by \citetalias{thieulot2018} provides an exact analytical solution
+for incompressible isoviscous Stokes flow in an annulus subjected to
+radially directed gravity. The benchmark was specifically designed for
+geodynamics applications and has since been widely used for verification of
+geodynamic codes within the community \citep{gassmoller2024}. Unlike classical
+Cartesian manufactured solutions, the benchmark incorporates curved inner and
+outer boundaries, non-trivial pressure distributions along the boundaries,
+coordinate-dependent buoyancy forcing, tangential velocity boundary conditions,
+and controllable azimuthal complexity through the harmonic parameter \(k\).
+These characteristics make the benchmark particularly well suited for assessing
+finite-element formulations in annulus and curved-domain mantle convection
+problems.
+
+In this study, we reproduce the \citetalias{thieulot2018} annulus
+benchmark to verify the curved-domain finite-element implementations in
+\citetalias{Moresi2025}. We
+evaluate the convergence and accuracy of several mixed finite-element
+discretisations, including both lower-order and higher-order
+velocity--pressure element pairs. Numerical results are compared against the
+analytical velocity and pressure fields using \(L_2\)-norm errors and
+boundary pressure diagnostics. Particular attention is given to the convergence
+behaviour of Taylor--Hood discretisations and the performance of lower-order and
+equal-order element formulations.
+
+\section{Governing Equations}
+
+We consider steady state incompressible Stokes equations:
+\begin{subequations}
+\begin{align}
+  -\nabla \cdot \boldsymbol{\sigma} &= \rho \mathbf{g}, \\
+  \nabla \cdot \mathbf{u} &= 0.
+\end{align}
+\end{subequations}
+The stress tensor is
+\begin{equation}
+  \boldsymbol{\sigma} = -p\mathbf{I} + 2\eta\boldsymbol{\varepsilon}(\mathbf{u}),
+\end{equation}
+with viscosity \(\eta\) and strain-rate tensor
+\begin{equation}
+  \boldsymbol{\varepsilon}(\mathbf{u})
+  =
+  \frac{1}{2}\left(\nabla \mathbf{u} + (\nabla \mathbf{u})^T\right).
+\end{equation}
+where \(\mathbf{u}\) is velocity, \(p\) is pressure, \(\rho\) is density, and \(\mathbf{g}\) is gravitational acceleration.
+
+\section{Analytical Benchmark Solution}
+
+Following \citetalias{thieulot2018}, the analytical velocity field in polar coordinates is defined as
+\begin{subequations}
+\begin{align}
+  v_\theta(r,\theta) &= f(r)\cos(k\theta), \\
+  v_r(r,\theta) &= k g(r)\sin(k\theta).
+\end{align}
+\end{subequations}
+where
+\begin{subequations}
+\begin{align}
+  f(r) &= Ar+\frac{B}{r}, \\
+  g(r) &= \frac{A}{2}r+\frac{B}{r}\ln r+\frac{C}{r}.
+\end{align}
+\end{subequations}
+The constants \(A\) and \(B\) are chosen such that radial velocity vanishes at both annulus boundaries:
+\begin{subequations}
+\begin{align}
+  A &= -C\frac{2(\ln R_1-\ln R_2)}{R_2^2\ln R_1-R_1^2\ln R_2}, \\
+  B &= -C\frac{R_2^2-R_1^2}{R_2^2\ln R_1-R_1^2\ln R_2}.
+\end{align}
+\end{subequations}
+The pressure field is
+\begin{equation}
+  p(r,\theta)=k h(r)\sin(k\theta)+\rho_0(R_2-r),
+\end{equation}
+where
+\begin{equation}
+  h(r)=\frac{2g(r)-f(r)}{r}.
+\end{equation}
+The corresponding density field is
+\begin{equation}
+  \rho(r,\theta)=kM(r)\sin(k\theta)+\rho_0,
+\end{equation}
+with
+\begin{equation}
+  M(r)=g''(r)-\frac{g'(r)}{r}
+  -\frac{g(r)}{r^2}(k^2-1)
+  +\frac{f(r)}{r^2}
+  +\frac{f'(r)}{r}.
+\end{equation}
+The benchmark calculations use the standard parameter values
+\[
+  R_1=1,
+  \qquad
+  R_2=2,
+  \qquad
+  C=-1,
+  \qquad
+  \rho_0=0.
+\]
+where \(R_1\) is the inner radius and \(R_2\) is the outer radius.
+Gravity acts radially inward:
+\begin{equation}
+  \mathbf{g} = -\mathbf{e}_r.
+\end{equation}
+The benchmark assumes constant viscosity \(\eta=1\) and prescribes analytical velocity on boundaries, and density field in the domain.
+Increasing the harmonic parameter \(k\) increases azimuthal complexity and produces \(2k\) convection cells in the annulus.
+This enables systematic evaluation of numerical performance across increasingly oscillatory flow structures.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\linewidth]{figure_1_thieulot_annulus_analytical.pdf}
+    \caption{Analytical density, velocity, and pressure fields. Columns correspond to increasing \(k\), which increases the number of convection cells in the annulus.}
+    \label{fig:thieulot_annulus_fields}
+\end{figure}
+
+\section{Numerical Methodology}
+
+\subsection{UW3 Formulation}
+
+The benchmark is implemented in \citetalias{Moresi2025}, a finite-element
+geodynamics framework built on PETSc \citep{osti_2337606} with symbolic problem specification
+in Python. The incompressible Stokes equations are assembled from SymPy
+expressions for the viscosity, body force, velocity, pressure, and
+boundary data, and the resulting saddle-point systems are solved with
+PETSc Krylov methods and preconditioners.
+
+The pressure in the incompressible Stokes equations is determined only up
+to an additive constant unless a pressure reference value or mean-pressure
+constraint is imposed. This gauge freedom remains even when the velocity
+is prescribed on the annulus boundaries, because adding a constant to the
+pressure does not change the pressure gradient in the momentum equation.
+Accordingly, a constant-pressure nullspace is supplied to PETSc during
+the solve. After solution, the domain-average pressure is subtracted from
+the numerical field so that pressure errors are evaluated in the same
+zero-mean gauge as the analytical benchmark solution.
+
+The annulus is discretised using unstructured triangular meshes generated
+with progressively refined characteristic cell sizes. The calculations reported
+here use a linear geometric representation of the curved inner and outer
+annulus boundaries; the effect of this geometric approximation is
+therefore included in the measured discretisation error.
+
+UW3 uses Gmsh \citep{Geuzaine2009} as the backend for mesh generation. In Gmsh, the
+characteristic cell size specifies the target local mesh length used
+during mesh generation. It controls the intended edge length of the
+triangular elements, but the generated mesh still contains a distribution
+of element sizes because the mesher must also satisfy the geometric
+boundary representation and element-quality constraints. In the
+convergence plots, \(h\) denotes this prescribed characteristic cell size,
+rather than an exact maximum or average element diameter measured after
+meshing.
+
+\subsection{Finite-Element Discretisations}
+
+The following mixed finite-element pairs are evaluated:
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+Velocity space & Pressure space & Description \\
+\midrule
+\(P_1\) & \(P_0\) & Linear velocity, discontinuous constant pressure \\
+\(P_1\) & \(P_1\) & Equal-order continuous discretisation \\
+\(P_2\) & \(P_0\) & Quadratic velocity, discontinuous constant pressure \\
+\(P_2\) & \(P_{-1}\) & Quadratic velocity, discontinuous linear pressure \\
+\(P_2\) & \(P_1\) & Taylor--Hood discretisation \\
+\(P_3\) & \(P_2\) & Higher-order Taylor--Hood discretisation \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The quadrature degree is chosen according to the highest polynomial order present in the discretisation.
+For smooth incompressible Stokes solutions, stable Taylor--Hood-type discretisations are expected to exhibit 
+velocity convergence of order \(p+1\) and pressure convergence of order \(p\) for a \(P_{p}\times P_{p-1}\) 
+discretisation \citep{girault1986,boffi2013}.
+
+\subsection{Error Metrics}
+
+Errors are quantified by comparing the numerical and analytical
+solutions using both absolute and relative \(L_2\)-norm measures.
+The absolute \(L_2\)-norm error is defined as
+\begin{equation}
+  E_{L_2}(q)
+  =
+  \left(
+  \int_\Omega |q-q^*|^2 \, d\Omega
+  \right)^{1/2},
+\end{equation}
+and the relative \(L_2\)-norm error is computed as
+\begin{equation}
+  E_{L_2}^{\mathrm{rel}}(q)
+  =
+  \frac{E_{L_2}(q)}{\|q^*\|_{L_2}}
+  =
+  \left(
+  \frac{\int_\Omega |q-q^*|^2\,d\Omega}
+       {\int_\Omega |q^*|^2\,d\Omega}
+  \right)^{1/2},
+\end{equation}
+where \(q\) and \(q^*\) denote the numerical and analytical
+solutions, respectively.
+Boundary errors are written with a boundary subscript. For an annulus boundary
+\(\Gamma\), the absolute pressure trace error is
+\begin{equation}
+  E_{L_2,\Gamma}(p)
+  =
+  \left(
+  \int_\Gamma |p-p^*|^2\,d\Gamma
+  \right)^{1/2}.
+\end{equation}
+The inner and outer boundaries are denoted
+\(\Gamma_{\mathrm{inner}}\) and \(\Gamma_{\mathrm{outer}}\), respectively.
+
+Convergence rates are evaluated from successive mesh refinements as
+\begin{equation}
+  rate
+  =
+  \frac{
+    \log\left(
+      E_{L_2,h_1}(q) /
+      E_{L_2,h_2}(q)
+    \right)
+  }
+  {
+    \log\left(h_1/h_2\right)
+  },
+\end{equation}
+where \(h_1\) and \(h_2\) are the characteristic mesh sizes of two
+consecutive refinements. For uniform mesh refinement with
+\(h_2=h_1/2\), this reduces to
+\begin{equation}
+  rate
+  =
+  \log_2
+  \left(
+    \frac{E_{L_2,h_1}(q)}
+         {E_{L_2,h_2}(q)}
+  \right).
+\end{equation}
+
+\section{Results}
+
+\subsection{Convergence Behaviour}
+
+The convergence behaviour for all tested discretisations is shown in \figref{fig:thieulot_annulus_convergence}.
+The \(P_2\times P_1\) Taylor--Hood discretisation exhibits approximately third-order velocity convergence and 
+second-order pressure convergence, consistent with theoretical expectations for smooth Stokes solutions.
+
+The higher-order \(P_3\times P_2\) discretisation achieves approximately fourth-order velocity convergence and 
+third-order pressure convergence on coarse-to-intermediate mesh resolutions.
+At the finest resolutions, convergence rates begin to plateau, likely reflecting accumulated effects 
+from geometry approximation, quadrature errors, and solver tolerances.
+
+The lower-order discretisations show reduced robustness.
+The \(P_1\times P_0\) pair fails to produce reliable convergence behaviour for this benchmark.
+The equal-order \(P_1\times P_1\) pair gives approximately second-order velocity convergence but only 
+first-order to slightly superlinear pressure convergence.
+The discontinuous-pressure \(P_2\times P_0\) pair gives approximately second-order velocity convergence 
+and first-order pressure convergence, whereas \(P_2\times P_{-1}\) gives near second-order velocity convergence 
+but poor pressure convergence over the available mesh refinements.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\linewidth]{figure_5_thieulot_annulus_convergence.pdf}
+    \caption{Convergence of relative volume errors \(E_{L_2}^{\mathrm{rel}}(\mathbf{u})\) and \(E_{L_2}^{\mathrm{rel}}(p)\) for the annulus Thieulot benchmark. Reference lines indicate the expected smooth-solution rates for the higher-order element pairs.}
+    \label{fig:thieulot_annulus_convergence}
+\end{figure}
+
+% Native LaTeX table content generated by make_table_figure_5_thieulot_annulus_convergence.py.
+\input{table_figure_5_thieulot_annulus_convergence_fragment.tex}
+
+\subsection{Boundary Pressure Recovery}
+
+Boundary pressure is examined because it directly contributes to the
+normal stress and traction acting on the annulus boundaries. While
+domain-integrated pressure errors quantify global convergence behaviour,
+boundary pressure recovery provides a more stringent assessment of
+pressure interpolation accuracy, element-pair stability, and geometric
+representation of the curved domain.
+
+Pressure profiles extracted along the inner and outer annulus boundaries
+are compared against the analytical solutions in
+\figref{fig:thieulot_annulus_boundary_pressure}. The higher-order
+Taylor--Hood discretisations reproduce the analytical pressure
+distributions with high accuracy across both boundaries, including the
+pressure extrema associated with strong azimuthal variations. In
+contrast, discrepancies are more evident for lower-order
+discretisations and become increasingly pronounced at larger harmonic
+orders \(k\), where sharper angular pressure gradients must be resolved.
+
+Because the benchmark contains non-trivial pressure variations directly
+on curved boundaries, these comparisons provide a demanding test of both
+pressure interpolation quality and numerical accuracy in curved-domain
+finite-element discretisations.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\linewidth]{figure_2_thieulot_annulus_pressure_boundary.pdf}
+    \caption{Pressure along the inner and outer annulus boundaries for \(k=1,2,4\), using the \(P_2\times P_1\), \(h=1/128\) calculations. Solid curves denote the analytical solution and dashed curves denote UW3 values sampled from the numerical pressure field.}
+    \label{fig:thieulot_annulus_boundary_pressure}
+\end{figure}
+
+The corresponding absolute boundary pressure errors for the \(P_2\times P_1\)
+discretisation are shown in \figref{fig:thieulot_annulus_boundary_pressure_convergence}.
+Both inner- and outer-boundary errors decrease at approximately second order,
+consistent with the volume pressure convergence observed for this element pair.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\linewidth]{figure_p2p1_boundary_pressure_convergence.pdf}
+    \caption{Convergence of absolute boundary pressure errors \(E_{L_2,\Gamma}(p)\) for the \(P_2\times P_1\) annulus Thieulot benchmark calculations. Solid curves denote the inner boundary and dashed curves denote the outer boundary.}
+    \label{fig:thieulot_annulus_boundary_pressure_convergence}
+\end{figure}
+
+
+\section{Discussion}
+
+The present results demonstrate that UW3 reproduces the analytical annulus benchmark 
+solution with convergence behaviour consistent with finite-element theory.
+The benchmark additionally highlights several important numerical considerations.
+
+\tabref{tab:observed_convergence_rates} summarises the observed convergence
+rates for the three harmonic benchmark cases for which analytical solutions are
+available. The optimal-rate column reports the smooth-solution reference rates
+used here; entries marked \(-/-\) have no optimal-rate claim in this comparison,
+and their fitted rates should be interpreted empirically.
+
+\input{table_observed_convergence_rates_fragment.tex}
+
+The stability status of the lower-order and discontinuous-pressure pairs requires
+some qualification. The equal-order \(P_1\times P_1\) pair is not inf-sup stable
+as a standard Galerkin Stokes discretisation and is therefore susceptible to
+spurious pressure modes unless an additional pressure-stabilisation mechanism is
+introduced \citep{boffi2013}. Stabilised equal-order formulations, such as
+Petrov--Galerkin, Galerkin least-squares, or related stabilised mixed methods, can
+restore well-posedness and recover the smooth-solution target rates
+\(E_{L_2}^{\mathrm{rel}}(\mathbf{u})/E_{L_2}^{\mathrm{rel}}(p)=2/1\)
+\citep{Hughes_1986,Brezzi_1988}.
+For this particular smooth benchmark, the unstabilised \(P_1\times P_1\) pair
+nevertheless produces approximately second-order velocity convergence and
+roughly first-order pressure convergence. These rates should therefore be
+interpreted as benchmark-specific observed behaviour, not as convergence
+guaranteed by a stable mixed finite-element method.
+The \(P_2\times P_0\) pair is inf-sup stable, but is non-standard and
+approximation-unbalanced: the constant pressure space limits the expected
+pressure convergence to first order and the velocity convergence to second order
+\citep{boffi2013,thieulot2025}. The \(P_2\times P_{-1}\) pair used here denotes
+continuous quadratic velocity with discontinuous linear pressure, i.e. the
+lowest-order Scott--Vogelius-type \(P_2\times P_1^{\mathrm{disc}}\) pairing. This
+pair is not uniformly stable on arbitrary triangular meshes, but can be made
+stable on suitable split meshes, including barycentric/Alfeld refinements, where
+the smooth-solution target is \(3/2\) \citep{Scott_1985,Guzm_n_2018}.
+
+\begin{table}[H]
+\centering
+\caption{Stability interpretation and expected smooth-solution rates for selected
+non-Taylor--Hood element pairs. Rates are reported as
+\(E_{L_2}^{\mathrm{rel}}(\mathbf{u})/E_{L_2}^{\mathrm{rel}}(p)\).}
+\label{tab:nonstandard_element_stability}
+\scriptsize
+\begin{tabular}{p{0.14\linewidth}p{0.25\linewidth}p{0.35\linewidth}p{0.13\linewidth}}
+\toprule
+Pair & Status in standard Galerkin form & Route to stable use & Expected rate \\
+\midrule
+\(P_1\times P_1\) & Unstable equal-order pair & Add consistent pressure stabilisation, e.g. PSPG/GLS or related stabilised mixed methods & \(2/1\) when stabilised \\
+\(P_2\times P_0\) & Stable but non-standard and pressure-limited & No stabilisation required, but pressure approximation remains piecewise constant & \(2/1\) \\
+\(P_2\times P_{-1}\) & Not uniformly stable on arbitrary triangular meshes & Use suitable Scott--Vogelius meshes such as barycentric/Alfeld refinements, or equivalent stabilising enrichment/restriction & \(3/2\) when stable \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Boundary Pressure Error Asymmetry}
+
+The inner- and outer-boundary pressure errors in
+\figref{fig:thieulot_annulus_boundary_pressure_convergence} are not expected to
+be equal, even though the analytical pressure has zero signed integral on each
+boundary. With \(\rho_0=0\), the analytical boundary pressure is
+\begin{equation}
+  p^*(r,\theta) = k h(r)\sin(k\theta),
+\end{equation}
+and therefore
+\begin{equation}
+  \int_{\Gamma_r} p^*\,ds
+  =
+  \int_0^{2\pi} k h(r)\sin(k\theta)\,r\,d\theta
+  =
+  0.
+\end{equation}
+The error plotted in \figref{fig:thieulot_annulus_boundary_pressure_convergence}
+is instead an absolute boundary \(L_2\) error,
+\begin{equation}
+  E_{L_2,\Gamma_r}(p)
+  =
+  \left(
+  \int_{\Gamma_r} |p_h-p^*|^2\,ds
+  \right)^{1/2}
+  =
+  \left(
+  \int_0^{2\pi} |p_h(r,\theta)-p^*(r,\theta)|^2 r\,d\theta
+  \right)^{1/2}.
+\end{equation}
+The corresponding analytical pressure magnitude is
+\begin{equation}
+  \|p^*\|_{L_2(\Gamma_r)}
+  =
+  |k h(r)|\sqrt{\pi r},
+\end{equation}
+which is different on the two boundaries. For the present benchmark parameters,
+\[
+  h(R_1) \simeq 2.328,
+  \qquad
+  h(R_2) \simeq -0.918,
+  \qquad
+  \frac{\|p^*\|_{L_2(\Gamma_{R_2})}}
+       {\|p^*\|_{L_2(\Gamma_{R_1})}}
+  \simeq 0.558 .
+\]
+Thus the signed mean cancels on both boundaries, but the pressure trace has
+larger \(L_2\) magnitude on the inner boundary.
+
+A second source of asymmetry is the sensitivity of the pressure trace to small
+geometric perturbations. If a discrete boundary point is displaced from the
+exact circular boundary by
+\[
+  x_h(\theta)-x(\theta)
+  =
+  \delta r(\theta)\mathbf{e}_r
+  +
+  r\,\delta\theta(\theta)\mathbf{e}_\theta,
+\]
+then the analytical pressure sampled on the perturbed boundary satisfies, to
+first order,
+\begin{equation}
+  p^*(r+\delta r,\theta+\delta\theta)-p^*(r,\theta)
+  \simeq
+  k h'(r)\sin(k\theta)\,\delta r
+  +
+  k^2 h(r)\cos(k\theta)\,\delta\theta .
+\end{equation}
+Consequently, a boundary-pressure error model contains the geometric component
+\begin{equation}
+  E_{L_2,\Gamma_r}^2(p)
+  \approx
+  r\int_0^{2\pi}
+  \left|
+    e_{\mathrm{disc}}(\theta)
+    +
+    k h'(r)\sin(k\theta)\,\delta r
+    +
+    k^2 h(r)\cos(k\theta)\,\delta\theta
+  \right|^2 d\theta ,
+\end{equation}
+where \(e_{\mathrm{disc}}\) contains the pressure discretisation and solver
+errors on the represented boundary. For the benchmark constants,
+\[
+  h'(R_1)\simeq -13.31,
+  \qquad
+  h'(R_2)\simeq -0.164 .
+\]
+The inner pressure trace is therefore far more sensitive to small radial
+boundary-location errors than the outer trace. This explains why the absolute
+inner-boundary error can be much larger than the outer-boundary error, despite
+the outer boundary having a larger arclength measure.
+
+Linear boundary elements approximate a circular boundary by straight chords. If
+\(\Delta\) denotes the boundary mesh spacing, the geometric displacement is
+typically \(O(\Delta^2)\), while the normal error is \(O(\Delta)\). Classical
+curved-element and isoparametric finite-element estimates show how higher-order
+geometry can recover the optimal approximation behaviour expected on smooth
+domains \citep{Ciarlet_1972,Lenoir_1986,Bernardi_1989}. A curved isoparametric
+element of geometric degree \(m\) uses
+\begin{equation}
+  x_h(\xi)=\sum_i N_i^{(m)}(\xi)X_i
+\end{equation}
+and improves these estimates to approximately
+\begin{equation}
+  \|x_h-x\|_{L^\infty(\Gamma)}=O(\Delta^{m+1}),
+  \qquad
+  \|n_h-n\|_{L^\infty(\Gamma)}=O(\Delta^m).
+\end{equation}
+This is particularly relevant for pressure because the normal stress contains
+the pressure term
+\begin{equation}
+  \sigma(\mathbf{u},p)n
+  =
+  -p n + 2\eta \varepsilon(\mathbf{u})n .
+\end{equation}
+Replacing \(n\) by a discrete normal \(n_h\) perturbs the pressure contribution
+by approximately \(-p(n_h-n)\). Higher-order curved geometry reduces this
+normal and boundary-location error, and should therefore reduce boundary
+pressure errors most strongly where \(|h'(r)|\) and \(|h(r)|\) are largest.
+\tabref{tab:boundary_pressure_error_mechanisms} summarises the main terms
+controlling the inner--outer error difference.
+
+\begin{table}[H]
+\centering
+\caption{Diagnostic quantities controlling the difference between inner- and
+outer-boundary pressure errors. Values use \(R_1=1\), \(R_2=2\), and \(C=-1\).
+The listed effects are qualitative because the final error also depends on the
+discrete pressure field and solver tolerance.}
+\label{tab:boundary_pressure_error_mechanisms}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{p{0.22\linewidth}p{0.25\linewidth}p{0.24\linewidth}p{0.20\linewidth}}
+\toprule
+Mechanism & Diagnostic quantity & Benchmark value & Expected effect \\
+\midrule
+Signed pressure mean & \(\int_{\Gamma_r} p^*\,ds\) & Zero on both boundaries & Does not determine \(L_2\) error because signs cancel only before squaring \\
+Trace magnitude & \(|h(R_1)|\), \(|h(R_2)|\) & \(2.328\), \(0.918\) & Larger inner pressure amplitude increases potential inner trace error \\
+Boundary measure & \(\sqrt{R_2/R_1}\) in an \(L_2\) norm & \(1.414\) & Would favour larger outer error if pointwise errors were equal \\
+Radial geometry sensitivity & \(|h'(R_1)|\), \(|h'(R_2)|\) & \(13.31\), \(0.164\) & Strongly amplifies inner error from radial boundary displacement \\
+Tangential phase sensitivity & \(|h(R_1)|/|h(R_2)|\) in the \(k^2 h\,\delta\theta\) term & \(2.54\) & Inner trace is more sensitive to tangential/phase perturbations; sensitivity grows with \(k\) \\
+Boundary geometry order & Linear: \(O(\Delta^2)\) position, \(O(\Delta)\) normal; curved degree \(m\): \(O(\Delta^{m+1})\), \(O(\Delta^m)\) & Method-dependent & Curved elements reduce pressure-trace and stress-normal errors, especially on the inner boundary \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+First, higher-order mixed discretisations provide substantially improved pressure accuracy relative to lower-order formulations.
+This is particularly important in geodynamics applications where pressure gradients strongly influence buoyancy-driven flow and dynamic topography.
+
+Second, curved geometries remain sensitive to geometric approximation order.
+Although linear geometry representation was sufficient to recover theoretical convergence trends for the present benchmark, higher-order 
+curved geometry representations may become increasingly important for extremely fine meshes or strongly curved spherical-shell problems.
+
+Third, equal-order discretisations continue to exhibit weaker pressure robustness relative to stable Taylor--Hood formulations.
+This behaviour aligns with expectations from the Ladyzhenskaya--Babuska--Brezzi stability condition.
+
+The benchmark therefore provides a valuable verification framework not only for UW3, but also for future development of curved-element 
+geometries, advanced boundary-condition implementations, and spherical-shell finite-element formulations.
+
+\conclusions
+
+We have presented a verification study of the
+\citetalias{thieulot2018} annulus Stokes benchmark using
+\citetalias{Moresi2025}. The benchmark provides a comprehensive test
+for incompressible Stokes solvers in curved geometries by combining
+radial gravity, coordinate-dependent forcing, tangential velocity
+boundary conditions, pressure nullspace treatment, and non-trivial
+pressure variation along curved annulus boundaries.
+
+The main observations from this study are:
+\begin{enumerate}
+  \item The Taylor--Hood discretisations recover the expected
+  convergence behaviour for smooth solutions.
+  
+  \item The \(P_2\times P_1\) discretisation achieves approximately
+  third-order velocity convergence and second-order pressure
+  convergence.
+  
+  \item The \(P_3\times P_2\) discretisation achieves approximately
+  fourth-order velocity convergence and third-order pressure
+  convergence before reaching fine-resolution error saturation.
+  
+  \item The \(P_2\times P_0\) discretisation exhibits approximately
+  second-order velocity convergence and first-order pressure
+  convergence, consistent with its piecewise-constant pressure
+  approximation.
+  
+  \item The unstabilised lower-order and non-standard element pairs
+  show reduced pressure robustness. In particular, the observed
+  \(P_1\times P_1\) convergence rates should be interpreted as
+  benchmark-specific behaviour rather than rates associated with an
+  inf--sup stable formulation.
+  
+  \item Boundary pressure recovery provides an additional measure of
+  pressure accuracy on curved boundaries, where pressure contributes
+  directly to normal stress and traction.
+\end{enumerate}
+
+These results demonstrate that UW3 accurately reproduces the analytical
+annulus Stokes solution for stable mixed finite-element
+discretisations. The study also demonstrates that \citetalias{thieulot2018} 
+provides a robust verification benchmark for curved-domain 
+geodynamics simulations in UW3.
+
+%% The following commands are for the statements about the availability of data sets and/or software code corresponding to the manuscript.
+%% It is strongly recommended to make use of these sections in case data sets and/or software code have been part of your research the article is based on.
+
+% \codeavailability{TEXT} %% use this section when having only software code available
+
+
+% \dataavailability{TEXT} %% use this section when having only data sets available
+
+
+% \codedataavailability{TEXT} %% use this section when having data sets and software code available
+
+
+% \sampleavailability{TEXT} %% use this section when having geoscientific samples available
+
+
+% \videosupplement{TEXT} %% use this section when having video supplements available
+
+
+% \appendix
+% \section{}    %% Appendix A
+
+% \subsection{}     %% Appendix A1, A2, etc.
+
+
+% \noappendix       %% use this to mark the end of the appendix section. Otherwise the figures might be numbered incorrectly (e.g. 10 instead of 1).
+
+%% Regarding figures and tables in appendices, the following two options are possible depending on your general handling of figures and tables in the manuscript environment:
+
+%% Option 1: If you sorted all figures and tables into the sections of the text, please also sort the appendix figures and appendix tables into the respective appendix sections.
+%% They will be correctly named automatically.
+
+%% Option 2: If you put all figures after the reference list, please insert appendix tables and figures after the normal tables and figures.
+%% To rename them correctly to A1, A2, etc., please add the following commands in front of them:
+
+% % \appendixfigures  %% needs to be added in front of appendix figures
+
+% % \appendixtables   %% needs to be added in front of appendix tables
+
+%% Please add \clearpage between each table and/or figure. Further guidelines on figures and tables can be found below.
+
+
+
+% \authorcontribution{TEXT} %% this section is mandatory
+
+% \competinginterests{TEXT} %% this section is mandatory even if you declare that no competing interests are present
+
+% \disclaimer{TEXT} %% optional section
+
+% \begin{acknowledgements}
+% TEXT
+% \end{acknowledgements}
+
+
+
+
+%% REFERENCES
+
+%% The reference list is compiled as follows:
+
+\bibliographystyle{copernicus}
+\bibliography{thieulot_annulus_benchmark_article_refs}
+
+%% Since the Copernicus LaTeX package includes the BibTeX style file copernicus.bst,
+%% authors experienced with BibTeX only have to include the following two lines:
+%%
+%% \bibliographystyle{copernicus}
+%% \bibliography{example.bib}
+%%
+%% URLs and DOIs can be entered in your BibTeX file as:
+%%
+%% URL = {http://www.xyz.org/~jones/idx_g.htm}
+%% DOI = {10.5194/xyz}
+
+
+%% LITERATURE CITATIONS
+%%
+%% command                        & example result
+%% \citet{jones90}|               & Jones et al. (1990)
+%% \citep{jones90}|               & (Jones et al., 1990)
+%% \citep{jones90,jones93}|       & (Jones et al., 1990, 1993)
+%% \citep[p.~32]{jones90}|        & (Jones et al., 1990, p.~32)
+%% \citep[e.g.,][]{jones90}|      & (e.g., Jones et al., 1990)
+%% \citep[e.g.,][p.~32]{jones90}| & (e.g., Jones et al., 1990, p.~32)
+%% \citeauthor{jones90}|          & Jones et al.
+%% \citeyear{jones90}|            & 1990
+
+
+
+%% FIGURES
+
+%% When figures and tables are placed at the end of the MS (article in one-column style), please add \clearpage
+%% between bibliography and first table and/or figure as well as between each table and/or figure.
+
+% The figure files should be labelled correctly with Arabic numerals (e.g. fig01.jpg, fig02.png).
+
+
+%% ONE-COLUMN FIGURES
+
+%%f
+%\begin{figure}[t]
+%\includegraphics[width=8.3cm]{FILE NAME}
+%\caption{TEXT}
+%\end{figure}
+%
+%%% TWO-COLUMN FIGURES
+%
+%%f
+%\begin{figure*}[t]
+%\includegraphics[width=12cm]{FILE NAME}
+%\caption{TEXT}
+%\end{figure*}
+%
+%
+%%% TABLES
+%%%
+%%% The different columns must be seperated with a & command and should
+%%% end with \\ to identify the column brake.
+%
+%%% ONE-COLUMN TABLE
+%
+%%t
+%\begin{table}[t]
+%\caption{TEXT}
+%\begin{tabular}{column = lcr}
+%\tophline
+%
+%\middlehline
+%
+%\bottomhline
+%\end{tabular}
+%\belowtable{} % Table Footnotes
+%\end{table}
+%
+%%% TWO-COLUMN TABLE
+%
+%%t
+%\begin{table*}[t]
+%\caption{TEXT}
+%\begin{tabular}{column = lcr}
+%\tophline
+%
+%\middlehline
+%
+%\bottomhline
+%\end{tabular}
+%\belowtable{} % Table Footnotes
+%\end{sidewaystable*}
+%
+%%% LANDSCAPE TABLE
+%
+%%t
+%\begin{sidewaystable*}[t]
+%\caption{TEXT}
+%\begin{tabular}{column = lcr}
+%\tophline
+%
+%\middlehline
+%
+%\bottomhline
+%\end{tabular}
+%\belowtable{} % Table Footnotes
+%\end{table*}
+%
+%
+%%% MATHEMATICAL EXPRESSIONS
+%
+%%% All papers typeset by Copernicus Publications follow the math typesetting regulations
+%%% given by the IUPAC Green Book (IUPAC: Quantities, Units and Symbols in Physical Chemistry,
+%%% 2nd Edn., Blackwell Science, available at: http://old.iupac.org/publications/books/gbook/green_book_2ed.pdf, 1993).
+%%%
+%%% Physical quantities/variables are typeset in italic font (t for time, T for Temperature)
+%%% Indices which are not defined are typeset in italic font (x, y, z, a, b, c)
+%%% Items/objects which are defined are typeset in roman font (Car A, Car B)
+%%% Descriptions/specifications which are defined by itself are typeset in roman font (abs, rel, ref, tot, net, ice)
+%%% Abbreviations from 2 letters are typeset in roman font (RH, LAI)
+%%% Vectors are identified in bold italic font using \vec{x}
+%%% Matrices are identified in bold roman font
+%%% Multiplication signs are typeset using the LaTeX commands \times (for vector products, grids, and exponential notations) or \cdot
+%%% The character * should not be applied as mutliplication sign
+%
+%
+%%% EQUATIONS
+%
+%%% Single-row equation
+%
+%\begin{equation}
+%
+%\end{equation}
+%
+%%% Multiline equation
+%
+%\begin{align}
+%& 3 + 5 = 8\\
+%& 3 + 5 = 8\\
+%& 3 + 5 = 8
+%\end{align}
+%
+%
+%%% MATRICES
+%
+%\begin{matrix}
+%x & y & z\\
+%x & y & z\\
+%x & y & z\\
+%\end{matrix}
+%
+%
+%%% ALGORITHM
+%
+%\begin{algorithm}
+%\caption{...}
+%\label{a1}
+%\begin{algorithmic}
+%...
+%\end{algorithmic}
+%\end{algorithm}
+%
+%
+%%% CHEMICAL FORMULAS AND REACTIONS
+%
+%%% For formulas embedded in the text, please use \chem{}
+%
+%%% The reaction environment creates labels including the letter R, i.e. (R1), (R2), etc.
+%
+%\begin{reaction}
+%%% \rightarrow should be used for normal (one-way) chemical reactions
+%%% \rightleftharpoons should be used for equilibria
+%%% \leftrightarrow should be used for resonance structures
+%\end{reaction}
+%
+%
+%%% PHYSICAL UNITS
+%%%
+%%% Please use \unit{} and apply the exponential notation (e.g. 20\,\unit{W\,m^{-2}})
+
+
+\end{document}
