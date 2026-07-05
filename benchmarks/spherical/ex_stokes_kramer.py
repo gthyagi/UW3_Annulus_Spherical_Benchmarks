@@ -113,12 +113,17 @@ params = uw.Params(
     uw_bc_type=uw.Param(
         None,
         type=uw.ParamType.STRING,
-        description="Boundary-condition mode: natural or essential",
+        description="Boundary-condition mode set by benchmark case",
     ),
     uw_freeslip_type=uw.Param(
-        'nitsche',
+        "nitsche",
         type=uw.ParamType.STRING,
-        description="Free-slip method: penalty or nitsche",
+        description="Free-slip method: penalty, nitsche, rotated, constrained",
+    ),
+    uw_nitsche_gamma=uw.Param(
+        10.0,
+        type=uw.ParamType.FLOAT,
+        description="Nitsche penalty factor for free-slip boundary conditions",
     ),
     uw_run_on_gadi=uw.Param(
         False,
@@ -148,8 +153,48 @@ def parse_float_fraction(value):
         return float(Fraction(numerator) / Fraction(denominator))
     return float(Fraction(text))
 
+
+FREESLIP_METHODS = ("penalty", "nitsche", "rotated", "constrained")
+
+
+def normalise_freeslip_type(value):
+    text = str(value).strip().lower().replace("-", "_")
+    aliases = {
+        "natural": "penalty",
+        "natural_penalty": "penalty",
+        "penalty": "penalty",
+        "natural_nitsche": "nitsche",
+        "nitsche": "nitsche",
+        "rotated": "rotated",
+        "rotated_freeslip": "rotated",
+        "constraint": "constrained",
+        "constrained": "constrained",
+        "lagrange": "constrained",
+        "lagrange_multiplier": "constrained",
+    }
+    if text not in aliases:
+        raise ValueError(
+            f"Unknown uw_freeslip_type={value!r}. "
+            f"Expected one of: {', '.join(FREESLIP_METHODS)}."
+        )
+    return aliases[text]
+
+
+def apply_radial_freeslip_bc(stokes, velocity, boundary, normal, method, penalty, gamma):
+    if method == "penalty":
+        stokes.add_natural_bc(penalty * normal.dot(velocity.sym) * normal, boundary)
+    elif method == "nitsche":
+        stokes.add_nitsche_bc(boundary, normal=normal, gamma=gamma)
+    elif method == "rotated":
+        stokes.add_rotated_freeslip_bc(boundary, normal=normal)
+    elif method == "constrained":
+        stokes.add_constraint_bc(boundary, g=0.0, normal=normal)
+    else:
+        raise ValueError(f"Unknown free-slip method: {method}")
+
 # %%
 params.uw_cellsize = parse_float_fraction(params.uw_cellsize)
+params.uw_freeslip_type = normalise_freeslip_type(params.uw_freeslip_type)
 
 # set pressure continuity based on velocity degree
 pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
@@ -175,14 +220,14 @@ smooth = False
 if params.uw_case in ("case1",):
     freeslip = True
     delta_fn = True
-    params.uw_bc_type = f'natural_{params.uw_freeslip_type}'
-    if params.uw_freeslip_type == "nitsche":
+    params.uw_bc_type = f"natural_{params.uw_freeslip_type}"
+    if params.uw_freeslip_type != "penalty":
         params.uw_vel_penalty = None
 elif params.uw_case in ("case2",):
     freeslip = True
     smooth = True
-    params.uw_bc_type = f'natural_{params.uw_freeslip_type}'
-    if params.uw_freeslip_type == "nitsche":
+    params.uw_bc_type = f"natural_{params.uw_freeslip_type}"
+    if params.uw_freeslip_type != "penalty":
         params.uw_vel_penalty = None
 elif params.uw_case in ("case3",):
     zeroslip = True
@@ -741,13 +786,19 @@ p_soln = uw.discretisation.MeshVariable(
 # #### Stokes Setup
 
 # %%
-stokes = Stokes(mesh, velocityField=v_soln, pressureField=p_soln)
+use_constrained_stokes = freeslip and params.uw_freeslip_type == "constrained"
+
+if use_constrained_stokes:
+    stokes = uw.systems.Stokes_Constrained(mesh, velocityField=v_soln, pressureField=p_soln)
+else:
+    stokes = Stokes(mesh, velocityField=v_soln, pressureField=p_soln)
 stokes.constitutive_model = uw.constitutive_models.ViscousFlowModel
 stokes.constitutive_model.Parameters.viscosity = 1.0
-stokes.saddle_preconditioner = 1.0
+if not use_constrained_stokes:
+    stokes.saddle_preconditioner = 1.0
 stokes.petsc_use_pressure_nullspace = True
 if freeslip:
-    if hasattr(type(stokes), "petsc_use_nullspace"):
+    if hasattr(stokes, "petsc_use_nullspace"):
         stokes.petsc_use_nullspace = True
     else:
         stokes.petsc_velocity_nullspace_basis = velocity_nullspace_basis
@@ -783,8 +834,9 @@ else:
 #
 # `stokes.tolerance` does not affect the two Kramer case families equally.
 #
-# - free-slip cases use weak analytical-velocity matching on the shell
-#   boundaries and are more tolerance-sensitive.
+# - free-slip cases constrain the radial velocity component by the selected
+#   penalty, Nitsche, rotated, or constrained formulation and are more
+#   tolerance-sensitive.
 # - zero-slip cases can use strong zero-velocity Dirichlet conditions and are less
 #   sensitive to a looser tolerance.
 #
@@ -812,18 +864,26 @@ lower = mesh.boundaries.Lower.name
 upper = mesh.boundaries.Upper.name
 
 if freeslip:
-    if params.uw_freeslip_type == "penalty":
-        # Free-slip through a penalty on the normal velocity component.
-        Gamma_N = mesh.CoordinateSystem.unit_e_0
-        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_soln.sym) * Gamma_N, upper)
-        stokes.add_natural_bc(params.uw_vel_penalty * Gamma_N.dot(v_soln.sym) * Gamma_N, lower)
-    elif params.uw_freeslip_type == "nitsche":
-        # Nitsche's method is more robust than the penalty method for free-slip conditions, 
-        # and it does not require tuning a penalty parameter.
-        outer_normal = mesh.CoordinateSystem.unit_e_0
-        inner_normal = -mesh.CoordinateSystem.unit_e_0
-        stokes.add_nitsche_bc(upper, normal=outer_normal, gamma=10)
-        stokes.add_nitsche_bc(lower, normal=inner_normal, gamma=10)
+    outer_normal = unit_rvec
+    inner_normal = -unit_rvec
+    apply_radial_freeslip_bc(
+        stokes,
+        v_soln,
+        upper,
+        outer_normal,
+        params.uw_freeslip_type,
+        params.uw_vel_penalty,
+        params.uw_nitsche_gamma,
+    )
+    apply_radial_freeslip_bc(
+        stokes,
+        v_soln,
+        lower,
+        inner_normal,
+        params.uw_freeslip_type,
+        params.uw_vel_penalty,
+        params.uw_nitsche_gamma,
+    )
 elif zeroslip:
     stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), upper)
     stokes.add_essential_bc(sp.Matrix([0.0, 0.0, 0.0]), lower)
@@ -884,7 +944,9 @@ stokes.petsc_options["snes_type"] = "ksponly"
 stokes.petsc_options["ksp_rtol"] = params.uw_stokes_tol
 stokes.petsc_options["ksp_atol"] = 0.0
 
-if is_p1p0:
+if use_constrained_stokes:
+    stokes.petsc_options["ksp_type"] = "fgmres"
+elif is_p1p0:
     if uw.mpi.size == 1:
         stokes.petsc_options["ksp_type"] = "preonly"
         stokes.petsc_options["pc_type"] = "lu"
@@ -1326,6 +1388,8 @@ if uw.mpi.rank == 0:
 
         f_h5.create_dataset("git_sha", data=np.bytes_(git_sha))
         f_h5.create_dataset("command", data=np.bytes_(cli_args))
+        f_h5.create_dataset("bc_type", data=np.bytes_(params.uw_bc_type))
+        f_h5.create_dataset("freeslip_type", data=np.bytes_(params.uw_freeslip_type))
 
         for key, value in run_metadata.items():
             f_h5.create_dataset(key, data=value)

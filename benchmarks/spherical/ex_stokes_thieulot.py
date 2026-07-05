@@ -569,21 +569,21 @@ stokes.bodyforce = rho_bodyforce_expr * gravity_fn
 #
 # The coupled Stokes system is solved with PETSc's constant-pressure nullspace
 # enabled. This removes the additive pressure gauge freedom during the solve
-# without imposing an artificial pressure Dirichlet condition on either annulus
-# boundary.
+# without imposing an artificial pressure Dirichlet condition on either
+# spherical-shell boundary.
 #
 # We still subtract the domain-average pressure after the solve so the reported
 # pressure field has a unique zero-mean gauge for benchmark comparisons.
 #
 # We do not register or subtract a rigid-body rotation mode in this script.
-# Although a centered annulus with exact free-slip shell boundary conditions can
-# admit one rotational velocity null mode, this benchmark does not use those
-# boundary conditions:
+# Although a centered spherical shell with exact free-slip shell boundary
+# conditions can admit rotational velocity null modes, this benchmark does not
+# use those boundary conditions:
 # - `essential` prescribes the full analytical velocity on both boundaries
 # - `natural` penalizes the full velocity error `v - v_ana` on both boundaries
 #
-# Both branches therefore select a specific tangential boundary velocity, so a
-# rigid rotation is not an exact null mode of the posed problem.
+# Both branches therefore select a specific tangential boundary velocity, so
+# rotational modes are not exact null modes of the posed problem.
 #
 # %% [markdown]
 # #### Tolerance And BC Type
