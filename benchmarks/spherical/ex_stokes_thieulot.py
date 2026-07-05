@@ -191,6 +191,29 @@ def make_case_id(*, case, **kwargs):
     return "_".join(parts)
 
 
+def timestep_mesh_file(base, mesh_name, index=0):
+    return f"{base}.{mesh_name}.{index:05d}.h5"
+
+
+def timestep_field_file(base, mesh_name, field_name, index=0):
+    return f"{base}.{mesh_name}.{field_name}.{index:05d}.h5"
+
+
+def write_metrics_h5(filename, metrics, *, string_metadata=None, scalar_metadata=None):
+    if os.path.isfile(filename):
+        os.remove(filename)
+
+    with h5py.File(filename, "w") as f_h5:
+        for key, value in metrics.items():
+            f_h5.create_dataset(key, data=value)
+
+        for key, value in (string_metadata or {}).items():
+            f_h5.create_dataset(key, data=np.bytes_(value))
+
+        for key, value in (scalar_metadata or {}).items():
+            f_h5.create_dataset(key, data=value)
+
+
 # --- repo root (for git SHA, code reference) ---
 if "__file__" in globals():
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -228,9 +251,9 @@ if uw.mpi.rank == 0:
 
 checkpoint_mode = bool(params.uw_metrics_from_checkpoint_only)
 checkout_base = os.path.join(output_dir, checkout_base_filename)
-checkout_mesh_file = checkout_base + ".mesh.00000.h5"
-velocity_checkpoint_file = checkout_base + ".Velocity.00000.h5"
-pressure_checkpoint_file = checkout_base + ".Pressure.00000.h5"
+checkout_mesh_file = timestep_mesh_file(checkout_base, "mesh")
+velocity_checkpoint_file = timestep_field_file(checkout_base, "mesh", "Velocity")
+pressure_checkpoint_file = timestep_field_file(checkout_base, "mesh", "Pressure")
 
 uw.timing.start()
 mesh_stage_event = uw.timing.create_event("Benchmark.MeshCreation")
@@ -836,19 +859,20 @@ if not checkpoint_mode:
 
 # %%
 if not checkpoint_mode:
-    uw.pprint("Stage start: saving checkpoint output")
+    uw.pprint("Stage start: saving PETSc reload timestep output")
 
     h5_stage_event.begin()
-    mesh.write_checkpoint(
+    mesh.write_timestep(
         checkout_base_filename,
-        outputPath=str(output_dir),
-        meshUpdates=False,
-        meshVars=[v_soln, p_soln],
         index=0,
+        outputPath=str(output_dir),
+        meshVars=[v_soln, p_soln],
+        create_xdmf=False,
+        petsc_reload=True,
     )
     h5_stage_event.end()
 
-    uw.pprint("Stage complete: saving checkpoint output")
+    uw.pprint("Stage complete: saving PETSc reload timestep output")
     uw.timing.print_table(filename=os.path.join(output_dir, "h5_timing.txt"))
 
     if uw.mpi.rank == 0:
@@ -1120,14 +1144,14 @@ uw.pprint("Stage start: saving metric output")
 
 if uw.mpi.rank == 0:
     metrics_h5 = os.path.join(output_dir, metrics_filename)
-    if os.path.isfile(metrics_h5):
-        os.remove(metrics_h5)
-    with h5py.File(metrics_h5, "w") as f_h5:
-        for key, value in metrics.items():
-            f_h5.create_dataset(key, data=value)
-        f_h5.create_dataset("git_sha", data=np.bytes_(git_sha))
-        f_h5.create_dataset("command", data=np.bytes_(cli_args))
-        for key, value in run_metadata.items():
-            f_h5.create_dataset(key, data=value)
+    write_metrics_h5(
+        metrics_h5,
+        metrics,
+        string_metadata={
+            "git_sha": git_sha,
+            "command": cli_args,
+        },
+        scalar_metadata=run_metadata,
+    )
 
 uw.pprint("Stage complete: saving metric output")

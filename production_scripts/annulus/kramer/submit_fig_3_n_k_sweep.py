@@ -5,12 +5,22 @@ import base64
 import json
 from pathlib import Path
 import subprocess
+import argparse
 
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--freeslip-type",
+    choices=("nitsche", "penalty", "rotated", "constrained"),
+    default="nitsche",
+    help="Free-slip method for case1 and case2.",
+)
+args = parser.parse_args()
 
 CELL_SIZES = ["1/8", "1/16", "1/32", "1/64", "1/128", "1/256"]
 NS = [2, 8, 32]
 KS = [2, 8]
 CASES = ["case1", "case2", "case3", "case4"]
+FREESLIP_TYPE = args.freeslip_type
 
 RESOURCES_BY_CELLSIZE = {
     "1/8": {"ncpus": 2, "mem": "8gb", "walltime": "06:00:00"},
@@ -35,7 +45,7 @@ def slug(value: int | str) -> str:
 
 def case_extra_args(case_name: str) -> list[str]:
     if case_name in FREE_SLIP_CASES:
-        return ["-uw_freeslip_type", "nitsche"]
+        return ["-uw_freeslip_type", FREESLIP_TYPE]
     return []
 
 
@@ -105,6 +115,9 @@ def main() -> None:
                     if k is not None:
                         args.extend(["-uw_k", str(k)])
                         job_name = f"kr_a_{case_name}_k{k}_n{n}_cs{slug(cellsize)}"
+
+                    if case_name in FREE_SLIP_CASES:
+                        job_name = f"{job_name}_fs{FREESLIP_TYPE}"
 
                     args.extend(
                         [

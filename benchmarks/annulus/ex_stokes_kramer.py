@@ -216,35 +216,30 @@ cellsize_int_bd_fac = params.uw_cellsize_internal_boundary_factor
 # “zero-slip” and “no-slip” are used interchangeably in geodynamics.
 
 # %%
-freeslip = False
-zeroslip = False
-delta_fn = False
-smooth = False
+CASE_CONFIG = {
+    "case1": {"freeslip": True, "zeroslip": False, "delta_fn": True, "smooth": False},
+    "case2": {"freeslip": True, "zeroslip": False, "delta_fn": False, "smooth": True},
+    "case3": {"freeslip": False, "zeroslip": True, "delta_fn": True, "smooth": False},
+    "case4": {"freeslip": False, "zeroslip": True, "delta_fn": False, "smooth": True},
+}
 
-if case in ("case1",):
-    freeslip = True
-    delta_fn = True
-    params.uw_bc_type = f"natural_{params.uw_freeslip_type}"
+try:
+    case_config = CASE_CONFIG[case]
+except KeyError as exc:
+    raise ValueError(f"Unknown case: {case}") from exc
+
+freeslip = case_config["freeslip"]
+zeroslip = case_config["zeroslip"]
+delta_fn = case_config["delta_fn"]
+smooth = case_config["smooth"]
+
+if freeslip:
+    params.uw_bc_type = f"freeslip_{params.uw_freeslip_type}"
     if params.uw_freeslip_type != "penalty":
         params.uw_vel_penalty = None
-elif case in ("case2",):
-    freeslip = True
-    smooth = True
-    params.uw_bc_type = f"natural_{params.uw_freeslip_type}"
-    if params.uw_freeslip_type != "penalty":
-        params.uw_vel_penalty = None
-elif case in ("case3",):
-    zeroslip = True
-    delta_fn = True
+elif zeroslip:
     params.uw_bc_type = "essential"
     params.uw_vel_penalty = None
-elif case in ("case4",):
-    zeroslip = True
-    smooth = True
-    params.uw_bc_type = "essential"
-    params.uw_vel_penalty = None
-else:
-    raise ValueError(f"Unknown case: {case}")
 
 # %% [markdown]
 # ### Output Directory
@@ -278,6 +273,21 @@ def make_case_id(*, case, **kwargs):
     parts = [case]
     parts += [f"{key}_{_case_value(value)}" for key, value in kwargs.items() if value is not None]
     return "_".join(parts)
+
+
+def write_metrics_h5(filename, metrics, *, string_metadata=None, scalar_metadata=None):
+    if os.path.isfile(filename):
+        os.remove(filename)
+
+    with h5py.File(filename, "w") as f_h5:
+        for key, value in metrics.items():
+            f_h5.create_dataset(key, data=value)
+
+        for key, value in (string_metadata or {}).items():
+            f_h5.create_dataset(key, data=np.bytes_(value))
+
+        for key, value in (scalar_metadata or {}).items():
+            f_h5.create_dataset(key, data=value)
 
 
 case_id = make_case_id(
@@ -555,7 +565,7 @@ uw.timing.print_table(filename=os.path.join(output_dir, "mesh_timing.txt"))
 
 unit_rvec = mesh.CoordinateSystem.unit_e_0
 r_uw, th_uw = mesh.CoordinateSystem.xR
-v_theta_fn_xy = r_uw * mesh.CoordinateSystem.rRotN.T * sp.Matrix((0, 1))
+velocity_nullspace_basis = mesh.nullspace_rotations
 v_ana_above_sym = analytical_velocity_cartesian_sympy(soln_above, r_uw, th_uw, mesh.CoordinateSystem.rRotN)
 v_ana_below_sym = analytical_velocity_cartesian_sympy(soln_below, r_uw, th_uw, mesh.CoordinateSystem.rRotN)
 p_ana_above_sym = analytical_pressure_sympy(soln_above, r_uw, th_uw)
@@ -613,10 +623,7 @@ if not use_constrained_stokes:
     stokes.saddle_preconditioner = 1.0
 stokes.petsc_use_pressure_nullspace = True
 if freeslip:
-    if hasattr(stokes, "petsc_use_nullspace"):
-        stokes.petsc_use_nullspace = True
-    else:
-        stokes.petsc_velocity_nullspace_basis = [v_theta_fn_xy]
+    stokes.petsc_use_nullspace = True
 
 # %%
 if delta_fn:
@@ -640,9 +647,9 @@ elif smooth:
 # pressure field has a unique zero-mean gauge for benchmark comparisons.
 #
 # For the free-slip annulus cases, the rigid-body rotation is an exact null
-# mode. We enable the PETSc velocity nullspace automatically in those cases.
-# On newer UW branches this goes through `stokes.petsc_use_nullspace`; on older
-# branches we fall back to the explicit annulus rotation basis.
+# mode. UW mesh factories provide the rotation mode through
+# `mesh.nullspace_rotations`, and `stokes.petsc_use_nullspace = True` registers
+# it with PETSc.
 #
 # %% [markdown]
 # #### Tolerance And BC Type
@@ -855,7 +862,7 @@ def subtract_rigid_rotation(mesh, velocity_var, rotation_mode):
 subtract_pressure_mean(mesh, p_uw)
 
 if freeslip:
-    subtract_rigid_rotation(mesh, v_uw, v_theta_fn_xy)
+    subtract_rigid_rotation(mesh, v_uw, velocity_nullspace_basis[0])
 
 # %% [markdown]
 # ### Save h5 Output
@@ -1060,19 +1067,16 @@ uw.pprint("Stage start: saving metric output")
 
 if uw.mpi.rank == 0:
     metrics_h5 = os.path.join(output_dir, metrics_filename)
-    if os.path.isfile(metrics_h5):
-        os.remove(metrics_h5)
-
-    with h5py.File(metrics_h5, "w") as f_h5:
-        for key, value in metrics.items():
-            f_h5.create_dataset(key, data=value)
-
-        f_h5.create_dataset("git_sha", data=np.bytes_(git_sha))
-        f_h5.create_dataset("command", data=np.bytes_(cli_args))
-        f_h5.create_dataset("bc_type", data=np.bytes_(params.uw_bc_type))
-        f_h5.create_dataset("freeslip_type", data=np.bytes_(params.uw_freeslip_type))
-
-        for key, value in run_metadata.items():
-            f_h5.create_dataset(key, data=value)
+    write_metrics_h5(
+        metrics_h5,
+        metrics,
+        string_metadata={
+            "git_sha": git_sha,
+            "command": cli_args,
+            "bc_type": params.uw_bc_type,
+            "freeslip_type": params.uw_freeslip_type,
+        },
+        scalar_metadata=run_metadata,
+    )
 
 uw.pprint("Stage complete: saving metric output")

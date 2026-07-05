@@ -212,35 +212,30 @@ params.uw_k = params.uw_l + 1
 # “zero-slip” and “no-slip” are used interchangeably in geodynamics.
 
 # %%
-freeslip = False
-zeroslip = False
-delta_fn = False
-smooth = False
+CASE_CONFIG = {
+    "case1": {"freeslip": True, "zeroslip": False, "delta_fn": True, "smooth": False},
+    "case2": {"freeslip": True, "zeroslip": False, "delta_fn": False, "smooth": True},
+    "case3": {"freeslip": False, "zeroslip": True, "delta_fn": True, "smooth": False},
+    "case4": {"freeslip": False, "zeroslip": True, "delta_fn": False, "smooth": True},
+}
 
-if params.uw_case in ("case1",):
-    freeslip = True
-    delta_fn = True
-    params.uw_bc_type = f"natural_{params.uw_freeslip_type}"
+try:
+    case_config = CASE_CONFIG[params.uw_case]
+except KeyError as exc:
+    raise ValueError(f"Unknown case: {params.uw_case}") from exc
+
+freeslip = case_config["freeslip"]
+zeroslip = case_config["zeroslip"]
+delta_fn = case_config["delta_fn"]
+smooth = case_config["smooth"]
+
+if freeslip:
+    params.uw_bc_type = f"freeslip_{params.uw_freeslip_type}"
     if params.uw_freeslip_type != "penalty":
         params.uw_vel_penalty = None
-elif params.uw_case in ("case2",):
-    freeslip = True
-    smooth = True
-    params.uw_bc_type = f"natural_{params.uw_freeslip_type}"
-    if params.uw_freeslip_type != "penalty":
-        params.uw_vel_penalty = None
-elif params.uw_case in ("case3",):
-    zeroslip = True
-    delta_fn = True
+elif zeroslip:
     params.uw_bc_type = "essential"
     params.uw_vel_penalty = None
-elif params.uw_case in ("case4",):
-    zeroslip = True
-    smooth = True
-    params.uw_bc_type = "essential"
-    params.uw_vel_penalty = None
-else:
-    raise ValueError(f"Unknown case: {params.uw_case}")
 
 # %% [markdown]
 # ### Output Directory
@@ -258,6 +253,29 @@ def make_case_id(*, case, **kwargs):
     parts = [case]
     parts += [f"{key}_{_case_value(value)}" for key, value in kwargs.items() if value is not None]
     return "_".join(parts)
+
+
+def timestep_mesh_file(base, mesh_name, index=0):
+    return f"{base}.{mesh_name}.{index:05d}.h5"
+
+
+def timestep_field_file(base, mesh_name, field_name, index=0):
+    return f"{base}.{mesh_name}.{field_name}.{index:05d}.h5"
+
+
+def write_metrics_h5(filename, metrics, *, string_metadata=None, scalar_metadata=None):
+    if os.path.isfile(filename):
+        os.remove(filename)
+
+    with h5py.File(filename, "w") as f_h5:
+        for key, value in metrics.items():
+            f_h5.create_dataset(key, data=value)
+
+        for key, value in (string_metadata or {}).items():
+            f_h5.create_dataset(key, data=np.bytes_(value))
+
+        for key, value in (scalar_metadata or {}).items():
+            f_h5.create_dataset(key, data=value)
 
 
 # --- repo root (for git SHA, code reference) ---
@@ -296,9 +314,9 @@ case_id = make_case_id(
 output_dir = os.path.join(output_root, case_id)
 checkpoint_mode = bool(params.uw_metrics_from_checkpoint_only)
 checkout_base = os.path.join(output_dir, checkout_base_filename)
-checkout_mesh_file = checkout_base + ".mesh.00000.h5"
-velocity_checkpoint_file = checkout_base + ".Velocity.00000.h5"
-pressure_checkpoint_file = checkout_base + ".Pressure.00000.h5"
+checkout_mesh_file = timestep_mesh_file(checkout_base, "mesh")
+velocity_checkpoint_file = timestep_field_file(checkout_base, "mesh", "Velocity")
+pressure_checkpoint_file = timestep_field_file(checkout_base, "mesh", "Pressure")
 
 if uw.mpi.rank == 0:
     os.makedirs(output_dir, exist_ok=True)
@@ -674,11 +692,7 @@ phi_uw = sp.Piecewise(
     (2 * sp.pi + phi_raw, phi_raw < 0),
     (phi_raw, True),
 )
-velocity_nullspace_basis = [
-    sp.Matrix([0, -z_uw, y_uw]),
-    sp.Matrix([z_uw, 0, -x_uw]),
-    sp.Matrix([-y_uw, x_uw, 0]),
-]
+velocity_nullspace_basis = mesh.nullspace_rotations
 y_lm_sym = (
     sp.sqrt(
         (2 * params.uw_l + 1)
@@ -798,10 +812,7 @@ if not use_constrained_stokes:
     stokes.saddle_preconditioner = 1.0
 stokes.petsc_use_pressure_nullspace = True
 if freeslip:
-    if hasattr(stokes, "petsc_use_nullspace"):
-        stokes.petsc_use_nullspace = True
-    else:
-        stokes.petsc_velocity_nullspace_basis = velocity_nullspace_basis
+    stokes.petsc_use_nullspace = True
 
 
 if delta_fn:
@@ -1084,19 +1095,20 @@ if not checkpoint_mode:
 
 # %%
 if not checkpoint_mode:
-    uw.pprint("Stage start: saving checkpoint output")
+    uw.pprint("Stage start: saving PETSc reload timestep output")
 
     h5_stage_event.begin()
-    mesh.write_checkpoint(
+    mesh.write_timestep(
         checkout_base_filename,
-        outputPath=str(output_dir),
-        meshUpdates=False,
-        meshVars=[v_soln, p_soln],
         index=0,
+        outputPath=str(output_dir),
+        meshVars=[v_soln, p_soln],
+        create_xdmf=False,
+        petsc_reload=True,
     )
     h5_stage_event.end()
 
-    uw.pprint("Stage complete: saving checkpoint output")
+    uw.pprint("Stage complete: saving PETSc reload timestep output")
     uw.timing.print_table(filename=os.path.join(output_dir, "h5_timing.txt"))
 
     if uw.mpi.rank == 0:
@@ -1379,19 +1391,16 @@ uw.pprint("Stage start: saving metric output")
 
 if uw.mpi.rank == 0:
     metrics_h5 = os.path.join(output_dir, metrics_filename)
-    if os.path.isfile(metrics_h5):
-        os.remove(metrics_h5)
-
-    with h5py.File(metrics_h5, "w") as f_h5:
-        for key, value in metrics.items():
-            f_h5.create_dataset(key, data=value)
-
-        f_h5.create_dataset("git_sha", data=np.bytes_(git_sha))
-        f_h5.create_dataset("command", data=np.bytes_(cli_args))
-        f_h5.create_dataset("bc_type", data=np.bytes_(params.uw_bc_type))
-        f_h5.create_dataset("freeslip_type", data=np.bytes_(params.uw_freeslip_type))
-
-        for key, value in run_metadata.items():
-            f_h5.create_dataset(key, data=value)
+    write_metrics_h5(
+        metrics_h5,
+        metrics,
+        string_metadata={
+            "git_sha": git_sha,
+            "command": cli_args,
+            "bc_type": params.uw_bc_type,
+            "freeslip_type": params.uw_freeslip_type,
+        },
+        scalar_metadata=run_metadata,
+    )
 
 uw.pprint("Stage complete: saving metric output")

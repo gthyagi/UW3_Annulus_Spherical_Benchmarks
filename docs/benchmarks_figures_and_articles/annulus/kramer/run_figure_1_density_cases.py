@@ -32,12 +32,12 @@ for case in CASES:
         if case in ("case2", "case4"):
             case_dir = (
                 f"{case}_inv_lc_{INV_LC}_n_{n}_k_{k}_"
-                "vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche"
+                "vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_freeslip_nitsche"
             )
         else:
             case_dir = (
                 f"{case}_inv_lc_{INV_LC}_n_{n}_"
-                "vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche"
+                "vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_freeslip_nitsche"
             )
         if not (OUTPUT_ROOT / case_dir).is_dir():
             print(f"Skipping missing output directory: {OUTPUT_ROOT / case_dir}", flush=True)

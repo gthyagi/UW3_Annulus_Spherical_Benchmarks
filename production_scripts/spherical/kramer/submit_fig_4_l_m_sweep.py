@@ -15,12 +15,19 @@ parser.add_argument(
     default=False,
     action="store_true",
 )
+parser.add_argument(
+    "--freeslip-type",
+    choices=("nitsche", "penalty", "rotated", "constrained"),
+    default="nitsche",
+    help="Free-slip method for case1 and case2.",
+)
 args = parser.parse_args()
 
 CELL_SIZES = ["1/8", "1/16", "1/32", "1/64"]  # "1/96"
 LM_PAIRS = [(2, 1), (2, 2), (4, 2), (4, 4), (8, 4), (8, 8)]
 CASES = ["case1", "case2", "case3", "case4"]
 METRICS_FROM_CHECKPOINT_ONLY = args.metrics_from_checkpoint_only
+FREESLIP_TYPE = args.freeslip_type
 
 RESOURCES_BY_CELLSIZE = {
     "1/8": {"ncpus": 8, "mem": "32gb", "walltime": "01:00:00"},
@@ -50,7 +57,7 @@ def case_density(case_name: str) -> str:
 
 def case_extra_args(case_name: str) -> list[str]:
     if case_name in FREE_SLIP_CASES:
-        return ["-uw_freeslip_type", "nitsche"]
+        return ["-uw_freeslip_type", FREESLIP_TYPE]
     return []
 
 
@@ -128,7 +135,10 @@ def main() -> None:
                 submit_job(
                     common_pbs=common_pbs,
                     script=bench_script,
-                    job_name=f"kr_s_{case_name}_l{l}_m{slug(m)}_cs{slug(cellsize)}",
+                    job_name=(
+                        f"kr_s_{case_name}_l{l}_m{slug(m)}_cs{slug(cellsize)}"
+                        f"{'_fs' + FREESLIP_TYPE if case_name in FREE_SLIP_CASES else ''}"
+                    ),
                     args=args,
                     walltime=resources["walltime"],
                     ncpus=resources["ncpus"],

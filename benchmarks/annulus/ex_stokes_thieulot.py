@@ -177,6 +177,22 @@ def make_case_id(*, case, **kwargs):
     parts += [f"{key}_{_case_value(value)}" for key, value in kwargs.items() if value is not None]
     return "_".join(parts)
 
+
+def write_metrics_h5(filename, metrics, *, string_metadata=None, scalar_metadata=None):
+    if os.path.isfile(filename):
+        os.remove(filename)
+
+    with h5py.File(filename, "w") as f_h5:
+        for key, value in metrics.items():
+            f_h5.create_dataset(key, data=value)
+
+        for key, value in (string_metadata or {}).items():
+            f_h5.create_dataset(key, data=np.bytes_(value))
+
+        for key, value in (scalar_metadata or {}).items():
+            f_h5.create_dataset(key, data=value)
+
+
 # --- repo root (for git SHA, code reference) ---
 if "__file__" in globals():
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -747,17 +763,14 @@ uw.pprint("Stage start: saving metric output")
 
 if uw.mpi.rank == 0:
     metrics_h5 = os.path.join(output_dir, metrics_filename)
-    if os.path.isfile(metrics_h5):
-        os.remove(metrics_h5)
-
-    with h5py.File(metrics_h5, "w") as f_h5:
-        for key, value in metrics.items():
-            f_h5.create_dataset(key, data=value)
-
-        f_h5.create_dataset("git_sha", data=np.bytes_(git_sha))
-        f_h5.create_dataset("command", data=np.bytes_(cli_args))
-
-        for key, value in run_metadata.items():
-            f_h5.create_dataset(key, data=value)
+    write_metrics_h5(
+        metrics_h5,
+        metrics,
+        string_metadata={
+            "git_sha": git_sha,
+            "command": cli_args,
+        },
+        scalar_metadata=run_metadata,
+    )
 
 uw.pprint("Stage complete: saving metric output")

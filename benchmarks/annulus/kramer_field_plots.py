@@ -38,7 +38,7 @@ if IS_INTERACTIVE:
 # ### Parameters And Paths
 
 # %%
-DEFAULT_DIRNAME = "case1_inv_lc_64_n_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_natural_nitsche"
+DEFAULT_DIRNAME = "case1_inv_lc_64_n_2_vdeg_2_pdeg_1_pcont_true_stokes_tol_1e-09_ncpus_8_bc_freeslip_nitsche"
 parser = argparse.ArgumentParser()
 parser.add_argument("-dirname", type=str, default=DEFAULT_DIRNAME, help="directory name")
 args, _ = parser.parse_known_args()
@@ -61,7 +61,7 @@ pattern = (
     r"stokes_tol_(?P<stokes_tol>[0-9.eE+\-]+)_"
     r"ncpus_(?P<ncpus>\d+)_"
     r"bc_(?P<bc_type>[A-Za-z]+)"
-    r"(?:_(?P<freeslip_type>nitsche|penalty))?$"
+    r"(?:_(?P<freeslip_type>nitsche|penalty|rotated|constrained))?$"
 )
 
 m = re.search(pattern, dirname)
