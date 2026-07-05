@@ -64,7 +64,7 @@ def make_case_id(**parts) -> str:
     for key, value in parts.items():
         value = case_value(value)
         if value is not None:
-            rendered.append(f"{key}_{value}")
+            rendered.append(str(value) if key in ("fem_case", "vel_penalty", "penalty") else f"{key}_{value}")
     return "_".join(rendered)
 
 
@@ -502,11 +502,14 @@ def make_summary_text(params, results):
 
 def run(params):
     params.uw_cellsize = parse_cellsize(params.uw_cellsize)
-    params.uw_pcont = params.uw_pcont if params.uw_pdegree > 0 else False
+    vdegree = params.uw_vdegree  # velocity degree
+    pdegree = params.uw_pdegree  # pressure degree
+    params.uw_pcont = params.uw_pcont and pdegree > 0
+    fem_case = f"P{vdegree}P{pdegree}{'' if params.uw_pcont else 'dG'}"
     pressure_modes = parse_csv_strings(params.dbg_pressure_modes)
     report_gauges = parse_csv_strings(params.dbg_report_gauges)
     mesh_qdegree = (
-        params.uw_qdegree if params.uw_qdegree > 0 else max(params.uw_vdegree, params.uw_pdegree)
+        params.uw_qdegree if params.uw_qdegree > 0 else max(vdegree, pdegree)
     )
 
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -519,9 +522,7 @@ def run(params):
         inv_lc=int(round(1.0 / params.uw_cellsize)),
         m=params.uw_m,
         mesh_order=params.uw_gmsh_element_order,
-        vdeg=params.uw_vdegree,
-        pdeg=params.uw_pdegree,
-        pcont=params.uw_pcont,
+        fem_case=fem_case,
         qdeg=params.uw_qdegree if params.uw_qdegree > 0 else None,
         tol=params.uw_stokes_tol,
         np=uw.mpi.size,

@@ -60,7 +60,7 @@ def make_case_id(**parts) -> str:
     for key, value in parts.items():
         value = case_value(value)
         if value is not None:
-            rendered.append(f"{key}_{value}")
+            rendered.append(str(value) if key in ("fem_case", "vel_penalty", "penalty") else f"{key}_{value}")
     return "_".join(rendered)
 
 
@@ -425,10 +425,14 @@ def residual_diagnostics(mesh, stokes, velocity_var, pressure_var, v_ana_expr, p
 
 def run(params):
     params.uw_cellsize = parse_cellsize(params.uw_cellsize)
-    pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
-    is_p1p0 = params.uw_vdegree == 1 and params.uw_pdegree == 0
+    vdegree = params.uw_vdegree  # velocity degree
+    pdegree = params.uw_pdegree  # pressure degree
+    pressure_is_continuous = params.uw_pcont and pdegree > 0
+    fem_case = f"P{vdegree}P{pdegree}{'' if pressure_is_continuous else 'dG'}"
+    pcont = pressure_is_continuous  # pressure continuity
+    is_p1p0 = vdegree == 1 and pdegree == 0
     mesh_qdegree = (
-        params.uw_qdegree if params.uw_qdegree > 0 else max(params.uw_vdegree, params.uw_pdegree)
+        params.uw_qdegree if params.uw_qdegree > 0 else max(vdegree, pdegree)
     )
 
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -441,9 +445,7 @@ def run(params):
         case="case",
         inv_lc=int(round(1.0 / params.uw_cellsize)),
         m=params.uw_m,
-        vdeg=params.uw_vdegree,
-        pdeg=params.uw_pdegree,
-        pcont=pressure_is_continuous,
+        fem_case=fem_case,
         qdeg=params.uw_qdegree if params.uw_qdegree > 0 else None,
         bc=params.uw_bc_type,
         p_bc=params.uw_p_bc,
@@ -469,17 +471,17 @@ def run(params):
     v_soln = uw.discretisation.MeshVariable(
         varname="Velocity",
         mesh=mesh,
-        degree=params.uw_vdegree,
+        degree=vdegree,
         vtype=uw.VarType.VECTOR,
         varsymbol=r"V",
     )
     p_soln = uw.discretisation.MeshVariable(
         varname="Pressure",
         mesh=mesh,
-        degree=params.uw_pdegree,
+        degree=pdegree,
         vtype=uw.VarType.SCALAR,
         varsymbol=r"P",
-        continuous=pressure_is_continuous,
+        continuous=pcont,
     )
 
     v_ana_expr, p_ana_expr, rho_expr, mu_expr = analytic_solution(

@@ -61,7 +61,7 @@ def make_case_id(**parts) -> str:
     for key, value in parts.items():
         value = case_value(value)
         if value is not None:
-            rendered.append(f"{key}_{value}")
+            rendered.append(str(value) if key in ("fem_case", "vel_penalty", "penalty") else f"{key}_{value}")
     return "_".join(rendered)
 
 
@@ -365,10 +365,13 @@ def gauge_metrics_volume_only(mesh, pressure_var, p_ana_expr, gauge):
 
 def run(params):
     params.uw_cellsize = parse_cellsize(params.uw_cellsize)
-    params.uw_pcont = params.uw_pcont if params.uw_pdegree > 0 else False
+    vdegree = params.uw_vdegree  # velocity degree
+    pdegree = params.uw_pdegree  # pressure degree
+    params.uw_pcont = params.uw_pcont and pdegree > 0
+    fem_case = f"P{vdegree}P{pdegree}{'' if params.uw_pcont else 'dG'}"
     report_gauges = parse_csv_strings(params.dbg_report_gauges)
     mesh_qdegree = (
-        params.uw_qdegree if params.uw_qdegree > 0 else max(params.uw_vdegree, params.uw_pdegree)
+        params.uw_qdegree if params.uw_qdegree > 0 else max(vdegree, pdegree)
     )
     inner_scale, outer_scale = grading_scales(params.dbg_grading_ratio)
 
@@ -383,9 +386,7 @@ def run(params):
         m=params.uw_m,
         grade=params.dbg_grading_ratio,
         inner_scale=inner_scale,
-        vdeg=params.uw_vdegree,
-        pdeg=params.uw_pdegree,
-        pcont=params.uw_pcont,
+        fem_case=fem_case,
         qdeg=params.uw_qdegree if params.uw_qdegree > 0 else None,
         tol=params.uw_stokes_tol,
         np=uw.mpi.size,

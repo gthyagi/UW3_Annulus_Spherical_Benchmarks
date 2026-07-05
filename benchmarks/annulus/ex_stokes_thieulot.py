@@ -107,6 +107,11 @@ params = uw.Params(
         type=uw.ParamType.BOOLEAN,
         description="Pressure continuity flag",
     ),
+    uw_fem_case=uw.Param(
+        None,
+        type=uw.ParamType.STRING,
+        description="Finite-element pair label for output naming",
+    ),
     uw_stokes_tol=uw.Param(
         1e-9,
         type=uw.ParamType.FLOAT,
@@ -148,11 +153,15 @@ def parse_float_fraction(value):
 # %%
 params.uw_cellsize = parse_float_fraction(params.uw_cellsize)
 
-# set pressure continuity based on velocity degree
-pressure_is_continuous = params.uw_pcont if params.uw_pdegree > 0 else False
-is_p1p0 = params.uw_vdegree == 1 and params.uw_pdegree == 0
+# %%
+vdegree = params.uw_vdegree  # velocity degree
+pdegree = params.uw_pdegree  # pressure degree
+pressure_is_continuous = params.uw_pcont and pdegree > 0
+fem_case = params.uw_fem_case or f"P{vdegree}P{pdegree}{'' if pressure_is_continuous else 'dG'}"
+pcont = pressure_is_continuous  # pressure continuity
+is_p1p0 = vdegree == 1 and pdegree == 0
 
-if uw.mpi.rank == 0 and params.uw_pdegree == 0 and params.uw_pcont:
+if uw.mpi.rank == 0 and pdegree == 0 and params.uw_pcont:
     print("Degree-0 pressure uses discontinuous storage; overriding uw_pcont to false.")
 
 # %%
@@ -181,7 +190,11 @@ def _case_value(value):
 
 def make_case_id(*, case, **kwargs):
     parts = [case]
-    parts += [f"{key}_{_case_value(value)}" for key, value in kwargs.items() if value is not None]
+    for key, value in kwargs.items():
+        if value is None:
+            continue
+        value = _case_value(value)
+        parts.append(str(value) if key in ("fem_case", "vel_penalty", "penalty") else f"{key}_{value}")
     return "_".join(parts)
 
 
@@ -220,9 +233,7 @@ case_id = make_case_id(
     case="model",
     inv_lc=int(1 / params.uw_cellsize),
     k=params.uw_k,
-    vdeg=params.uw_vdegree,
-    pdeg=params.uw_pdegree,
-    pcont=pressure_is_continuous,
+    fem_case=fem_case,
     stokes_tol=params.uw_stokes_tol,
     ncpus=uw.mpi.size,
     bc=params.uw_bc_type,
@@ -251,7 +262,7 @@ mesh = uw.meshing.Annulus(
     radiusOuter=params.uw_r_o,
     radiusInner=params.uw_r_i,
     cellSize=params.uw_cellsize,
-    qdegree=max(params.uw_pdegree, params.uw_vdegree),
+    qdegree=max(pdegree, vdegree),
     degree=1,
     filename=os.path.join(output_dir, "mesh.msh"),
 )
@@ -275,7 +286,7 @@ unit_rvec = mesh.CoordinateSystem.unit_e_0
 v_soln = uw.discretisation.MeshVariable(
     varname="Velocity", 
     mesh=mesh, 
-    degree=params.uw_vdegree, 
+    degree=vdegree, 
     vtype=uw.VarType.VECTOR, 
     varsymbol=r"V"
 )
@@ -283,10 +294,10 @@ v_soln = uw.discretisation.MeshVariable(
 p_soln = uw.discretisation.MeshVariable(
     varname="Pressure",
     mesh=mesh,
-    degree=params.uw_pdegree,
+    degree=pdegree,
     vtype=uw.VarType.SCALAR,
     varsymbol=r"P",
-    continuous=pressure_is_continuous,
+    continuous=pcont,
 )
 
 # %%
