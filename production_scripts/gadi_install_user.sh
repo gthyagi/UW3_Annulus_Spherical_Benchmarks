@@ -47,12 +47,14 @@ export UW3_BRANCH=development
 export UW3_REPO="https://github.com/gthyagi/underworld3.git"
 export INSTALL_NAME=underworld3
 
-# Persistent source / PETSc location
-export BASE_PATH=/g/data/n69/${USER}/uw3-pixi
-export UW3_PATH=${BASE_PATH}/${INSTALL_NAME}
+# Persistent source and PETSc location
+export BASE_PATH="/g/data/n69/${USER}/uw3-pixi"
+export UW3_PATH="${BASE_PATH}/${INSTALL_NAME}"
 
-# Pixi binary / cache / detached envs on scratch
-export PIXI_HOME="/scratch/n69/${USER}/.pixi"
+# Persistent Pixi executable
+export PIXI_HOME="${BASE_PATH}/.pixi"
+
+# Rebuildable cache and detached environments on scratch
 export PIXI_CACHE_DIR="/scratch/n69/${USER}/.pixi-cache"
 export PIXI_ENV_ROOT="/scratch/n69/${USER}/pixi-envs"
 
@@ -106,7 +108,7 @@ load_env() {
 
     export PATH="${PIXI_HOME}/bin:${PATH}"
 
-    if command -v pixi &>/dev/null && [ -d "${UW3_PATH}" ] && [ -f "${PIXI_MANIFEST}" ]; then
+    if [ -x "${PIXI_HOME}/bin/pixi" ] && [ -d "${UW3_PATH}" ] && [ -f "${PIXI_MANIFEST}" ]; then
         configure_pixi_detached_envs
         activate_hpc_env
     fi
@@ -137,8 +139,8 @@ load_env() {
 # ============================================================
 
 setup_pixi() {
-    if command -v pixi &>/dev/null; then
-        echo "==> pixi already installed: $(pixi --version)"
+    if [ -x "${PIXI_HOME}/bin/pixi" ] && "${PIXI_HOME}/bin/pixi" --version &>/dev/null; then
+        echo "==> pixi already installed: $("${PIXI_HOME}/bin/pixi" --version)"
         return 0
     fi
     echo "==> Installing pixi to ${PIXI_HOME}..."
