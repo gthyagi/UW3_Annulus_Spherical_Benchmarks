@@ -38,8 +38,6 @@ Usage:
 
   UW3_BRANCH=<branch> source <this_script_name> install
       Select the branch used when a new UW3 source clone is required
-
-The install mode builds PETSc and must be run in a PBS compute-node shell.
 "
 
 OPTIND=1
@@ -440,14 +438,6 @@ print(f'C++ runtime   - {cpp_libs}')
 }
 
 run_install() {
-    case "$(hostname -s)" in
-        gadi-login-*)
-            echo "ERROR: installation compiles MPI-dependent packages and PETSc"
-            echo "Request a PBS compute allocation and rerun the installer there."
-            return 1
-            ;;
-    esac
-
     setup_pixi || return 1
     clone_uw3 || return 1
     install_pixi_env || return 1
