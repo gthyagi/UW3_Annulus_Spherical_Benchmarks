@@ -341,6 +341,11 @@ install_h5py() {
     local _conda_lib
     _conda_lib="${CONDA_PREFIX}/lib"
 
+    local _setuptools_version
+    _setuptools_version="$(
+        python3 -c "from importlib.metadata import version; print(version('setuptools'))"
+    )" || return 1
+
     local _hidden=()
     local _f
     for _f in "${_conda_lib}"/libhdf5*.so*; do
@@ -355,14 +360,19 @@ install_h5py() {
         export LDFLAGS="-L${HDF5_DIR}/lib -Wl,--disable-new-dtags,-rpath,${HDF5_DIR}/lib"
         export LD_LIBRARY_PATH="${HDF5_DIR}/lib:${MPI_DIR}/lib:${_conda_lib}"
 
-        # h5py >=3.15 requires setuptools >=77 to build, while UW3 pins the
-        # runtime environment to setuptools 75. Build isolation satisfies the
-        # h5py build requirements without modifying the locked Pixi packages.
+        # h5py >=3.15 requires setuptools >=77. Install its build tools in the
+        # active environment temporarily so --no-build-isolation can reuse the
+        # mpi4py already compiled against Gadi OpenMPI. An isolated h5py build
+        # attempts to rebuild mpi4py with the Pixi linker and cannot resolve
+        # Gadi OpenMPI's auxiliary libraries.
+        python3 -m pip install --upgrade --no-cache-dir --no-deps \
+            "setuptools>=77" wheel packaging pkgconfig || exit 1
+
         CC="${MPI_DIR}/bin/mpicc" \
         HDF5_MPI="ON" \
         HDF5_VERSION="1.12.2" \
         CFLAGS="-I${HDF5_DIR}/include -include ${HDF5_DIR}/include/hdf5.h -include ${HDF5_DIR}/include/H5FDmpio.h" \
-        python3 -m pip install --no-binary=h5py --no-cache-dir \
+        python3 -m pip install --no-build-isolation --no-binary=h5py --no-cache-dir \
         --force-reinstall --no-deps "h5py>=3.12,<4"
     )
     local _rc=$?
@@ -371,6 +381,12 @@ install_h5py() {
         mv "${_f}.h5build" "${_f}"
     done
     [ "${#_hidden[@]}" -gt 0 ] && echo "  Restored ${#_hidden[@]} pixi HDF5 lib(s)"
+
+    if ! python3 -m pip install --no-cache-dir --force-reinstall --no-deps \
+        "setuptools==${_setuptools_version}"; then
+        echo "ERROR: failed to restore setuptools ${_setuptools_version}"
+        return 1
+    fi
 
     [ "${_rc}" -ne 0 ] && { echo "ERROR: h5py build failed (rc=${_rc})"; return "${_rc}"; }
     python3 -c "import h5py; assert h5py.get_config().mpi, 'h5py lacks MPI support'" || return 1
