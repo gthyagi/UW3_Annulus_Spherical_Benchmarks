@@ -1,0 +1,114 @@
+html {
+  color: #202020;
+  background: #ffffff;
+}
+
+body {
+  box-sizing: border-box;
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  line-height: 1.65;
+  letter-spacing: 0;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+  margin-top: 1.6em;
+  margin-bottom: 0.75em;
+}
+
+h1 {
+  margin-top: 0;
+  font-size: 2rem;
+}
+
+h2 {
+  font-size: 1.5rem;
+}
+
+h3 {
+  font-size: 1.2rem;
+}
+
+p {
+  text-align: justify;
+}
+
+a {
+  color: #185b8a;
+  overflow-wrap: anywhere;
+}
+
+table {
+  width: 100%;
+  margin: 1.5rem 0;
+  border-collapse: collapse;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+th,
+td {
+  padding: 0.65rem 0.6rem;
+  vertical-align: top;
+  border-bottom: 1px solid #d8d8d8;
+}
+
+th {
+  text-align: left;
+  border-bottom: 2px solid #777777;
+}
+
+div[align="center"],
+div[data-align="center"] {
+  margin: 1.5rem 0 2rem;
+  text-align: center;
+}
+
+div[align="center"] p,
+div[data-align="center"] p {
+  text-align: center;
+  font-size: 1rem;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+.math.display {
+  display: block;
+  max-width: 100%;
+  margin: 1.25rem 0;
+  padding: 0.25rem 0;
+  overflow-x: auto;
+}
+
+math {
+  font-family: "STIX Two Math", "Cambria Math", math;
+}
+
+@media (max-width: 640px) {
+  body {
+    padding: 1.25rem 1rem 2rem;
+  }
+
+  p {
+    text-align: left;
+  }
+
+  table {
+    display: block;
+    overflow-x: auto;
+  }
+
+  th,
+  td {
+    min-width: 7rem;
+  }
+}

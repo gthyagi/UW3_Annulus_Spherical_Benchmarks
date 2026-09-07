@@ -1,233 +1,279 @@
-# Benchmarking Stokes Flow in Underworld3 Using Annulus and Spherical-Shell Geometries
+# Underworld3 Curved-Domain Stokes Benchmarks
 
-<p align="justify">
-This post introduces a suite of annulus and spherical-shell Stokes benchmarks reproduced using Underworld3.<sup><a href="#ref-1">1</a></sup> These benchmark problems have previously been implemented in several numerical codes, but here we bring them together within a single framework to highlight both the strengths and practical challenges of curved-domain finite-element modelling. The post is aimed at researchers working on geodynamics numerical modelling. Rather than focusing on heavy mathematical derivations or low-level implementation details, the goal is to provide an intuitive and practical guide to what each benchmark is designed to test, what numerical behaviour should be expected, and how to interpret the results. By the end, readers should have a clear understanding of the purpose of these benchmarks and the key ideas behind verifying Stokes flow in curved geometries.
-</p>
+Finite-element calculations of Stokes flow in an annulus or spherical shell involve both approximation of the velocity and pressure fields and representation of the curved domain. Their accuracy also depends on solution regularity and the imposed boundary conditions. Analytical solutions provide a reference against which these combined numerical errors can be measured as the mesh is refined.
 
-## What Is Benchmarking and Why Is It Important?
+This technical note evaluates Underworld3 (UW3)<sup><a href="#ref-1">1</a></sup> using four analytical Stokes benchmark families. It brings together volume velocity and pressure errors, boundary pressure errors, and radial normal-stress diagnostics to interpret the observed convergence. Smooth solutions permit assessment of the finite-element approximation orders, while delta-function forcing introduces an internal interface that limits solution regularity and reduces the expected rates. The emphasis is on the evidence provided by these complementary measures; the detailed benchmark articles contain the analytical derivations and complete convergence tables.
 
-<p align="justify">
-Benchmarking is the process of testing a numerical method or software implementation against problems with known analytical solutions or well-established reference results. In computational geodynamics, benchmarks are essential because they help verify that a code correctly solves the governing equations before it is applied to complex Earth-science problems where the true solution is unknown. A good benchmark does more than produce a visually reasonable result; it tests numerical convergence behaviour, boundary-condition implementation, mesh geometry, and solver robustness under controlled conditions. Curved-domain benchmarks such as annulus and spherical-shell Stokes problems are particularly important because they expose numerical challenges that do not appear in simple Cartesian geometries. Successfully reproducing benchmark results therefore builds confidence that a numerical framework can model real-world problems with reliable and physically meaningful approximations.
-</p>
+## Benchmark Problems and Numerical Objectives
 
-## What Are the Stokes Equations?
+On the domain $\Omega$, all benchmark cases satisfy the steady incompressible Stokes equations
 
-<p align="justify">
-The Stokes equations describe the slow, viscous flow of fluids in situations where inertial forces are negligible compared with viscous forces. In geodynamics, this approximation is widely used because rocks in the Earth's mantle deform extremely slowly over geological timescales and behave like highly viscous fluids. The incompressible Stokes equations are written as
-</p>
-
-```math
+$$
 \begin{aligned}
--\nabla \cdot \left(2 \eta \dot{\varepsilon}(\mathbf{u})\right)
-+ \nabla p &= \rho \mathbf{g}, \\
-\nabla \cdot \mathbf{u} &= 0 .
+-\nabla \cdot \boldsymbol{\sigma} &= \rho\mathbf{g}, \\
+\nabla \cdot \mathbf{u} &= 0.
 \end{aligned}
-```
+$$
 
-<p align="justify">
-Here <em>u</em> is velocity, <em>p</em> is pressure, <em>η</em> is viscosity, <em>ρ</em> is density, and <em>g</em> is gravity. The first equation represents conservation of momentum, balancing viscous stresses, pressure gradients, and body forces. The second equation enforces mass conservation through incompressibility. Solving these equations allows us to model mantle convection, lithospheric deformation, subduction, and many other large-scale Earth processes. Although the equations appear compact, solving them accurately in curved geometries with complex boundary conditions and variable material properties is computationally challenging, which is why benchmark problems are important.
-</p>
+The Cauchy stress and strain-rate tensors are defined by
 
-## Why Do We Need Curved Geometries?
+$$
+\begin{aligned}
+\boldsymbol{\sigma}
+&= -p\mathbf{I}+2\eta\boldsymbol{\varepsilon}(\mathbf{u}), \\
+\boldsymbol{\varepsilon}(\mathbf{u})
+&= \frac{1}{2}\left(\nabla\mathbf{u}+\nabla\mathbf{u}^{\mathsf{T}}\right).
+\end{aligned}
+$$
 
-<p align="justify">
-Curved geometries are important in geodynamics because the Earth itself is curved. Many large-scale Earth processes, such as mantle convection, subduction, plume dynamics, and lithospheric deformation, occur within spherical or shell-like domains rather than simple rectangular boxes. While Cartesian geometries are useful for developing intuition and testing numerical methods, they cannot fully represent radial gravity, curved boundaries, or global-scale flow patterns. Curved-domain models also introduce additional numerical challenges, including geometric approximation errors, coordinate transformations, and the accurate implementation of free-slip or zero-slip boundary conditions on non-planar surfaces. As a result, annulus and spherical-shell benchmarks provide a more realistic and demanding test of Stokes solvers.
-</p>
+Here $\mathbf{u}$ is velocity, $p$ is pressure, $\eta$ is viscosity, $\rho$ is density, $\mathbf{g}$ is gravitational acceleration, and $\mathbf{I}$ is the identity tensor. The benchmark families differ in geometry, forcing regularity, viscosity, and velocity boundary conditions, providing complementary assessments of the spatial discretisation and boundary treatment.
 
-## Benchmark Suite
+| Benchmark | Geometry | Forcing and viscosity | Velocity boundary condition | Principal numerical assessment |
+|---|---|---|---|---|
+| Thieulot–Puckett annulus<sup><a href="#ref-2">2</a></sup> | Annulus | Smooth forcing; constant viscosity; harmonics $k=1,4,8$ | Analytical tangential velocity prescribed on both boundaries | Convergence hierarchy across several mixed finite-element pairs |
+| Kramer annulus<sup><a href="#ref-3">3</a></sup> | Annulus | Smooth volumetric or delta-function interface forcing; constant viscosity | Free slip or zero slip | Effect of forcing regularity and boundary-condition type |
+| Thieulot spherical shell<sup><a href="#ref-4">4</a></sup> | Spherical shell | Smooth forcing; constant viscosity for $m=-1$ and radial viscosity for $m=3$ | Analytical tangential velocity prescribed on both boundaries | Three-dimensional velocity, pressure, and boundary-stress convergence |
+| Kramer spherical shell<sup><a href="#ref-3">3</a></sup> | Spherical shell | Smooth volumetric or delta-function interface forcing; constant viscosity | Free slip or zero slip | Regularity-limited convergence and spherical boundary diagnostics |
 
-<p align="justify">
-In this work, we reproduce four widely used Stokes benchmark suites in curved geometries using Underworld3.<sup><a href="#ref-1">1</a></sup> The first is the Thieulot--Puckett annulus benchmark, which provides a smooth analytical solution in an annulus and is mainly used to test optimal finite-element convergence behaviour.<sup><a href="#ref-2">2</a></sup> The second is the Kramer annulus benchmark, which extends the problem to include both smooth volumetric forcing and singular delta-function forcing on an internal interface, together with free-slip and zero-slip boundary conditions.<sup><a href="#ref-3">3</a></sup> We then consider the spherical-shell counterparts of these problems: the Thieulot spherical benchmark, which tests smooth Stokes flow in spherical geometry with both constant and radially varying viscosity,<sup><a href="#ref-4">4</a></sup> and the Kramer spherical benchmark, which again introduces internal interface forcing and reduced solution regularity.<sup><a href="#ref-3">3</a></sup> Together, these four benchmark suites test curved geometries, pressure treatment, mesh approximation, boundary-condition implementation, smooth and singular forcing, and convergence behaviour in both two- and three-dimensional Stokes flow.
-</p>
+<div align="center">
 
-<p align="center">
-  <img src="../benchmarks_banner_figure/combined_density_distribution_figures.jpg" alt="Combined analytical fields for the annulus and spherical-shell Stokes benchmarks" width="75%">
-</p>
-<p align="center">
-  <em>Analytical benchmark fields used in the annulus and spherical-shell Stokes benchmark suite. The panels collect the Thieulot--Puckett annulus, Kramer annulus, Thieulot spherical-shell, and Kramer spherical-shell cases.</em>
-</p>
+<img src="../benchmarks_banner_figure/combined_density_distribution_figures.jpg" alt="Analytical fields for the four annulus and spherical-shell Stokes benchmarks" width="75%">
 
-## What Do We Measure? Error Quantification
+Figure 1. Analytical fields used by the Thieulot–Puckett annulus, Kramer annulus, Thieulot spherical-shell, and Kramer spherical-shell benchmarks.
 
-<p align="justify">
-The benchmark comparisons use L<sub>2</sub>-norm errors because they give a single quantitative measure of the difference between the numerical solution and the analytical solution over the whole domain. For a computed field <em>q</em><sub>h</sub> and analytical field <em>q</em><sup>*</sup>, the absolute volume error is
-</p>
+</div>
 
-```math
-E_{L_2}(q)
-=
-\left(
-\int_{\Omega} |q_h-q^*|^2\,\mathrm{d}\Omega
-\right)^{1/2}.
-```
+## Spatial Discretisation and Solver Configuration
 
-<p align="justify">
-The corresponding relative volume error is
-</p>
+UW3 assembles the finite-element Stokes system from symbolic expressions, and PETSc solves the resulting saddle-point problem.<sup><a href="#ref-7">7</a></sup> Unstructured triangular and tetrahedral meshes are generated using Gmsh.<sup><a href="#ref-6">6</a></sup> The Kramer benchmarks and the Thieulot spherical-shell benchmark use the $P_2\times P_1$ Taylor–Hood pair, comprising continuous quadratic velocity and continuous linear pressure spaces.
 
-```math
+The Thieulot–Puckett annulus study additionally compares $P_1\times P_0$, equal-order $P_1\times P_1$, $P_2\times P_0$, $P_2\times P_1^{\mathrm{disc}}$ (labelled $P_2\times P_{-1}$ in the figures), $P_2\times P_1$, and $P_3\times P_2$. An observed convergence slope for a single benchmark does not establish mixed-element stability. For pairs that are not uniformly inf–sup stable on the meshes considered here, the reported rates are empirical properties of the benchmark calculations rather than general stability guarantees.
+
+Mesh resolution is parameterised by the Gmsh characteristic cell size $h$, which specifies a target local edge length rather than the measured maximum, minimum, or mean element diameter. Reducing $h$ from $1/8$ to $1/16$ generates an independent unstructured mesh with a smaller target size; it does not produce a nested refinement by subdividing every element of the coarser mesh. Geometric and element-quality constraints therefore yield a distribution of actual element sizes at each resolution. The annulus meshes also represent the curved boundaries with straight-sided facets, so the reported discretisation error includes a contribution from geometric approximation.
+
+For the prescribed-velocity and impermeable free-slip boundary conditions considered here, pressure is determined only up to an additive constant. The numerical and analytical pressure fields are therefore placed in the same zero-mean gauge before their errors are evaluated:
+
+$$
+\begin{aligned}
+p_h^{\circ}
+&= p_h-\frac{1}{|\Omega|}\int_{\Omega}p_h\,\mathrm{d}\Omega, \\
+p_*^{\circ}
+&= p_*-\frac{1}{|\Omega|}\int_{\Omega}p_*\,\mathrm{d}\Omega.
+\end{aligned}
+$$
+
+Here $|\Omega|$ denotes the domain area in the annulus and volume in the spherical shell. The same domain-wide pressure shift is used for both boundary-error evaluations.
+
+The reported annulus calculations use a Stokes tolerance of $10^{-9}$; the spherical-shell calculations use $10^{-6}$. Run outputs record the mesh, element, solver, and process-count parameters. The benchmark implementations are available in the [annulus Thieulot](../../benchmarks/annulus/ex_stokes_thieulot.py), [annulus Kramer](../../benchmarks/annulus/ex_stokes_kramer.py), [spherical Thieulot](../../benchmarks/spherical/ex_stokes_thieulot.py), and [spherical Kramer](../../benchmarks/spherical/ex_stokes_kramer.py) scripts.
+
+## Error Measures and Convergence Rates
+
+### Volume Errors
+
+For a numerical field $q_h$ and analytical field $q_*$, the absolute volume error is defined as
+
+$$
+E_{L_2}(q) = \left(
+\int_{\Omega}\lVert q_h-q_*\rVert^2\,\mathrm{d}\Omega
+\right)^{1/2},
+$$
+
+and the relative error, when the analytical norm is nonzero, is
+
+$$
+\begin{aligned}
 E_{L_2}^{\mathrm{rel}}(q)
-=
-\frac{E_{L_2}(q)}{\|q^*\|_{L_2}}
-=
-\left(
-\frac{\int_{\Omega} |q_h-q^*|^2\,\mathrm{d}\Omega}
-     {\int_{\Omega} |q^*|^2\,\mathrm{d}\Omega}
+&= \frac{E_{L_2}(q)}{\lVert q_*\rVert_{L_2}} \\
+&= \left(
+\frac{\int_{\Omega}\lVert q_h-q_*\rVert^2\,\mathrm{d}\Omega}
+     {\int_{\Omega}\lVert q_*\rVert^2\,\mathrm{d}\Omega}
 \right)^{1/2}.
-```
+\end{aligned}
+$$
 
-<p align="justify">
-The relative form is useful when comparing velocity and pressure errors across different benchmark cases because it normalises the error by the size of the analytical solution. For pressure, the numerical and analytical fields are first compared in the same pressure gauge, since incompressible Stokes pressure is determined only up to an additive constant.
-</p>
+The pointwise norm denotes absolute value for pressure and the Euclidean norm for velocity. For pressure, $q_h$ and $q_*$ denote the gauge-normalised fields defined above. Normalisation by the analytical $L_2$ norm permits comparisons among cases with different forcing amplitudes, whereas the absolute norm retains the scaling associated with both the field and the integration domain.
 
-<p align="justify">
-Boundary pressure errors are measured separately on the inner and outer surfaces. For a boundary Γ ∈ {Γ<sub>inner</sub>, Γ<sub>outer</sub>}, the absolute pressure-trace error is
-</p>
+### Boundary Errors
 
-```math
-E_{L_2,\Gamma}(p)
-=
-\left(
-\int_{\Gamma} |p_h-p^*|^2\,\mathrm{d}\Gamma
+To assess boundary accuracy directly, pressure is evaluated separately on the inner and outer boundaries. For either boundary $\Gamma$, the absolute pressure-trace error is
+
+$$
+E_{L_2,\Gamma}(p) = \left(
+\int_{\Gamma}|p_h^{\circ}-p_*^{\circ}|^2\,\mathrm{d}\Gamma
 \right)^{1/2}.
-```
+$$
 
-<p align="justify">
-Where the analytical boundary pressure has a nonzero L<sub>2</sub> norm, the relative boundary pressure error is
-</p>
+Where the analytical boundary pressure has a nonzero $L_2$ norm, the relative measure is
 
-```math
-E_{L_2,\Gamma}^{\mathrm{rel}}(p)
-=
-\left(
-\frac{\int_{\Gamma} |p_h-p^*|^2\,\mathrm{d}\Gamma}
-     {\int_{\Gamma} |p^*|^2\,\mathrm{d}\Gamma}
+$$
+E_{L_2,\Gamma}^{\mathrm{rel}}(p) = \left(
+\frac{\int_{\Gamma}|p_h^{\circ}-p_*^{\circ}|^2\,\mathrm{d}\Gamma}
+     {\int_{\Gamma}|p_*^{\circ}|^2\,\mathrm{d}\Gamma}
 \right)^{1/2}.
-```
+$$
 
-<p align="justify">
-Convergence is measured by comparing errors across successively refined meshes:
-</p>
+The absolute boundary norm includes the boundary measure $|\Gamma|$, which is a length in the annulus and an area in the spherical shell. Thus, different inner and outer absolute errors can partly reflect different integration measures. A boundary root-mean-square error removes this factor:
 
-```math
-\mathrm{rate}
-=
-\frac{
-\log\left(E_{h_1}/E_{h_2}\right)
-}{
-\log\left(h_1/h_2\right)
-}.
-```
+$$
+E_{\mathrm{RMS},\Gamma}(p)
+= \frac{E_{L_2,\Gamma}(p)}{\sqrt{|\Gamma|}}.
+$$
 
-<p align="justify">
-Here <em>h</em> is the characteristic cell size. If the mesh is uniformly refined so that <em>h</em><sub>2</sub> = <em>h</em><sub>1</sub>/2, this becomes
-</p>
+This normalisation permits comparison of the average error magnitude on the two boundaries. The absolute and relative norms in the figures retain their stated definitions.
 
-```math
-\mathrm{rate}
-=
-\log_2\left(\frac{E_{h_1}}{E_{h_2}}\right).
-```
+### Convergence Rates
 
-<p align="justify">
-The expected behaviour is simple: as <em>h</em> decreases, the error should decrease. On a log-log convergence plot, a method with error proportional to <em>C h</em><sup>r</sup> appears approximately as a straight line with slope <em>r</em>. For smooth Stokes solutions, stable mixed finite-element pairs have well-defined optimal convergence expectations; for example, Taylor--Hood P<sub>2</sub> × P<sub>1</sub> commonly gives third-order velocity and second-order pressure convergence in the volume L<sub>2</sub> norm when the geometry and solution are sufficiently smooth.<sup><a href="#ref-5">5</a></sup> Singular forcing cases are different: the solution is less regular near the internal interface, so reduced convergence rates are expected even when the solver is implemented correctly.
-</p>
+The observed convergence rate between successive target cell sizes is
 
-## What Do We Observe? Results of Benchmarks in Underworld3
+$$
+r = \frac{\log(E_{h_1}/E_{h_2})}
+     {\log(h_1/h_2)}.
+$$
 
-### Volumetric Convergence
+For the nominal halving used here, this reduces to
 
-<p align="justify">
-The benchmark results show that Underworld3 reproduces the expected convergence behaviour for both annulus and spherical-shell Stokes problems. For smooth analytical solutions, such as the Thieulot annulus and spherical benchmarks, the Taylor--Hood P<sub>2</sub> × P<sub>1</sub> discretisation achieves close to the theoretically expected convergence rates, with approximately third-order velocity convergence and second-order pressure convergence in the volume L<sub>2</sub> norm. Higher-order element pairs further improve accuracy, while lower-order discretisations show the expected reduction in convergence order.
-</p>
+$$
+r=\log_2\left(\frac{E_h}{E_{h/2}}\right).
+$$
 
-<p align="justify">
-For the Kramer benchmarks with smooth forcing, the velocity convergence is closer to second order because the curved geometry is represented using linear meshes, consistent with the original benchmark studies.<sup><a href="#ref-3">3</a></sup> In the delta-function forcing cases, the convergence rates reduce significantly because the internal singular interface lowers the regularity of the analytical solution. Overall, the volumetric results demonstrate that Underworld3 captures both optimal convergence behaviour for smooth problems and the expected degradation in accuracy for singular forcing cases.
-</p>
+Here $E_h$ denotes the same error measure evaluated at each resolution. On log–log axes, $E_h\simeq Ch^r$ has slope $r$; halving $h$ reduces the error by approximately $2^r$ within that regime. For a sufficiently smooth Stokes solution, a stable $P_2\times P_1$ Taylor–Hood discretisation can attain third-order velocity and second-order pressure convergence in the volume $L_2$ norm under the usual regularity assumptions, provided that geometry, quadrature, boundary treatment, and solver error do not limit the rate.<sup><a href="#ref-5">5</a></sup> Delta-function interface forcing reduces solution regularity and lowers the expected asymptotic rates. Departures from the smooth-solution orders must therefore be interpreted against the regularity of each benchmark.
 
-<p align="center">
-  <img src="figures/figure_5_thieulot_annulus_convergence.jpg" alt="Velocity and pressure convergence for the Thieulot--Puckett annulus benchmark" width="75%">
-</p>
-<p align="center"><em>Velocity and pressure convergence for the Thieulot--Puckett annulus benchmark.</em></p>
+## Volume-Error Convergence
 
-<p align="center">
-  <img src="figures/figure_3_kramer_annulus_convergence.jpg" alt="Velocity and pressure convergence for the Kramer annulus benchmark" width="75%">
-</p>
-<p align="center"><em>Velocity and pressure convergence for the Kramer annulus benchmark.</em></p>
+### Thieulot–Puckett Annulus
 
-<p align="center">
-  <img src="figures/figures_4_5_thieulot_convergence.jpg" alt="Velocity and pressure convergence for the Thieulot spherical-shell benchmark" width="75%">
-</p>
-<p align="center"><em>Velocity and pressure convergence for the Thieulot spherical-shell benchmark.</em></p>
+The smooth Thieulot–Puckett solution provides a direct assessment of the convergence hierarchy associated with increasing polynomial degree. The stable $P_2\times P_1$ Taylor–Hood pair gives approximately $O(h^3)$ velocity and $O(h^2)$ pressure convergence, while $P_3\times P_2$ approaches $O(h^4)$ and $O(h^3)$ before saturation at the finest resolutions. The piecewise-constant pressure space limits the $P_2\times P_0$ pressure error to approximately first-order convergence. The equal-order and discontinuous-pressure curves provide additional empirical results, but their slopes do not establish uniform inf–sup stability.
 
-<p align="center">
-  <img src="figures/figure_4_kramer_spherical_convergence.jpg" alt="Velocity and pressure convergence for the Kramer spherical-shell benchmark" width="75%">
-</p>
-<p align="center"><em>Velocity and pressure convergence for the Kramer spherical-shell benchmark.</em></p>
+<div align="center">
 
-### Boundary Pressure Convergence
+<img src="figures/figure_5_thieulot_annulus_convergence.jpg" alt="Velocity and pressure convergence for the Thieulot–Puckett annulus benchmark" width="75%">
 
-<p align="justify">
-Boundary diagnostics provide a more local and often more sensitive measure of solver accuracy in curved geometries. The volume pressure norm measures an error over the full domain, but boundary pressure errors isolate the pressure trace on the surfaces where boundary conditions, radial normal stresses, and traction-related diagnostics are evaluated. This is useful because geometric approximation errors and boundary quadrature errors can be more visible on curved inner and outer boundaries than in a volume-averaged metric.
-</p>
+Figure 2. Relative volume velocity and pressure errors for the Thieulot–Puckett annulus benchmark. Curves compare the tested mixed finite-element pairs for $k=1,4,8$; reference lines show the smooth-solution orders.
 
-<p align="justify">
-For the Thieulot--Puckett annulus benchmark, the P<sub>2</sub> × P<sub>1</sub> boundary pressure errors decrease close to the expected O(<em>h</em><sup>2</sup>) trend. The inner and outer boundaries do not have identical error constants, which is acceptable: the two curves have different radii, different geometric representation errors, and different boundary integration paths.
-</p>
+</div>
 
-<p align="center">
-  <img src="figures/figure_p2p1_boundary_pressure_convergence.jpg" alt="Boundary pressure convergence for the Thieulot--Puckett annulus benchmark" width="75%">
-</p>
-<p align="center"><em>Absolute boundary pressure error convergence for the Thieulot--Puckett annulus benchmark using the P<sub>2</sub> × P<sub>1</sub> discretisation. Solid curves denote the inner boundary and dashed curves denote the outer boundary.</em></p>
+### Kramer Annulus
 
-<p align="justify">
-For the Kramer annulus benchmark, the boundary pressure errors converge close to second order for the smooth cases. The delta-function cases also show stronger boundary pressure convergence than the corresponding volume pressure norm because the reduced regularity is localized at the internal interface rather than on the annulus boundaries.
-</p>
+The Kramer annulus results are governed primarily by forcing regularity rather than by the distinction between free-slip and zero-slip boundary conditions. Smooth forcing gives approximately second-order velocity and pressure convergence over the available resolutions. Delta-function forcing reduces the asymptotic trends to approximately $O(h^{1.5})$ for velocity and $O(h^{0.5})$ for pressure, consistent with the regularity limits derived for an internal singular interface.<sup><a href="#ref-3">3</a></sup> The $n=32$ cases exhibit a longer pre-asymptotic regime because fewer elements resolve each azimuthal wavelength.
 
-<p align="center">
-  <img src="figures/figure_boundary_pressure_convergence.jpg" alt="Boundary pressure convergence for the Kramer annulus benchmark" width="75%">
-</p>
-<p align="center"><em>Relative boundary pressure error convergence for the Kramer annulus benchmark. Solid curves denote the inner boundary and dashed curves denote the outer boundary.</em></p>
+<div align="center">
 
-<p align="justify">
-The Thieulot spherical-shell benchmark gives the corresponding smooth three-dimensional boundary test. The boundary-pressure panel shows that the absolute pressure-trace errors for both <em>m</em> = -1 and <em>m</em> = 3 decrease systematically with refinement. These errors are shown together with radial normal-stress errors because the stress diagnostic combines pressure and velocity-gradient errors at the same curved spherical boundaries.
-</p>
+<img src="figures/figure_3_kramer_annulus_convergence.jpg" alt="Velocity and pressure convergence for the Kramer annulus benchmark" width="75%">
 
-<p align="center">
-  <img src="figures/boundary_metric_convergence.jpg" alt="Boundary pressure and radial normal-stress convergence for the Thieulot spherical-shell benchmark" width="75%">
-</p>
-<p align="center"><em>Boundary radial normal-stress and absolute boundary pressure error convergence for the Thieulot spherical-shell benchmark. The right panel shows E<sub>L2,Γ</sub>(p) on the inner and outer spherical boundaries.</em></p>
+Figure 3. Relative volume errors for the Kramer annulus benchmark. Rows separate free-slip and zero-slip cases; columns separate delta-function forcing from smooth forcing with $k=2$ and $k=8$. Symbols denote $n=2,8,32$.
 
-<p align="justify">
-For the Kramer spherical-shell benchmark, the current boundary figure reports boundary velocity and radial normal-stress convergence for the free-slip delta-function case. A separate boundary pressure-trace convergence plot is not part of the current spherical Kramer article outputs. The radial normal-stress diagnostic is included here because it is pressure-sensitive: σ<sub>rr</sub> contains the pressure contribution and therefore tests pressure recovery together with velocity-gradient recovery on the spherical boundaries.
-</p>
+</div>
 
-<p align="center">
-  <img src="figures/figure_7_kramer_boundary_convergence.jpg" alt="Boundary velocity and radial normal-stress convergence for the Kramer spherical-shell benchmark" width="75%">
-</p>
-<p align="center"><em>Boundary velocity and radial normal-stress convergence for the Kramer spherical-shell benchmark. This is the available pressure-sensitive boundary diagnostic for the spherical Kramer case.</em></p>
+### Thieulot Spherical Shell
 
-<p align="justify">
-Overall, the boundary diagnostics complement the volume L<sub>2</sub> pressure errors. Smooth benchmark cases recover approximately second-order pressure-trace convergence for the P<sub>2</sub> × P<sub>1</sub> pair, while singular forcing primarily affects the volume pressure norm through reduced regularity at the internal interface. Persistent differences between inner- and outer-boundary error constants should therefore be interpreted as geometric and boundary-evaluation effects rather than as a failure of pressure normalisation.
-</p>
+The Thieulot spherical-shell benchmark extends the Taylor–Hood convergence assessment to three dimensions. Between $h=1/64$ and $1/128$, the observed velocity rates are 3.03 for $m=-1$ and 3.11 for $m=3$, while the pressure rate is 2.20 in both cases. The radially varying-viscosity solution exhibits greater pressure variation at coarse resolution, but both cases approach the expected asymptotic behaviour under refinement.
 
-<p align="justify">
-The full details are in the article PDFs, which can be viewed directly from the <a href="https://github.com/gthyagi/UW3_Annulus_Spherical_Benchmarks/tree/main/docs/benchmarks_figures_and_articles">benchmark figures and articles directory on GitHub</a>:
-</p>
+<div align="center">
 
-- [Thieulot--Puckett annulus benchmark](https://github.com/gthyagi/UW3_Annulus_Spherical_Benchmarks/blob/main/docs/benchmarks_figures_and_articles/annulus/thieulot/thieulot_annulus_benchmark_article.pdf)
+<img src="figures/figures_4_5_thieulot_convergence.jpg" alt="Velocity and pressure convergence for the Thieulot spherical-shell benchmark" width="75%">
+
+Figure 4. Relative volume velocity and pressure errors for the $P_2\times P_1$ Thieulot spherical-shell benchmark. The $m=-1$ case has constant viscosity, whereas $m=3$ has radially varying viscosity.
+
+</div>
+
+### Kramer Spherical Shell
+
+The Kramer spherical-shell results retain the distinction between smooth and singular forcing, but the smooth velocity convergence exhibits a systematic limitation. Smooth pressure converges close to $O(h^2)$, whereas smooth velocity rates remain predominantly between 1.9 and 2.1 rather than attaining the ideal $O(h^3)$ $P_2$ rate reported for the curved/isoparametric Fluidity meshes of Kramer et al.<sup><a href="#ref-3">3</a></sup> The present calculations establish this difference but do not isolate its origin. Potential contributions include linear geometry, boundary-condition enforcement, quadrature, mesh quality, and interactions among these factors. The delta-function cases approach the expected regularity-limited rates of $O(h^{1.5})$ for velocity and $O(h^{0.5})$ for pressure.
+
+<div align="center">
+
+<img src="figures/figure_4_kramer_spherical_convergence.jpg" alt="Velocity and pressure convergence for the Kramer spherical-shell benchmark" width="75%">
+
+Figure 5. Relative volume errors for the $P_2\times P_1$ Kramer spherical-shell benchmark. Rows separate free-slip and zero-slip cases; columns separate delta-function and smooth forcing. Colours denote the tested spherical harmonics.
+
+</div>
+
+## Boundary Pressure and Normal-Stress Convergence
+
+Volume-error convergence alone does not establish boundary accuracy. Errors near a boundary may contribute relatively little to a domain integral, while boundary pressure and stress remain quantities of interest in their own right. The pressure trace measures the boundary restriction of the pressure field. Radial normal stress additionally involves velocity derivatives:
+
+$$
+\begin{aligned}
+\sigma_{rr}
+&= \mathbf{e}_r\cdot\boldsymbol{\sigma}\mathbf{e}_r \\
+&= -p+2\eta\,\mathbf{e}_r\cdot
+\boldsymbol{\varepsilon}(\mathbf{u})\mathbf{e}_r.
+\end{aligned}
+$$
+
+Here $\mathbf{e}_r$ is the radial unit vector. Errors in $\sigma_{rr}$ combine pressure and velocity-gradient contributions, which cannot be separated from the stress norm alone. The reported stress and boundary-velocity errors use the same absolute or relative $L_2$ definitions with the corresponding field substituted for pressure.
+
+### Annulus Pressure Traces
+
+For the Thieulot–Puckett annulus, the $P_2\times P_1$ boundary pressure error converges at approximately second order. Differences between the inner and outer error constants may reflect boundary length, analytical pressure variation, local mesh geometry, and quadrature. The available curves do not separate these contributions. Their similar convergence rates indicate comparable orders of boundary-pressure accuracy, without requiring equal absolute error magnitudes.
+
+<div align="center">
+
+<img src="figures/figure_p2p1_boundary_pressure_convergence.jpg" alt="Boundary pressure convergence for the Thieulot–Puckett annulus benchmark" width="75%">
+
+Figure 6. Absolute pressure-trace errors for the $P_2\times P_1$ Thieulot–Puckett annulus benchmark. Solid curves denote the inner boundary and dashed curves the outer boundary.
+
+</div>
+
+The smooth Kramer annulus cases also approach second-order boundary pressure convergence. For delta-function forcing, the boundary pressure trace can converge faster than the corresponding volume pressure norm. This behaviour is consistent with localisation of the singular forcing on an internal interface, although elliptic coupling, boundary geometry, quadrature, and pressure-trace approximation also contribute. The available results demonstrate the difference in convergence behaviour but do not isolate a single controlling mechanism.
+
+<div align="center">
+
+<img src="figures/figure_boundary_pressure_convergence.jpg" alt="Boundary pressure convergence for the Kramer annulus benchmark" width="75%">
+
+Figure 7. Relative inner- and outer-boundary pressure errors for the Kramer annulus benchmark. Rows separate free-slip and zero-slip cases; columns separate delta-function and smooth forcing.
+
+</div>
+
+### Spherical-Shell Boundary Diagnostics
+
+For the Thieulot spherical shell, pressure-trace errors decrease systematically on both boundaries for $m=-1$ and $m=3$. The $\sigma_{rr}$ metric is more demanding because it combines pressure error with velocity-derivative error. Inner and outer values also differ through their surface areas, analytical amplitudes, local facets, and quadrature weights. The results quantify this asymmetry but do not identify a dominant contribution.
+
+<div align="center">
+
+<img src="figures/boundary_metric_convergence.jpg" alt="Boundary pressure and radial normal-stress convergence for the Thieulot spherical-shell benchmark" width="75%">
+
+Figure 8. Relative radial normal-stress errors and absolute pressure-trace errors for the $P_2\times P_1$ Thieulot spherical-shell benchmark. Solid and dashed curves denote the inner and outer boundaries.
+
+</div>
+
+The Kramer spherical-shell boundary results report velocity and radial normal stress for the free-slip delta-function case; a separate pressure-trace norm is not included. The $\sigma_{rr}$ metric remains sensitive to pressure but also includes velocity-gradient error and must therefore be interpreted as a coupled stress diagnostic.
+
+<div align="center">
+
+<img src="figures/figure_7_kramer_boundary_convergence.jpg" alt="Boundary velocity and radial normal-stress convergence for the Kramer spherical-shell benchmark" width="75%">
+
+Figure 9. Boundary velocity and radial normal-stress convergence for the free-slip, delta-function Kramer spherical-shell benchmark. This is a pressure-sensitive stress diagnostic, not a pressure-trace error.
+
+</div>
+
+## Summary
+
+The smooth Thieulot solutions recover the expected Taylor–Hood convergence hierarchy. The $P_2\times P_1$ pair gives approximately third-order velocity and second-order pressure convergence, while the annulus $P_3\times P_2$ pair approaches fourth- and third-order rates. The delta-function Kramer solutions recover the lower rates permitted by the reduced interface regularity, approximately $O(h^{1.5})$ for velocity and $O(h^{0.5})$ for pressure.
+
+The smooth Kramer cases exhibit approximately second-order pressure convergence, while velocity remains closer to second than third order over the reported resolutions. Boundary pressure and normal-stress results provide additional evidence beyond the volume norms, although their interpretation depends on the quantity measured and the boundary normalisation. Together, these comparisons identify both the recovered convergence orders and the remaining departures from smooth-solution expectations.
+
+## Limitations
+
+The results apply to the reported mesh sequences, finite-element pairs, boundary treatments, and solver tolerances. These calculations do not independently quantify geometry, quadrature, boundary-enforcement, and algebraic-solver errors. In particular, the cause of the reduced smooth Kramer velocity rate remains unresolved. A controlled comparison of linear and curved/isoparametric geometry, with consistent solver accuracy and quadrature, would help assess the geometric contribution.
+
+The Kramer spherical-shell study also requires a separate pressure-trace calculation because the current normal-stress metric combines pressure and velocity-gradient errors. Differences between inner and outer boundary errors likewise cannot be assigned quantitatively to individual mechanisms from the present convergence curves alone.
+
+## Detailed Benchmark Articles
+
+The complete analytical definitions, convergence tables, and discussion are provided in the benchmark articles:
+
+- [Thieulot–Puckett annulus benchmark](https://github.com/gthyagi/UW3_Annulus_Spherical_Benchmarks/blob/main/docs/benchmarks_figures_and_articles/annulus/thieulot/thieulot_annulus_benchmark_article.pdf)
 - [Kramer annulus benchmark](https://github.com/gthyagi/UW3_Annulus_Spherical_Benchmarks/blob/main/docs/benchmarks_figures_and_articles/annulus/kramer/kramer_annulus_benchmark_article.pdf)
 - [Thieulot spherical-shell benchmark](https://github.com/gthyagi/UW3_Annulus_Spherical_Benchmarks/blob/main/docs/benchmarks_figures_and_articles/spherical/thieulot/thieulot_spherical_benchmark_article.pdf)
 - [Kramer spherical-shell benchmark](https://github.com/gthyagi/UW3_Annulus_Spherical_Benchmarks/blob/main/docs/benchmarks_figures_and_articles/spherical/kramer/kramer_spherical_benchmark_article.pdf)
-
-<p align="justify">
-Those articles contain the analytical fields, discretisation choices, convergence tables, boundary diagnostics, and full reference details.
-</p>
 
 ## References
 
 1. <span id="ref-1"></span>Moresi, L., Mansour, J., Giordani, J., Knepley, M., Knight, B., Graciosa, J. C., Gollapalli, T., Lu, N., and Beucher, R.: Underworld3: Mathematically Self-Describing Modelling in Python for Desktop, HPC and Cloud, *Journal of Open Source Software*, 10, 7831, [https://doi.org/10.21105/joss.07831](https://doi.org/10.21105/joss.07831), 2025.
 2. <span id="ref-2"></span>Thieulot, C. and Puckett, E. G.: Incompressible Stokes flow in an annulus: An analytical solution and numerical benchmark, preprint submitted to *Computers & Geosciences*, [https://www.math.ucdavis.edu/~egp/PUBLICATIONS/JOURNAL_ARTICLES/SUBMITTED/CAPT-EGP-2018.pdf](https://www.math.ucdavis.edu/~egp/PUBLICATIONS/JOURNAL_ARTICLES/SUBMITTED/CAPT-EGP-2018.pdf), 2018.
-3. <span id="ref-3"></span>Kramer, S. C., Davies, D. R., and Wilson, C. R.: Analytical solutions for mantle flow in cylindrical and spherical shells, *Geoscientific Model Development*, 14, 1899--1919, [https://doi.org/10.5194/gmd-14-1899-2021](https://doi.org/10.5194/gmd-14-1899-2021), 2021.
-4. <span id="ref-4"></span>Thieulot, C.: Analytical solution for viscous incompressible Stokes flow in a spherical shell, *Solid Earth*, 8, 1181--1191, [https://doi.org/10.5194/se-8-1181-2017](https://doi.org/10.5194/se-8-1181-2017), 2017.
+3. <span id="ref-3"></span>Kramer, S. C., Davies, D. R., and Wilson, C. R.: Analytical solutions for mantle flow in cylindrical and spherical shells, *Geoscientific Model Development*, 14, 1899–1919, [https://doi.org/10.5194/gmd-14-1899-2021](https://doi.org/10.5194/gmd-14-1899-2021), 2021.
+4. <span id="ref-4"></span>Thieulot, C.: Analytical solution for viscous incompressible Stokes flow in a spherical shell, *Solid Earth*, 8, 1181–1191, [https://doi.org/10.5194/se-8-1181-2017](https://doi.org/10.5194/se-8-1181-2017), 2017.
 5. <span id="ref-5"></span>Boffi, D., Brezzi, F., and Fortin, M.: *Mixed Finite Element Methods and Applications*, Springer Series in Computational Mathematics, Springer, [https://doi.org/10.1007/978-3-642-36519-5](https://doi.org/10.1007/978-3-642-36519-5), 2013.
+6. <span id="ref-6"></span>Geuzaine, C. and Remacle, J.-F.: Gmsh: A 3-D finite element mesh generator with built-in pre- and post-processing facilities, *International Journal for Numerical Methods in Engineering*, 79, 1309–1331, [https://doi.org/10.1002/nme.2579](https://doi.org/10.1002/nme.2579), 2009.
+7. <span id="ref-7"></span>Balay, S., Abhyankar, S., Adams, M. F., Benson, S., Brown, J., Brune, P., Buschelman, K., Constantinescu, E. M., Dalcin, L., Dener, A., Eijkhout, V., Faibussowitsch, J., Gropp, W. D., Hapla, V., Isaac, T., Jolivet, P., Karpeev, D., Kaushik, D., Knepley, M. G., and others: PETSc/TAO Users Manual, ANL-21/39 Rev. 3.21, Argonne National Laboratory, [https://doi.org/10.2172/2337606](https://doi.org/10.2172/2337606), 2024.
